@@ -24,6 +24,7 @@ public:
     // Spawn the RAR executable to compress files.
     // rarExePathOverride: if non-empty, use this path instead of auto-detect.
     // method: "0"=Store .. "5"=Best (maps to -m0..-m5). nullptr/empty → "3" (Normal).
+    // password/encryptHeaders: nullptr/false = no encryption; encryptHeaders=true → -hp (ヘッダ含む暗号化)
     // adv: optional advanced params (nullptr = use defaults).
     // - WinRAR.exe (GUI): shows its own progress window; no stdout parsing.
     // - Rar.exe (console): posts WM_APP_PROGRESS / WM_APP_DONE to hwndNotify.
@@ -31,6 +32,8 @@ public:
                   const wchar_t* outPath,
                   const wchar_t* method,
                   const wchar_t* rarExePathOverride,
+                  const wchar_t* password,
+                  bool encryptHeaders,
                   HWND hwndNotify,
                   UINT progressMsg,
                   UINT doneMsg,

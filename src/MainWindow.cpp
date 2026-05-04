@@ -801,8 +801,10 @@ void MainWindow::OnCompress(CompressDlg::Params& params) {
         rarAdv.splitVolume = params.rarSplitVolume;
         rarAdv.extra       = params.rarExtra;
         RarProcess rarProc;
+        const wchar_t* rarPw = pw.empty() ? nullptr : pw.c_str();
         bool started = rarProc.Compress(inputs, outPath.c_str(), method.c_str(),
                                         App::Instance().GetSettings().GetRarExePath().c_str(),
+                                        rarPw, params.encryptHeaders,
                                         m_hwnd, WM_APP_PROGRESS, WM_APP_DONE, &rarAdv);
         if (!started) {
             progDlg.Dismiss();

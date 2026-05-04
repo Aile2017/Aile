@@ -138,9 +138,11 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
         rarAdv.splitVolume = params.rarSplitVolume;
         rarAdv.extra       = params.rarExtra;
         RarProcess rar;
+        const wchar_t* rarPw = params.password.empty() ? nullptr : params.password.c_str();
         if (!rar.Compress(params.inputFiles, params.outputPath.c_str(),
                           params.method.c_str(),
                           m_settings.GetRarExePath().c_str(),
+                          rarPw, params.encryptHeaders,
                           wnd.Hwnd(), WM_APP_PROGRESS, WM_APP_DONE, &rarAdv)) {
             progDlg.Dismiss();
             return 0;

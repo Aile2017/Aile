@@ -194,7 +194,7 @@ void CompressDlg::OnFormatChange(HWND hwnd) {
         EnableWindow(hLevel, TRUE);
         EnableWindow(hMethod, FALSE);
         EnableWindow(GetDlgItem(hwnd, IDC_PASSWORD), TRUE);
-        EnableWindow(GetDlgItem(hwnd, IDC_ENCRYPT_HDR), FALSE);
+        EnableWindow(GetDlgItem(hwnd, IDC_ENCRYPT_HDR), TRUE);  // RAR は -hp でヘッダ暗号化可能
         return;
     }
 

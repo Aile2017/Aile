@@ -97,6 +97,8 @@ bool RarProcess::Compress(const std::vector<std::wstring>& srcPaths,
                            const wchar_t* outPath,
                            const wchar_t* method,
                            const wchar_t* rarExePathOverride,
+                           const wchar_t* password,
+                           bool encryptHeaders,
                            HWND hwndNotify,
                            UINT progressMsg, UINT doneMsg,
                            const RarAdvancedParams* adv) {
@@ -119,6 +121,15 @@ bool RarProcess::Compress(const std::vector<std::wstring>& srcPaths,
     wchar_t mBuf[2] = {mChar, L'\0'};
 
     std::wstring cmd = L"\"" + rarExe + L"\" a -ep1 -r -m" + mBuf;
+
+    // パスワード: -hp (ヘッダ含む暗号化) または -p (データのみ)
+    if (password && password[0]) {
+        std::wstring pw(password);
+        if (encryptHeaders)
+            cmd += L" -hp" + pw;
+        else
+            cmd += L" -p" + pw;
+    }
 
     if (adv) {
         // 辞書サイズ
