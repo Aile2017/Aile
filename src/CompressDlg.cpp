@@ -29,13 +29,22 @@ static const MethodEntry kMethods7z[] = {
     {L"PPMd",          L"ppmd"},
     {L"BZip2",         L"bzip2"},
     {L"Deflate",       L"deflate"},
+    // 7-Zip Zstandard 拡張コーデック（DLL が対応している場合のみ表示される）
     {L"Zstandard",     L"zstd"},
+    {L"Brotli",        L"brotli"},
+    {L"LZ4",           L"lz4"},
+    {L"LZ5",           L"lz5"},
+    {L"Lizard",        L"lizard"},
+    {L"FastLZMA2",     L"flzma2"},
 };
 static const MethodEntry kMethodsZip[] = {
     {L"Deflate (既定)", L"deflate"},
     {L"BZip2",          L"bzip2"},
     {L"LZMA",           L"lzma"},
+    // 7-Zip Zstandard 拡張
     {L"Zstandard",      L"zstd"},
+    {L"Brotli",         L"brotli"},
+    {L"LZ4",            L"lz4"},
     {L"Store",          L"store"},
 };
 // rar.exe -m0..-m5
