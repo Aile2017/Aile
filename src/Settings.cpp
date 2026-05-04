@@ -31,6 +31,14 @@ void Settings::Load() {
     m_advThreads    = ReadStr(L"AdvancedCompress", L"Threads",    L"");
     m_advExtra      = ReadStr(L"AdvancedCompress", L"Extra",      L"");
 
+    // RAR advanced compress options
+    m_rarAdvDictSize  = ReadStr(L"RarAdvanced", L"DictSize",  L"");
+    m_rarAdvVolume    = ReadStr(L"RarAdvanced", L"Volume",    L"");
+    m_rarAdvExtra     = ReadStr(L"RarAdvanced", L"Extra",     L"");
+    GetPrivateProfileStringW(L"RarAdvanced", L"Solid",    L"1", buf, 16, m_iniPath); m_rarAdvSolid    = _wtoi(buf) != 0;
+    GetPrivateProfileStringW(L"RarAdvanced", L"Threads",  L"0", buf, 16, m_iniPath); m_rarAdvThreads  = _wtoi(buf);
+    GetPrivateProfileStringW(L"RarAdvanced", L"Recovery", L"0", buf, 16, m_iniPath); m_rarAdvRecovery = _wtoi(buf);
+
     // Window placement
     GetPrivateProfileStringW(L"Window", L"X",         L"-1",    buf, 16, m_iniPath); m_windowX        = _wtoi(buf);
     GetPrivateProfileStringW(L"Window", L"Y",         L"-1",    buf, 16, m_iniPath); m_windowY        = _wtoi(buf);
@@ -64,6 +72,14 @@ void Settings::Save() const {
     WriteStr(L"AdvancedCompress", L"SolidBlock", m_advSolidBlock.c_str());
     WriteStr(L"AdvancedCompress", L"Threads",    m_advThreads.c_str());
     WriteStr(L"AdvancedCompress", L"Extra",      m_advExtra.c_str());
+
+    // RAR advanced compress options
+    WriteStr(L"RarAdvanced", L"DictSize",  m_rarAdvDictSize.c_str());
+    WriteStr(L"RarAdvanced", L"Volume",    m_rarAdvVolume.c_str());
+    WriteStr(L"RarAdvanced", L"Extra",     m_rarAdvExtra.c_str());
+    _itow_s(m_rarAdvSolid    ? 1 : 0, buf, 10); WriteStr(L"RarAdvanced", L"Solid",    buf);
+    _itow_s(m_rarAdvThreads,           buf, 10); WriteStr(L"RarAdvanced", L"Threads",  buf);
+    _itow_s(m_rarAdvRecovery,          buf, 10); WriteStr(L"RarAdvanced", L"Recovery", buf);
 
     // Window placement
     _itow_s(m_windowX,  buf, 10); WriteStr(L"Window", L"X",         buf);

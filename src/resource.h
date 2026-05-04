@@ -13,6 +13,7 @@
 #define IDD_SETTINGS        203
 #define IDD_INFO            204
 #define IDD_COMPRESS_ADV    205
+#define IDD_RAR_COMPRESS_ADV  206
 
 // Compress dialog controls
 #define IDC_OUTPUT_PATH     1001
@@ -31,6 +32,14 @@
 #define IDC_ADV_SOLID       6003
 #define IDC_ADV_THREADS     6004
 #define IDC_ADV_PARAMS      6005
+
+// RAR Advanced compress dialog controls
+#define IDC_RAR_ADV_DICT      7001
+#define IDC_RAR_ADV_SOLID     7002
+#define IDC_RAR_ADV_THREADS   7003
+#define IDC_RAR_ADV_RECOVERY  7004
+#define IDC_RAR_ADV_VOLUME    7005
+#define IDC_RAR_ADV_PARAMS    7006
 
 // Progress dialog controls
 #define IDC_PROGRESS_BAR    2001

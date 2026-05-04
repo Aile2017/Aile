@@ -1,4 +1,4 @@
-﻿#include "RarProcess.h"
+#include "RarProcess.h"
 #include "resource.h"
 #include <shlwapi.h>
 #include <string>
@@ -98,7 +98,8 @@ bool RarProcess::Compress(const std::vector<std::wstring>& srcPaths,
                            const wchar_t* method,
                            const wchar_t* rarExePathOverride,
                            HWND hwndNotify,
-                           UINT progressMsg, UINT doneMsg) {
+                           UINT progressMsg, UINT doneMsg,
+                           const RarAdvancedParams* adv) {
     // Resolve executable: override > auto-detect
     std::wstring rarExe;
     if (rarExePathOverride && rarExePathOverride[0])
@@ -117,8 +118,30 @@ bool RarProcess::Compress(const std::vector<std::wstring>& srcPaths,
     wchar_t mChar = (method && method[0] >= L'0' && method[0] <= L'5') ? method[0] : L'3';
     wchar_t mBuf[2] = {mChar, L'\0'};
 
-    std::wstring cmd = L"\"" + rarExe + L"\" a -ep1 -r -m" + mBuf + L" \"" + outPath + L"\"";
-    for (auto& f : srcPaths) cmd += L" \"" + f + L"\"";
+    std::wstring cmd = L"\"" + rarExe + L"\" a -ep1 -r -m" + mBuf;
+
+    if (adv) {
+        // 辞書サイズ
+        if (!adv->dictSize.empty())
+            cmd += L" -md" + adv->dictSize;
+        // ソリッドアーカイブ
+        cmd += adv->solid ? L" -s" : L" -ds";
+        // スレッド数
+        if (adv->threads > 0)
+            cmd += L" -mt" + std::to_wstring(adv->threads);
+        // リカバリレコード
+        if (adv->recoveryPct > 0)
+            cmd += L" -rr" + std::to_wstring(adv->recoveryPct) + L"p";
+        // 分割ボリューム (コンソール版のみ有効)
+        if (!adv->splitVolume.empty())
+            cmd += L" -v" + adv->splitVolume;
+        // 追加パラメーター
+        if (!adv->extra.empty())
+            cmd += L" " + adv->extra;
+    }
+
+    cmd += std::wstring(L" \"") + outPath + L"\"";
+    for (auto& f : srcPaths) cmd += std::wstring(L" \"") + f + L"\"";
 
     std::vector<wchar_t> cmdBuf(cmd.begin(), cmd.end());
     cmdBuf.push_back(L'\0');

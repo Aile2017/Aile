@@ -709,6 +709,12 @@ void MainWindow::OnAddFiles() {
     params.solidBlock = App::Instance().GetSettings().GetAdvSolidBlock();
     params.threads    = App::Instance().GetSettings().GetAdvThreads();
     params.extra      = App::Instance().GetSettings().GetAdvExtra();
+    params.rarDictSize    = App::Instance().GetSettings().GetRarAdvDictSize();
+    params.rarSolid       = App::Instance().GetSettings().GetRarAdvSolid();
+    params.rarThreads     = App::Instance().GetSettings().GetRarAdvThreads();
+    params.rarRecoveryPct = App::Instance().GetSettings().GetRarAdvRecovery();
+    params.rarSplitVolume = App::Instance().GetSettings().GetRarAdvVolume();
+    params.rarExtra       = App::Instance().GetSettings().GetRarAdvExtra();
 
     CompressDlg dlg;
     if (dlg.Show(m_hwnd, params)) {
@@ -721,6 +727,12 @@ void MainWindow::OnAddFiles() {
         s.SetAdvSolidBlock(params.solidBlock.c_str());
         s.SetAdvThreads(params.threads.c_str());
         s.SetAdvExtra(params.extra.c_str());
+        s.SetRarAdvDictSize(params.rarDictSize.c_str());
+        s.SetRarAdvSolid(params.rarSolid);
+        s.SetRarAdvThreads(params.rarThreads);
+        s.SetRarAdvRecovery(params.rarRecoveryPct);
+        s.SetRarAdvVolume(params.rarSplitVolume.c_str());
+        s.SetRarAdvExtra(params.rarExtra.c_str());
         s.Save();
         OnCompress(params);
     }
@@ -781,10 +793,17 @@ void MainWindow::OnCompress(CompressDlg::Params& params) {
     };
 
     if (format == L"rar") {
+        RarAdvancedParams rarAdv;
+        rarAdv.dictSize    = params.rarDictSize;
+        rarAdv.solid       = params.rarSolid;
+        rarAdv.threads     = params.rarThreads;
+        rarAdv.recoveryPct = params.rarRecoveryPct;
+        rarAdv.splitVolume = params.rarSplitVolume;
+        rarAdv.extra       = params.rarExtra;
         RarProcess rarProc;
         bool started = rarProc.Compress(inputs, outPath.c_str(), method.c_str(),
                                         App::Instance().GetSettings().GetRarExePath().c_str(),
-                                        m_hwnd, WM_APP_PROGRESS, WM_APP_DONE);
+                                        m_hwnd, WM_APP_PROGRESS, WM_APP_DONE, &rarAdv);
         if (!started) {
             progDlg.Dismiss();
             delete sink; m_pSink = nullptr;

@@ -1,5 +1,6 @@
 ﻿#include "CompressDlg.h"
 #include "AdvancedCompressDlg.h"
+#include "RarAdvancedDlg.h"
 #include "resource.h"
 #include <shlobj.h>
 #include <commctrl.h>
@@ -86,6 +87,9 @@ INT_PTR CompressDlg::HandleMsg(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             break;
         case IDC_BROWSE:
             OnBrowseOutput(hwnd);
+            break;
+        case IDC_ADV_BUTTON:
+            OnAdvanced(hwnd);
             break;
         case IDOK:
             if (OnOK(hwnd)) EndDialog(hwnd, IDOK);
@@ -240,7 +244,7 @@ void CompressDlg::OnBrowseOutput(HWND hwnd) {
 }
 
 void CompressDlg::OnAdvanced(HWND hwnd) {
-    // 現在の形式を取得してダイアログに渡す
+    // 現在の形式を取得
     std::wstring fmt = m_params.format;
     HWND hFmt = GetDlgItem(hwnd, IDC_FORMAT);
     int fsel = (int)SendMessageW(hFmt, CB_GETCURSEL, 0, 0);
@@ -249,20 +253,42 @@ void CompressDlg::OnAdvanced(HWND hwnd) {
         if (fmtId) fmt = fmtId;
     }
 
-    AdvancedCompressDlg::Params advParams;
-    advParams.dictSize   = m_params.dictSize;
-    advParams.wordSize   = m_params.wordSize;
-    advParams.solidBlock = m_params.solidBlock;
-    advParams.threads    = m_params.threads;
-    advParams.extra      = m_params.extra;
+    if (fmt == L"rar") {
+        // RAR 専用詳細設定
+        RarAdvancedDlg::Params rp;
+        rp.dictSize    = m_params.rarDictSize;
+        rp.solid       = m_params.rarSolid;
+        rp.threads     = m_params.rarThreads;
+        rp.recoveryPct = m_params.rarRecoveryPct;
+        rp.splitVolume = m_params.rarSplitVolume;
+        rp.extra       = m_params.rarExtra;
 
-    AdvancedCompressDlg advDlg;
-    if (advDlg.Show(hwnd, fmt.c_str(), advParams)) {
-        m_params.dictSize   = advParams.dictSize;
-        m_params.wordSize   = advParams.wordSize;
-        m_params.solidBlock = advParams.solidBlock;
-        m_params.threads    = advParams.threads;
-        m_params.extra      = advParams.extra;
+        RarAdvancedDlg rarDlg;
+        if (rarDlg.Show(hwnd, rp)) {
+            m_params.rarDictSize    = rp.dictSize;
+            m_params.rarSolid       = rp.solid;
+            m_params.rarThreads     = rp.threads;
+            m_params.rarRecoveryPct = rp.recoveryPct;
+            m_params.rarSplitVolume = rp.splitVolume;
+            m_params.rarExtra       = rp.extra;
+        }
+    } else {
+        // 7z/zip 等の詳細設定
+        AdvancedCompressDlg::Params advParams;
+        advParams.dictSize   = m_params.dictSize;
+        advParams.wordSize   = m_params.wordSize;
+        advParams.solidBlock = m_params.solidBlock;
+        advParams.threads    = m_params.threads;
+        advParams.extra      = m_params.extra;
+
+        AdvancedCompressDlg advDlg;
+        if (advDlg.Show(hwnd, fmt.c_str(), advParams)) {
+            m_params.dictSize   = advParams.dictSize;
+            m_params.wordSize   = advParams.wordSize;
+            m_params.solidBlock = advParams.solidBlock;
+            m_params.threads    = advParams.threads;
+            m_params.extra      = advParams.extra;
+        }
     }
 }
 

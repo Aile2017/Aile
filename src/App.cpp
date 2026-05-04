@@ -97,6 +97,12 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
     params.solidBlock    = m_settings.GetAdvSolidBlock();
     params.threads       = m_settings.GetAdvThreads();
     params.extra         = m_settings.GetAdvExtra();
+    params.rarDictSize    = m_settings.GetRarAdvDictSize();
+    params.rarSolid       = m_settings.GetRarAdvSolid();
+    params.rarThreads     = m_settings.GetRarAdvThreads();
+    params.rarRecoveryPct = m_settings.GetRarAdvRecovery();
+    params.rarSplitVolume = m_settings.GetRarAdvVolume();
+    params.rarExtra       = m_settings.GetRarAdvExtra();
     params.outputPath    = m_settings.GetDefaultOutputDir();
 
     CompressDlg dlg;
@@ -112,17 +118,30 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
     m_settings.SetAdvSolidBlock(params.solidBlock.c_str());
     m_settings.SetAdvThreads(params.threads.c_str());
     m_settings.SetAdvExtra(params.extra.c_str());
+    m_settings.SetRarAdvDictSize(params.rarDictSize.c_str());
+    m_settings.SetRarAdvSolid(params.rarSolid);
+    m_settings.SetRarAdvThreads(params.rarThreads);
+    m_settings.SetRarAdvRecovery(params.rarRecoveryPct);
+    m_settings.SetRarAdvVolume(params.rarSplitVolume.c_str());
+    m_settings.SetRarAdvExtra(params.rarExtra.c_str());
     m_settings.Save();
 
     ProgressDlg progDlg;
     progDlg.Show(wnd.Hwnd(), L"圧縮中...");
 
     if (params.format == L"rar") {
+        RarAdvancedParams rarAdv;
+        rarAdv.dictSize    = params.rarDictSize;
+        rarAdv.solid       = params.rarSolid;
+        rarAdv.threads     = params.rarThreads;
+        rarAdv.recoveryPct = params.rarRecoveryPct;
+        rarAdv.splitVolume = params.rarSplitVolume;
+        rarAdv.extra       = params.rarExtra;
         RarProcess rar;
         if (!rar.Compress(params.inputFiles, params.outputPath.c_str(),
                           params.method.c_str(),
                           m_settings.GetRarExePath().c_str(),
-                          wnd.Hwnd(), WM_APP_PROGRESS, WM_APP_DONE)) {
+                          wnd.Hwnd(), WM_APP_PROGRESS, WM_APP_DONE, &rarAdv)) {
             progDlg.Dismiss();
             return 0;
         }

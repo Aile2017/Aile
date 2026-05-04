@@ -37,6 +37,20 @@ public:
     void SetAdvThreads(const wchar_t* v)            { m_advThreads    = v; }
     void SetAdvExtra(const wchar_t* v)              { m_advExtra      = v; }
 
+    // RAR advanced options (last-used values)
+    const std::wstring& GetRarAdvDictSize() const   { return m_rarAdvDictSize; }
+    bool                GetRarAdvSolid() const      { return m_rarAdvSolid; }
+    int                 GetRarAdvThreads() const    { return m_rarAdvThreads; }
+    int                 GetRarAdvRecovery() const   { return m_rarAdvRecovery; }
+    const std::wstring& GetRarAdvVolume() const     { return m_rarAdvVolume; }
+    const std::wstring& GetRarAdvExtra() const      { return m_rarAdvExtra; }
+    void SetRarAdvDictSize(const wchar_t* v)        { m_rarAdvDictSize  = v; }
+    void SetRarAdvSolid(bool v)                     { m_rarAdvSolid     = v; }
+    void SetRarAdvThreads(int v)                    { m_rarAdvThreads   = v; }
+    void SetRarAdvRecovery(int v)                   { m_rarAdvRecovery  = v; }
+    void SetRarAdvVolume(const wchar_t* v)          { m_rarAdvVolume    = v; }
+    void SetRarAdvExtra(const wchar_t* v)           { m_rarAdvExtra     = v; }
+
     // Window placement
     int  GetWindowX() const          { return m_windowX; }
     int  GetWindowY() const          { return m_windowY; }
@@ -70,6 +84,13 @@ private:
     std::wstring m_advSolidBlock;
     std::wstring m_advThreads;
     std::wstring m_advExtra;
+    // RAR advanced
+    std::wstring m_rarAdvDictSize;
+    bool         m_rarAdvSolid    = true;
+    int          m_rarAdvThreads  = 0;
+    int          m_rarAdvRecovery = 0;
+    std::wstring m_rarAdvVolume;
+    std::wstring m_rarAdvExtra;
     int          m_windowX          = -1;   // -1 = use CW_USEDEFAULT
     int          m_windowY          = -1;
     int          m_windowW          = 900;

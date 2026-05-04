@@ -3,6 +3,16 @@
 #include <string>
 #include <vector>
 
+// RAR 専用詳細圧縮オプション。RarProcess::Compress() の末尾引数として渡す。
+struct RarAdvancedParams {
+    std::wstring dictSize;    // "" = auto; "128k","1m","1024m" → -md<n>
+    bool         solid       = true;   // ソリッドアーカイブ: true=-s / false=-ds
+    int          threads     = 0;      // 0 = auto; n>0 → -mt<n>
+    int          recoveryPct = 0;      // 0 = none; n>0 → -rr<n>p
+    std::wstring splitVolume; // "" = none; "10m","700m" → -v<size>
+    std::wstring extra;       // free-form params (末尾に追記)
+};
+
 class RarProcess {
 public:
     ~RarProcess();
@@ -14,6 +24,7 @@ public:
     // Spawn the RAR executable to compress files.
     // rarExePathOverride: if non-empty, use this path instead of auto-detect.
     // method: "0"=Store .. "5"=Best (maps to -m0..-m5). nullptr/empty → "3" (Normal).
+    // adv: optional advanced params (nullptr = use defaults).
     // - WinRAR.exe (GUI): shows its own progress window; no stdout parsing.
     // - Rar.exe (console): posts WM_APP_PROGRESS / WM_APP_DONE to hwndNotify.
     bool Compress(const std::vector<std::wstring>& srcPaths,
@@ -22,7 +33,8 @@ public:
                   const wchar_t* rarExePathOverride,
                   HWND hwndNotify,
                   UINT progressMsg,
-                  UINT doneMsg);
+                  UINT doneMsg,
+                  const RarAdvancedParams* adv = nullptr);
 
     void Cancel();
     bool IsRunning() const;
