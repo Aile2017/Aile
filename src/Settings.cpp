@@ -19,6 +19,28 @@ void Settings::Load() {
     GetPrivateProfileStringW(L"General", L"CompressionLevel", L"5", buf, 16, m_iniPath);
     m_compressionLevel = _wtoi(buf);
     if (m_compressionLevel < 0 || m_compressionLevel > 9) m_compressionLevel = 5;
+
+    GetPrivateProfileStringW(L"General", L"RarLevel", L"3", buf, 16, m_iniPath);
+    m_rarLevel = _wtoi(buf);
+    if (m_rarLevel < 0 || m_rarLevel > 5) m_rarLevel = 3;
+
+    // Advanced compress options
+    m_advDictSize   = ReadStr(L"AdvancedCompress", L"DictSize",   L"");
+    m_advWordSize   = ReadStr(L"AdvancedCompress", L"WordSize",   L"");
+    m_advSolidBlock = ReadStr(L"AdvancedCompress", L"SolidBlock", L"");
+    m_advThreads    = ReadStr(L"AdvancedCompress", L"Threads",    L"");
+    m_advExtra      = ReadStr(L"AdvancedCompress", L"Extra",      L"");
+
+    // Window placement
+    GetPrivateProfileStringW(L"Window", L"X",         L"-1",    buf, 16, m_iniPath); m_windowX        = _wtoi(buf);
+    GetPrivateProfileStringW(L"Window", L"Y",         L"-1",    buf, 16, m_iniPath); m_windowY        = _wtoi(buf);
+    GetPrivateProfileStringW(L"Window", L"W",         L"900",   buf, 16, m_iniPath); m_windowW        = _wtoi(buf);
+    GetPrivateProfileStringW(L"Window", L"H",         L"600",   buf, 16, m_iniPath); m_windowH        = _wtoi(buf);
+    GetPrivateProfileStringW(L"Window", L"Maximized", L"0",     buf, 16, m_iniPath); m_windowMaximized = _wtoi(buf) != 0;
+    GetPrivateProfileStringW(L"Window", L"Splitter",  L"220",   buf, 16, m_iniPath); m_splitterPos    = _wtoi(buf);
+    if (m_windowW < 400) m_windowW = 400;
+    if (m_windowH < 300) m_windowH = 300;
+    if (m_splitterPos < 80) m_splitterPos = 80;
 }
 
 void Settings::Save() const {
@@ -32,6 +54,24 @@ void Settings::Save() const {
     wchar_t buf[16] = {};
     _itow_s(m_compressionLevel, buf, 10);
     WriteStr(L"General", L"CompressionLevel", buf);
+
+    _itow_s(m_rarLevel, buf, 10);
+    WriteStr(L"General", L"RarLevel", buf);
+
+    // Advanced compress options
+    WriteStr(L"AdvancedCompress", L"DictSize",   m_advDictSize.c_str());
+    WriteStr(L"AdvancedCompress", L"WordSize",   m_advWordSize.c_str());
+    WriteStr(L"AdvancedCompress", L"SolidBlock", m_advSolidBlock.c_str());
+    WriteStr(L"AdvancedCompress", L"Threads",    m_advThreads.c_str());
+    WriteStr(L"AdvancedCompress", L"Extra",      m_advExtra.c_str());
+
+    // Window placement
+    _itow_s(m_windowX,  buf, 10); WriteStr(L"Window", L"X",         buf);
+    _itow_s(m_windowY,  buf, 10); WriteStr(L"Window", L"Y",         buf);
+    _itow_s(m_windowW,  buf, 10); WriteStr(L"Window", L"W",         buf);
+    _itow_s(m_windowH,  buf, 10); WriteStr(L"Window", L"H",         buf);
+    WriteStr(L"Window", L"Maximized", m_windowMaximized ? L"1" : L"0");
+    _itow_s(m_splitterPos, buf, 10); WriteStr(L"Window", L"Splitter", buf);
 }
 
 std::wstring Settings::ReadStr(const wchar_t* section, const wchar_t* key, const wchar_t* def) const {

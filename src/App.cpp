@@ -1,4 +1,4 @@
-#include "App.h"
+﻿#include "App.h"
 #include "MainWindow.h"
 #include "CompressDlg.h"
 #include "ProgressDlg.h"
@@ -91,12 +91,28 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
     params.inputFiles    = filePaths;
     params.format        = m_settings.GetDefaultFormat();
     params.level         = m_settings.GetCompressionLevel();
+    params.rarLevel      = m_settings.GetRarLevel();
+    params.dictSize      = m_settings.GetAdvDictSize();
+    params.wordSize      = m_settings.GetAdvWordSize();
+    params.solidBlock    = m_settings.GetAdvSolidBlock();
+    params.threads       = m_settings.GetAdvThreads();
+    params.extra         = m_settings.GetAdvExtra();
     params.outputPath    = m_settings.GetDefaultOutputDir();
 
     CompressDlg dlg;
     if (!dlg.Show(wnd.Hwnd(), params)) {
         return 0;
     }
+    // Remember last-used settings
+    m_settings.SetCompressionLevel(params.level);
+    m_settings.SetRarLevel(params.rarLevel);
+    m_settings.SetDefaultFormat(params.format.c_str());
+    m_settings.SetAdvDictSize(params.dictSize.c_str());
+    m_settings.SetAdvWordSize(params.wordSize.c_str());
+    m_settings.SetAdvSolidBlock(params.solidBlock.c_str());
+    m_settings.SetAdvThreads(params.threads.c_str());
+    m_settings.SetAdvExtra(params.extra.c_str());
+    m_settings.Save();
 
     ProgressDlg progDlg;
     progDlg.Show(wnd.Hwnd(), L"圧縮中...");
@@ -135,9 +151,15 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
         WorkerThread worker;
         worker.Start([&sz, params, sink]() -> HRESULT {
             const wchar_t* pw = params.password.empty() ? nullptr : params.password.c_str();
+            CompressAdvanced adv;
+            adv.dictSize   = params.dictSize;
+            adv.wordSize   = params.wordSize;
+            adv.solidBlock = params.solidBlock;
+            adv.threads    = params.threads;
+            adv.extra      = params.extra;
             return sz.Compress(params.inputFiles, params.outputPath.c_str(),
                                params.format.c_str(), params.level,
-                               params.method.c_str(), pw, sink);
+                               params.method.c_str(), pw, sink, &adv);
         }, wnd.Hwnd(), WM_APP_DONE);
 
         MSG msg = {};

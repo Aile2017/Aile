@@ -12,6 +12,7 @@
 #define IDD_PROGRESS        202
 #define IDD_SETTINGS        203
 #define IDD_INFO            204
+#define IDD_COMPRESS_ADV    205
 
 // Compress dialog controls
 #define IDC_OUTPUT_PATH     1001
@@ -22,6 +23,14 @@
 #define IDC_PASSWORD        1006
 #define IDC_ENCRYPT_HDR     1007
 #define IDC_INPUT_LIST      1008
+#define IDC_ADV_BUTTON      1009
+
+// Advanced compress dialog controls
+#define IDC_ADV_DICT        6001
+#define IDC_ADV_WORD        6002
+#define IDC_ADV_SOLID       6003
+#define IDC_ADV_THREADS     6004
+#define IDC_ADV_PARAMS      6005
 
 // Progress dialog controls
 #define IDC_PROGRESS_BAR    2001

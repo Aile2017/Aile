@@ -984,7 +984,8 @@ HRESULT SevenZip::Compress(const std::vector<std::wstring>& srcPaths,
                             int level,
                             const wchar_t* method,
                             const wchar_t* password,
-                            IExtractProgressSink* sink) {
+                            IExtractProgressSink* sink,
+                            const CompressAdvanced* adv) {
     if (!IsLoaded()) return E_FAIL;
 
     // For stream formats (gz/bz2/xz) with multiple files or a single directory,
@@ -1041,6 +1042,7 @@ HRESULT SevenZip::Compress(const std::vector<std::wstring>& srcPaths,
                                           reinterpret_cast<void**>(&setProps))) && setProps) {
         std::vector<const wchar_t*> names;
         std::vector<PROPVARIANT>    vals;
+        std::vector<std::wstring>   extraKeyStore; // extra キー文字列の安定ストレージ
 
         PROPVARIANT pvLevel; PropVariantInit(&pvLevel);
         pvLevel.vt = VT_UI4;
@@ -1052,6 +1054,47 @@ HRESULT SevenZip::Compress(const std::vector<std::wstring>& srcPaths,
             pvMethod.vt = VT_BSTR;
             pvMethod.bstrVal = SysAllocString(method);
             names.push_back(L"m"); vals.push_back(pvMethod);
+        }
+
+        if (adv) {
+            auto pushBstr = [&](const wchar_t* key, const std::wstring& val) {
+                if (val.empty()) return;
+                PROPVARIANT pv; PropVariantInit(&pv);
+                pv.vt = VT_BSTR;
+                pv.bstrVal = SysAllocString(val.c_str());
+                names.push_back(key);
+                vals.push_back(pv);
+            };
+            pushBstr(L"d",  adv->dictSize);    // 辞書サイズ
+            pushBstr(L"fb", adv->wordSize);    // fast bytes (ワードサイズ)
+            pushBstr(L"ms", adv->solidBlock);  // ソリッドブロックサイズ
+            pushBstr(L"mt", adv->threads);     // スレッド数
+
+            // 追加パラメーター "key=value" pairs を空白区切りで解析して適用する
+            if (!adv->extra.empty()) {
+                std::vector<std::pair<std::wstring, std::wstring>> extraPairs;
+                const std::wstring& s = adv->extra;
+                size_t pos = 0;
+                while (pos < s.size()) {
+                    while (pos < s.size() && iswspace(s[pos])) ++pos;
+                    if (pos >= s.size()) break;
+                    size_t start2 = pos;
+                    while (pos < s.size() && !iswspace(s[pos])) ++pos;
+                    std::wstring token = s.substr(start2, pos - start2);
+                    auto eq = token.find(L'=');
+                    if (eq != std::wstring::npos)
+                        extraPairs.emplace_back(token.substr(0, eq), token.substr(eq + 1));
+                }
+                extraKeyStore.reserve(extraPairs.size());
+                for (auto& kv : extraPairs) extraKeyStore.push_back(kv.first);
+                for (size_t i = 0; i < extraPairs.size(); i++) {
+                    names.push_back(extraKeyStore[i].c_str());
+                    PROPVARIANT pv; PropVariantInit(&pv);
+                    pv.vt = VT_BSTR;
+                    pv.bstrVal = SysAllocString(extraPairs[i].second.c_str());
+                    vals.push_back(pv);
+                }
+            }
         }
 
         setProps->SetProperties(names.data(), vals.data(), (UInt32)names.size());

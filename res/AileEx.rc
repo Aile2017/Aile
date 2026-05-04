@@ -36,8 +36,35 @@ BEGIN
     EDITTEXT        IDC_PASSWORD,       62, 116, 150,  14, ES_AUTOHSCROLL | ES_PASSWORD
     AUTOCHECKBOX    "ヘッダを暗号化",   IDC_ENCRYPT_HDR, 220, 118, 100, 10
 
+    PUSHBUTTON      "詳細...",          IDC_ADV_BUTTON, 185, 158,  50,  14
     DEFPUSHBUTTON   "OK",              IDOK,          248, 158,  50,  14
     PUSHBUTTON      "キャンセル",       IDCANCEL,      302, 158,  50,  14
+END
+
+/////////////////////////////////////////////////////////////////////////////
+// Advanced compression dialog
+/////////////////////////////////////////////////////////////////////////////
+IDD_COMPRESS_ADV DIALOGEX 0, 0, 290, 195
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "詳細圧縮設定"
+FONT 9, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    GROUPBOX        "圧縮オプション",        IDC_STATIC,     7,   4, 276, 150
+    LTEXT           "辞書サイズ:",           IDC_STATIC,    14,  20,  58,   8
+    COMBOBOX        IDC_ADV_DICT,           76,  18, 110, 130, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "ワードサイズ:",         IDC_STATIC,    14,  38,  58,   8
+    COMBOBOX        IDC_ADV_WORD,           76,  36, 110, 130, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "ソリッドブロック:",     IDC_STATIC,    14,  56,  58,   8
+    COMBOBOX        IDC_ADV_SOLID,          76,  54, 110, 130, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "スレッド数:",           IDC_STATIC,    14,  74,  58,   8
+    COMBOBOX        IDC_ADV_THREADS,        76,  72, 110, 130, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "追加パラメーター:",     IDC_STATIC,    14,  96,  68,   8
+    LTEXT           "(例: mf=bt4 mpass=2)", IDC_STATIC,    14, 106,  90,   8
+    EDITTEXT        IDC_ADV_PARAMS,         14, 118, 256,  14, ES_AUTOHSCROLL
+    LTEXT           "※ 7z形式以外ではソリッドブロックは無効です。", IDC_STATIC, 14, 140, 260, 8
+
+    DEFPUSHBUTTON   "OK",              IDOK,          176, 175,  50,  14
+    PUSHBUTTON      "キャンセル",       IDCANCEL,      233, 175,  50,  14
 END
 
 /////////////////////////////////////////////////////////////////////////////

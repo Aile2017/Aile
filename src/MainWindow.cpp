@@ -1,4 +1,4 @@
-#include "MainWindow.h"
+﻿#include "MainWindow.h"
 #include "App.h"
 #include "CompressDlg.h"
 #include "InfoDlg.h"
@@ -28,13 +28,23 @@ bool MainWindow::RegisterClass(HINSTANCE hInst) {
 }
 
 bool MainWindow::Create(HINSTANCE hInst, int nCmdShow) {
+    auto& s = App::Instance().GetSettings();
+    m_treeWidth = s.GetSplitterPos();
+
+    int wx = s.GetWindowX(), wy = s.GetWindowY();
+    int ww = s.GetWindowW(), wh = s.GetWindowH();
+    if (wx < 0) { wx = CW_USEDEFAULT; wy = CW_USEDEFAULT; }
+
     HWND hwnd = CreateWindowExW(
         0, ClassName(), L"AileEx",
         WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT, CW_USEDEFAULT, 900, 600,
+        wx, wy, ww, wh,
         nullptr, nullptr, hInst, this);
 
     if (!hwnd) return false;
+    // If maximized was saved and caller did not request a specific show command, honour it
+    if (s.GetWindowMaximized() && nCmdShow == SW_SHOWDEFAULT)
+        nCmdShow = SW_SHOWMAXIMIZED;
     ShowWindow(hwnd, nCmdShow);
     UpdateWindow(hwnd);
     return true;
@@ -150,8 +160,72 @@ LRESULT MainWindow::HandleMsg(UINT msg, WPARAM wp, LPARAM lp) {
             OnTreeSelChanged();
         if (hdr->hwndFrom == m_hListView && hdr->code == NM_DBLCLK)
             OnListDblClick();
+        if (hdr->hwndFrom == m_hListView && hdr->code == LVN_COLUMNCLICK) {
+            auto* nm = reinterpret_cast<NMLISTVIEW*>(lp);
+            OnColumnClick(nm->iSubItem);
+        }
         return 0;
     }
+
+    case WM_SETCURSOR: {
+        if ((HWND)wp == m_hwnd) {
+            POINT pt;
+            GetCursorPos(&pt);
+            ScreenToClient(m_hwnd, &pt);
+            if (pt.x >= m_treeWidth && pt.x < m_treeWidth + kSplitterW) {
+                SetCursor(LoadCursorW(nullptr, IDC_SIZEWE));
+                return TRUE;
+            }
+        }
+        break;
+    }
+
+    case WM_LBUTTONDOWN: {
+        int x = (int)(short)LOWORD(lp);
+        if (x >= m_treeWidth && x < m_treeWidth + kSplitterW) {
+            m_draggingSplitter = true;
+            SetCapture(m_hwnd);
+            SetCursor(LoadCursorW(nullptr, IDC_SIZEWE));
+            return 0;
+        }
+        break;
+    }
+
+    case WM_MOUSEMOVE: {
+        int x = (int)(short)LOWORD(lp);
+        if (m_draggingSplitter) {
+            RECT rc;
+            GetClientRect(m_hwnd, &rc);
+            int newW = x;
+            if (newW < kTreeMinW) newW = kTreeMinW;
+            if (newW > rc.right - kListMinW - kSplitterW) newW = rc.right - kListMinW - kSplitterW;
+            if (newW != m_treeWidth) {
+                m_treeWidth = newW;
+                ResizePanes(rc.right, rc.bottom);
+            }
+            SetCursor(LoadCursorW(nullptr, IDC_SIZEWE));
+            return 0;
+        }
+        if (x >= m_treeWidth && x < m_treeWidth + kSplitterW) {
+            SetCursor(LoadCursorW(nullptr, IDC_SIZEWE));
+            return 0;
+        }
+        break;
+    }
+
+    case WM_LBUTTONUP:
+        if (m_draggingSplitter) {
+            m_draggingSplitter = false;
+            ReleaseCapture();
+            return 0;
+        }
+        break;
+
+    case WM_CAPTURECHANGED:
+        if (m_draggingSplitter) {
+            m_draggingSplitter = false;
+        }
+        break;
 
     case WM_APP_PROGRESS:
         OnProgress((int)wp, (wchar_t*)lp);
@@ -161,7 +235,21 @@ LRESULT MainWindow::HandleMsg(UINT msg, WPARAM wp, LPARAM lp) {
         OnDone((HRESULT)wp);
         return 0;
 
-    case WM_DESTROY:
+    case WM_DESTROY: {
+        // Save window placement and splitter position
+        {
+            WINDOWPLACEMENT wp = {};
+            wp.length = sizeof(wp);
+            GetWindowPlacement(m_hwnd, &wp);
+            bool maximized = (wp.showCmd == SW_SHOWMAXIMIZED);
+            RECT& r = wp.rcNormalPosition;
+            auto& s = App::Instance().GetSettings();
+            s.SetWindowPlacement((int)r.left, (int)r.top,
+                                 (int)(r.right - r.left), (int)(r.bottom - r.top),
+                                 maximized);
+            s.SetSplitterPos(m_treeWidth);
+            s.Save();
+        }
         // Delete session temp dir tree (files opened via [閲覧])
         if (!m_tempViewDir.empty()) {
             SHFILEOPSTRUCTW fop = {};
@@ -174,6 +262,7 @@ LRESULT MainWindow::HandleMsg(UINT msg, WPARAM wp, LPARAM lp) {
         }
         PostQuitMessage(0);
         return 0;
+    }
     }
     return DefWindowProcW(m_hwnd, msg, wp, lp);
 }
@@ -274,10 +363,10 @@ void MainWindow::ResizePanes(int cx, int cy) {
     if (contentH < 0) contentH = 0;
 
     // TreeView (left)
-    SetWindowPos(m_hTreeView, nullptr, 0, contentTop, kTreeWidth, contentH, SWP_NOZORDER);
+    SetWindowPos(m_hTreeView, nullptr, 0, contentTop, m_treeWidth, contentH, SWP_NOZORDER);
 
     // ListView (right)
-    int lvX = kTreeWidth + 2;
+    int lvX = m_treeWidth + kSplitterW;
     SetWindowPos(m_hListView, nullptr, lvX, contentTop, cx - lvX, contentH, SWP_NOZORDER);
 }
 
@@ -313,10 +402,27 @@ void MainWindow::OnDropFiles(HDROP hDrop) {
         params.inputFiles = std::move(regular);
         params.format     = App::Instance().GetSettings().GetDefaultFormat();
         params.level      = App::Instance().GetSettings().GetCompressionLevel();
+        params.rarLevel   = App::Instance().GetSettings().GetRarLevel();
+        params.dictSize   = App::Instance().GetSettings().GetAdvDictSize();
+        params.wordSize   = App::Instance().GetSettings().GetAdvWordSize();
+        params.solidBlock = App::Instance().GetSettings().GetAdvSolidBlock();
+        params.threads    = App::Instance().GetSettings().GetAdvThreads();
+        params.extra      = App::Instance().GetSettings().GetAdvExtra();
 
         CompressDlg dlg;
-        if (dlg.Show(m_hwnd, params))
+        if (dlg.Show(m_hwnd, params)) {
+            auto& s = App::Instance().GetSettings();
+            s.SetCompressionLevel(params.level);
+            s.SetRarLevel(params.rarLevel);
+            s.SetDefaultFormat(params.format.c_str());
+            s.SetAdvDictSize(params.dictSize.c_str());
+            s.SetAdvWordSize(params.wordSize.c_str());
+            s.SetAdvSolidBlock(params.solidBlock.c_str());
+            s.SetAdvThreads(params.threads.c_str());
+            s.SetAdvExtra(params.extra.c_str());
+            s.Save();
             OnCompress(params);
+        }
     }
 }
 
@@ -597,10 +703,27 @@ void MainWindow::OnAddFiles() {
     params.inputFiles = std::move(files);
     params.format     = App::Instance().GetSettings().GetDefaultFormat();
     params.level      = App::Instance().GetSettings().GetCompressionLevel();
+    params.rarLevel   = App::Instance().GetSettings().GetRarLevel();
+    params.dictSize   = App::Instance().GetSettings().GetAdvDictSize();
+    params.wordSize   = App::Instance().GetSettings().GetAdvWordSize();
+    params.solidBlock = App::Instance().GetSettings().GetAdvSolidBlock();
+    params.threads    = App::Instance().GetSettings().GetAdvThreads();
+    params.extra      = App::Instance().GetSettings().GetAdvExtra();
 
     CompressDlg dlg;
-    if (dlg.Show(m_hwnd, params))
+    if (dlg.Show(m_hwnd, params)) {
+        auto& s = App::Instance().GetSettings();
+        s.SetCompressionLevel(params.level);
+        s.SetRarLevel(params.rarLevel);
+        s.SetDefaultFormat(params.format.c_str());
+        s.SetAdvDictSize(params.dictSize.c_str());
+        s.SetAdvWordSize(params.wordSize.c_str());
+        s.SetAdvSolidBlock(params.solidBlock.c_str());
+        s.SetAdvThreads(params.threads.c_str());
+        s.SetAdvExtra(params.extra.c_str());
+        s.Save();
         OnCompress(params);
+    }
 }
 
 void MainWindow::OnInfo() {
@@ -676,9 +799,21 @@ void MainWindow::OnCompress(CompressDlg::Params& params) {
             return;
         }
         auto& sz = App::Instance().Get7z();
-        m_worker.Start([&sz, inputs, outPath, format, level, method, pw, sink]() -> HRESULT {
+        auto advDict   = params.dictSize;
+        auto advWord   = params.wordSize;
+        auto advSolid  = params.solidBlock;
+        auto advThreads= params.threads;
+        auto advExtra  = params.extra;
+        m_worker.Start([&sz, inputs, outPath, format, level, method, pw, sink,
+                        advDict, advWord, advSolid, advThreads, advExtra]() -> HRESULT {
+            CompressAdvanced adv;
+            adv.dictSize   = advDict;
+            adv.wordSize   = advWord;
+            adv.solidBlock = advSolid;
+            adv.threads    = advThreads;
+            adv.extra      = advExtra;
             return sz.Compress(inputs, outPath.c_str(), format.c_str(),
-                               level, method.c_str(), pw.empty() ? nullptr : pw.c_str(), sink);
+                               level, method.c_str(), pw.empty() ? nullptr : pw.c_str(), sink, &adv);
         }, m_hwnd, WM_APP_DONE);
         runMsgLoop([]{});
         m_worker.Wait();
@@ -821,12 +956,31 @@ void MainWindow::PopulateList(const std::wstring& folderPath) {
         else          files.push_back({&it});
     }
 
-    // Sort each group by name ascending (case-insensitive)
-    auto byName = [](const Row& a, const Row& b) {
-        return _wcsicmp(a.it->name.c_str(), b.it->name.c_str()) < 0;
+    // Sort each group by the current sort column/direction (folders always first)
+    int  sc  = m_sortCol;
+    bool asc = m_sortAsc;
+    auto cmp = [sc, asc](const Row& a, const Row& b) -> bool {
+        int result = 0;
+        switch (sc) {
+        case 1: // サイズ
+            result = (a.it->size < b.it->size) ? -1 : (a.it->size > b.it->size) ? 1 : 0;
+            break;
+        case 2: // 圧縮後
+            result = (a.it->packedSize < b.it->packedSize) ? -1 : (a.it->packedSize > b.it->packedSize) ? 1 : 0;
+            break;
+        case 3: // 種類
+            result = _wcsicmp(a.it->method.c_str(), b.it->method.c_str());
+            break;
+        case 4: // 更新日時
+            result = CompareFileTime(&a.it->mtime, &b.it->mtime);
+            break;
+        default: // 名前
+            result = _wcsicmp(a.it->name.c_str(), b.it->name.c_str());
+        }
+        return asc ? (result < 0) : (result > 0);
     };
-    std::sort(dirs.begin(),  dirs.end(),  byName);
-    std::sort(files.begin(), files.end(), byName);
+    std::sort(dirs.begin(),  dirs.end(),  cmp);
+    std::sort(files.begin(), files.end(), cmp);
 
     // Merge: folders first, then files
     std::vector<Row> rows;
@@ -871,6 +1025,32 @@ void MainWindow::PopulateList(const std::wstring& folderPath) {
             ListView_SetItemText(m_hListView, row, 4, dateStr);
         }
     }
+}
+
+void MainWindow::UpdateSortHeader() {
+    HWND hHeader = ListView_GetHeader(m_hListView);
+    if (!hHeader) return;
+    int nCols = Header_GetItemCount(hHeader);
+    for (int i = 0; i < nCols; ++i) {
+        HDITEMW hdi = {};
+        hdi.mask = HDI_FORMAT;
+        Header_GetItem(hHeader, i, &hdi);
+        hdi.fmt &= ~(HDF_SORTUP | HDF_SORTDOWN);
+        if (i == m_sortCol)
+            hdi.fmt |= (m_sortAsc ? HDF_SORTUP : HDF_SORTDOWN);
+        Header_SetItem(hHeader, i, &hdi);
+    }
+}
+
+void MainWindow::OnColumnClick(int col) {
+    if (m_sortCol == col)
+        m_sortAsc = !m_sortAsc;
+    else {
+        m_sortCol = col;
+        m_sortAsc = true;
+    }
+    UpdateSortHeader();
+    PopulateList(SelectedFolderPath());
 }
 
 std::wstring MainWindow::SelectedFolderPath() const {

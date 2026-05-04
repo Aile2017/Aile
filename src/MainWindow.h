@@ -36,6 +36,8 @@ private:
     void OnProgress(int pct, wchar_t* filename);  // takes ownership of filename
     void OnDone(HRESULT hr);
 
+    void OnColumnClick(int col);
+    void UpdateSortHeader();
     void CreateControls(HWND hwnd);
     void ResizePanes(int cx, int cy);
     void PopulateTree();
@@ -57,8 +59,14 @@ private:
     WorkerThread             m_worker;
     ProgressPostSink*        m_pSink = nullptr;
     std::wstring             m_tempViewDir;   // session temp dir; deleted on exit
+    int                      m_sortCol = 0;   // 0=名前, 1=サイズ, 2=圧縮後, 3=種類, 4=更新日時
+    bool                     m_sortAsc = true;
+    int                      m_treeWidth = 220;      // current splitter position
+    bool                     m_draggingSplitter = false;
 
-    static constexpr int kTreeWidth = 220;
+    static constexpr int kSplitterW = 5;
+    static constexpr int kTreeMinW  = 80;
+    static constexpr int kListMinW  = 80;
     static constexpr int kToolbarH  = 28;
     static constexpr int kStatusH   = 22;
 };

@@ -1,4 +1,5 @@
 ﻿#include "CompressDlg.h"
+#include "AdvancedCompressDlg.h"
 #include "resource.h"
 #include <shlobj.h>
 #include <commctrl.h>
@@ -41,7 +42,7 @@ static const MethodEntry kMethodsRar[] = {
     {L"Store",          L"0"},
     {L"Fastest",        L"1"},
     {L"Fast",           L"2"},
-    {L"Normal (既定)", L"3"},
+    {L"Normal",           L"3"},
     {L"Good",           L"4"},
     {L"Best",           L"5"},
 };
@@ -109,21 +110,6 @@ void CompressDlg::OnInit(HWND hwnd) {
     if (SendMessageW(hFmt, CB_GETCURSEL, 0, 0) == CB_ERR)
         SendMessageW(hFmt, CB_SETCURSEL, 0, 0);
 
-    // Populate level combo
-    HWND hLevel = GetDlgItem(hwnd, IDC_LEVEL);
-    const wchar_t* levels[] = {
-        L"0 – 無圧縮", L"1 – 最高速", L"3 – 高速",
-        L"5 – 標準",   L"7 – 最大",   L"9 – 超圧縮"
-    };
-    const int levelVals[] = {0, 1, 3, 5, 7, 9};
-    for (int i = 0; i < 6; ++i) {
-        int idx = (int)SendMessageW(hLevel, CB_ADDSTRING, 0, (LPARAM)levels[i]);
-        SendMessageW(hLevel, CB_SETITEMDATA, idx, levelVals[i]);
-        if (m_params.level == levelVals[i]) SendMessageW(hLevel, CB_SETCURSEL, idx, 0);
-    }
-    if (SendMessageW(hLevel, CB_GETCURSEL, 0, 0) == CB_ERR)
-        SendMessageW(hLevel, CB_SETCURSEL, 3, 0);  // default = 5 (index 3)
-
     // Output path
     SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, m_params.outputPath.c_str());
 
@@ -188,23 +174,40 @@ void CompressDlg::OnFormatChange(HWND hwnd) {
     bool isZip = (fmtId && wcscmp(fmtId, L"zip") == 0);
     bool isRar = (fmtId && wcscmp(fmtId, L"rar") == 0);
 
+    HWND hLevel = GetDlgItem(hwnd, IDC_LEVEL);
+    SendMessageW(hLevel, CB_RESETCONTENT, 0, 0);
+
     if (isRar) {
-        // RAR compression level is controlled via -m0..-m5; map to method combo
+        // RAR uses -m0..-m5 compression levels; populate level combo with RAR-specific options
         for (int i = 0; i < (int)_countof(kMethodsRar); ++i) {
-            int idx = (int)SendMessageW(hMethod, CB_ADDSTRING, 0, (LPARAM)kMethodsRar[i].label);
-            SendMessageW(hMethod, CB_SETITEMDATA, idx, (LPARAM)kMethodsRar[i].id);
-            if (m_params.method == kMethodsRar[i].id)
-                SendMessageW(hMethod, CB_SETCURSEL, idx, 0);
+            int idx = (int)SendMessageW(hLevel, CB_ADDSTRING, 0, (LPARAM)kMethodsRar[i].label);
+            SendMessageW(hLevel, CB_SETITEMDATA, idx, i);
+            if (m_params.rarLevel == i)
+                SendMessageW(hLevel, CB_SETCURSEL, idx, 0);
         }
-        if (SendMessageW(hMethod, CB_GETCURSEL, 0, 0) == CB_ERR)
-            SendMessageW(hMethod, CB_SETCURSEL, 3, 0);  // default = Normal
-        EnableWindow(hMethod, TRUE);
-        EnableWindow(GetDlgItem(hwnd, IDC_LEVEL), FALSE);  // level is meaningless for RAR
+        if (SendMessageW(hLevel, CB_GETCURSEL, 0, 0) == CB_ERR)
+            SendMessageW(hLevel, CB_SETCURSEL, 3, 0);  // default = Normal (index 3)
+        EnableWindow(hLevel, TRUE);
+        EnableWindow(hMethod, FALSE);
         EnableWindow(GetDlgItem(hwnd, IDC_PASSWORD), TRUE);
         EnableWindow(GetDlgItem(hwnd, IDC_ENCRYPT_HDR), FALSE);
         return;
     }
-    EnableWindow(GetDlgItem(hwnd, IDC_LEVEL), TRUE);
+
+    // Non-RAR: populate level combo with 7z/zip levels (0-9 scale)
+    const wchar_t* levels[] = {
+        L"0 – 無圧縮", L"1 – 最高速", L"3 – 高速",
+        L"5 – 標準",   L"7 – 最大",   L"9 – 超圧縮"
+    };
+    const int levelVals[] = {0, 1, 3, 5, 7, 9};
+    for (int i = 0; i < 6; ++i) {
+        int idx = (int)SendMessageW(hLevel, CB_ADDSTRING, 0, (LPARAM)levels[i]);
+        SendMessageW(hLevel, CB_SETITEMDATA, idx, levelVals[i]);
+        if (m_params.level == levelVals[i]) SendMessageW(hLevel, CB_SETCURSEL, idx, 0);
+    }
+    if (SendMessageW(hLevel, CB_GETCURSEL, 0, 0) == CB_ERR)
+        SendMessageW(hLevel, CB_SETCURSEL, 3, 0);  // default = 5 (index 3)
+    EnableWindow(hLevel, TRUE);
     EnableWindow(hMethod, TRUE);
     EnableWindow(GetDlgItem(hwnd, IDC_PASSWORD), TRUE);
     EnableWindow(GetDlgItem(hwnd, IDC_ENCRYPT_HDR), is7z);
@@ -234,6 +237,33 @@ void CompressDlg::OnBrowseOutput(HWND hwnd) {
     ofn.lpstrTitle   = L"出力ファイル名";
     if (GetSaveFileNameW(&ofn))
         SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, path);
+}
+
+void CompressDlg::OnAdvanced(HWND hwnd) {
+    // 現在の形式を取得してダイアログに渡す
+    std::wstring fmt = m_params.format;
+    HWND hFmt = GetDlgItem(hwnd, IDC_FORMAT);
+    int fsel = (int)SendMessageW(hFmt, CB_GETCURSEL, 0, 0);
+    if (fsel != CB_ERR) {
+        const wchar_t* fmtId = (const wchar_t*)SendMessageW(hFmt, CB_GETITEMDATA, fsel, 0);
+        if (fmtId) fmt = fmtId;
+    }
+
+    AdvancedCompressDlg::Params advParams;
+    advParams.dictSize   = m_params.dictSize;
+    advParams.wordSize   = m_params.wordSize;
+    advParams.solidBlock = m_params.solidBlock;
+    advParams.threads    = m_params.threads;
+    advParams.extra      = m_params.extra;
+
+    AdvancedCompressDlg advDlg;
+    if (advDlg.Show(hwnd, fmt.c_str(), advParams)) {
+        m_params.dictSize   = advParams.dictSize;
+        m_params.wordSize   = advParams.wordSize;
+        m_params.solidBlock = advParams.solidBlock;
+        m_params.threads    = advParams.threads;
+        m_params.extra      = advParams.extra;
+    }
 }
 
 bool CompressDlg::OnOK(HWND hwnd) {
@@ -267,6 +297,11 @@ bool CompressDlg::OnOK(HWND hwnd) {
     if (msel != CB_ERR) {
         const wchar_t* mId = (const wchar_t*)SendMessageW(hMethod, CB_GETITEMDATA, msel, 0);
         if (mId) m_params.method = mId;
+    }
+    // For RAR, the compression level is passed as the method digit (-m0..-m5)
+    if (m_params.format == L"rar") {
+        m_params.rarLevel = m_params.level;
+        m_params.method   = std::to_wstring(m_params.level);
     }
 
     // Read password

@@ -9,6 +9,7 @@ add_executable(AileEx WIN32
     src/App.cpp
     src/MainWindow.cpp
     src/CompressDlg.cpp
+    src/AdvancedCompressDlg.cpp
     src/InfoDlg.cpp
     src/ProgressDlg.cpp
     src/SettingsDlg.cpp

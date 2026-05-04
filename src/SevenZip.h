@@ -6,6 +6,16 @@
 #include "WorkerThread.h"
 #include "7zip/Archive/IArchive.h"
 
+// Advanced compression options passed to SevenZip::Compress().
+// Any empty string means "use default" (property is not sent to 7z.dll).
+struct CompressAdvanced {
+    std::wstring dictSize;    // "64k","1m","32m","512m","1g" — dictionary size
+    std::wstring wordSize;    // "8","32","64","273" — fast bytes (fb)
+    std::wstring solidBlock;  // "off","1m","4g" — solid block size (7z only)
+    std::wstring threads;     // "1","4","8" — CPU threads (mt)
+    std::wstring extra;       // free-form "key=value" pairs (e.g. "mf=bt4 mpass=2")
+};
+
 class SevenZip {
 public:
     bool Load(const wchar_t* dllPath = nullptr);
@@ -31,7 +41,8 @@ public:
                      int level,               // 0-9
                      const wchar_t* method,   // "lzma","deflate","zstd", etc.
                      const wchar_t* password,
-                     IExtractProgressSink* sink);
+                     IExtractProgressSink* sink,
+                     const CompressAdvanced* adv = nullptr);
 
     // Auto-detect installed 7z.dll from registry or known paths.
     static std::wstring Find7zDll();

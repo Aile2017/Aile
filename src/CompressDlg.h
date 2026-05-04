@@ -11,8 +11,15 @@ public:
         std::wstring format   = L"7z";   // "7z","zip","tar","gz","bz2","xz","rar"
         std::wstring method   = L"lzma";
         int          level    = 5;
+        int          rarLevel = 3;       // RAR compression level 0-5 (-m0..-m5)
         std::wstring password;
         bool         encryptHeaders = false;
+        // Advanced options (shown in the sub-dialog)
+        std::wstring dictSize;    // "" = auto; "64k","1m","32m"
+        std::wstring wordSize;    // "" = auto; "32","64","273"
+        std::wstring solidBlock;  // "" = default; "off","1m" (7z only)
+        std::wstring threads;     // "" = auto; "4","8"
+        std::wstring extra;       // free-form "key=value" pairs
     };
 
     // Returns true if user clicked OK.
@@ -25,6 +32,7 @@ private:
     void OnInit(HWND hwnd);
     void OnFormatChange(HWND hwnd);
     void OnBrowseOutput(HWND hwnd);
+    void OnAdvanced(HWND hwnd);
     bool OnOK(HWND hwnd);
 
     HWND   m_hwnd = nullptr;
