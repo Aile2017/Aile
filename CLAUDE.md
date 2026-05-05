@@ -81,11 +81,15 @@ delete sink
 
 ## 新フォーマット追加方法
 
-1. 実機の 7z.dll で `GetNumberOfFormats` / `GetHandlerProperty2` を使い CLSID を確認（過去の診断コードは git 履歴参照）
-2. `sdk/7zip/Archive/IArchive.h` に `Z7_FMT_GUID(CLSID_Format_XXX, 0xYY);` を追加
-3. `SevenZip.cpp` の `FormatToInGuid` / `FormatToOutGuid` に拡張子マッピング追加
-4. `CompressDlg.cpp` の `kFormats[]` にエントリ追加
-5. `main.cpp` の `kArchiveExts[]` に拡張子追加（ブラウズモード判定用）
+`FormatToInGuid` は 7z.dll ロード時に `m_extToClsid` マップ（動的列挙）を参照するため、
+**読み取り（展開・ブラウズ）は 7z.dll が対応していれば自動的に機能する**。
+手動対応が必要なのは以下の場合のみ。
+
+1. `main.cpp` の `kArchiveExts[]` に拡張子追加（ブラウズモード判定用）
+2. **圧縮（書き込み）対応が必要な場合のみ**: `SevenZip.cpp` の `FormatToOutGuid` 静的フォールバックに追加、`CompressDlg.cpp` の `kFormats[]` にエントリ追加
+3. **動的列挙が使えない場合（稀）のみ**: `sdk/7zip/Archive/IArchive.h` に `Z7_FMT_GUID(CLSID_Format_XXX, 0xYY);` を追加し、`FormatToInGuid` の静的フォールバックに分岐を追加
+
+CLSID 確認方法: 過去のコミットに `EnumerateFormats` 関数があるので git 履歴から復活させる（see `docs/known-issues.md` 項目 1）。
 
 ## 診断・デバッグ手法
 
