@@ -1,6 +1,7 @@
 ﻿#include "MainWindow.h"
 #include "App.h"
 #include "CompressDlg.h"
+#include "CompressHelper.h"
 #include "InfoDlg.h"
 #include "ProgressDlg.h"
 #include "SettingsDlg.h"
@@ -182,14 +183,6 @@ LRESULT MainWindow::HandleMsg(UINT msg, WPARAM wp, LPARAM lp) {
             OnTreeSelChanged();
         if (hdr->hwndFrom == m_hListView && hdr->code == NM_DBLCLK)
             OnListDblClick();
-        if (hdr->hwndFrom == m_hListView && hdr->code == NM_RETURN)
-            OnListDblClick();
-        if (hdr->hwndFrom == m_hListView && hdr->code == LVN_KEYDOWN) {
-            // NM_RETURN が IsDialogMessage に横取りされた場合のフォールバック
-            auto* kd = reinterpret_cast<NMLVKEYDOWN*>(lp);
-            if (kd->wVKey == VK_RETURN)
-                OnListDblClick();
-        }
         if (hdr->hwndFrom == m_hListView && hdr->code == LVN_COLUMNCLICK) {
             auto* nm = reinterpret_cast<NMLISTVIEW*>(lp);
             OnColumnClick(nm->iSubItem);
@@ -428,20 +421,7 @@ void MainWindow::OnDropFiles(HDROP hDrop) {
     } else if (!regular.empty()) {
         CompressDlg::Params params;
         params.inputFiles = std::move(regular);
-        params.format     = App::Instance().GetSettings().GetDefaultFormat();
-        params.level      = App::Instance().GetSettings().GetCompressionLevel();
-        params.rarLevel   = App::Instance().GetSettings().GetRarLevel();
-        params.dictSize   = App::Instance().GetSettings().GetAdvDictSize();
-        params.wordSize   = App::Instance().GetSettings().GetAdvWordSize();
-        params.solidBlock = App::Instance().GetSettings().GetAdvSolidBlock();
-        params.threads    = App::Instance().GetSettings().GetAdvThreads();
-        params.extra      = App::Instance().GetSettings().GetAdvExtra();
-        params.rarDictSize    = App::Instance().GetSettings().GetRarAdvDictSize();
-        params.rarSolid       = App::Instance().GetSettings().GetRarAdvSolid();
-        params.rarThreads     = App::Instance().GetSettings().GetRarAdvThreads();
-        params.rarRecoveryPct = App::Instance().GetSettings().GetRarAdvRecovery();
-        params.rarSplitVolume = App::Instance().GetSettings().GetRarAdvVolume();
-        params.rarExtra       = App::Instance().GetSettings().GetRarAdvExtra();
+        params.LoadFromSettings(App::Instance().GetSettings());
 
         CompressDlg dlg;
         auto& sz7 = App::Instance().Get7z();
@@ -449,14 +429,7 @@ void MainWindow::OnDropFiles(HDROP hDrop) {
         const auto* wf  = sz7.IsLoaded() ? &sz7.GetWritableFormats() : nullptr;
         if (dlg.Show(m_hwnd, params, enc, wf)) {
             auto& s = App::Instance().GetSettings();
-            s.SetCompressionLevel(params.level);
-            s.SetRarLevel(params.rarLevel);
-            s.SetDefaultFormat(params.format.c_str());
-            s.SetAdvDictSize(params.dictSize.c_str());
-            s.SetAdvWordSize(params.wordSize.c_str());
-            s.SetAdvSolidBlock(params.solidBlock.c_str());
-            s.SetAdvThreads(params.threads.c_str());
-            s.SetAdvExtra(params.extra.c_str());
+            params.SaveToSettings(s);
             s.Save();
             OnCompress(params);
         }
@@ -467,15 +440,6 @@ void MainWindow::OnDropFiles(HDROP hDrop) {
 
 void MainWindow::OnCommand(WORD id) {
     switch (id) {
-    case IDOK:
-        // IsDialogMessage が Enter を WM_COMMAND(IDOK) に変換して届ける。
-        // フォーカスに応じてコンテキスト処理する。
-        {
-            HWND hFocus = GetFocus();
-            if (hFocus == m_hListView || IsChild(m_hListView, hFocus))
-                OnListDblClick();
-        }
-        break;
     case ID_EXTRACT:
         OnExtract();
         break;
@@ -697,25 +661,7 @@ void MainWindow::OnExtract() {
         }, m_hwnd, WM_APP_DONE);
     }
 
-    HRESULT hrDone = S_OK;
-    MSG msg;
-    while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
-        if (msg.message == WM_APP_DONE) {
-            hrDone = (HRESULT)msg.wParam;
-            progDlg.SetDone(hrDone);
-            progDlg.Dismiss();
-            break;
-        }
-        if (msg.message == WM_APP_PROGRESS) {
-            progDlg.SetProgress((int)msg.wParam, (wchar_t*)msg.lParam);
-            free((wchar_t*)msg.lParam);
-            continue;
-        }
-        if (!IsDialogMessageW(progDlg.Hwnd(), &msg)) {
-            TranslateMessage(&msg);
-            DispatchMessageW(&msg);
-        }
-    }
+    HRESULT hrDone = progDlg.RunMessageLoop();
     m_worker.Wait();
     delete sink;
     m_pSink = nullptr;
@@ -770,45 +716,17 @@ void MainWindow::OnAddFiles() {
 
     CompressDlg::Params params;
     params.inputFiles = std::move(files);
-    params.format     = App::Instance().GetSettings().GetDefaultFormat();
-    params.level      = App::Instance().GetSettings().GetCompressionLevel();
-    params.rarLevel   = App::Instance().GetSettings().GetRarLevel();
-    params.dictSize   = App::Instance().GetSettings().GetAdvDictSize();
-    params.wordSize   = App::Instance().GetSettings().GetAdvWordSize();
-    params.solidBlock = App::Instance().GetSettings().GetAdvSolidBlock();
-    params.threads    = App::Instance().GetSettings().GetAdvThreads();
-    params.extra      = App::Instance().GetSettings().GetAdvExtra();
-    params.rarDictSize    = App::Instance().GetSettings().GetRarAdvDictSize();
-    params.rarSolid       = App::Instance().GetSettings().GetRarAdvSolid();
-    params.rarThreads     = App::Instance().GetSettings().GetRarAdvThreads();
-    params.rarRecoveryPct = App::Instance().GetSettings().GetRarAdvRecovery();
-    params.rarSplitVolume = App::Instance().GetSettings().GetRarAdvVolume();
-    params.rarExtra       = App::Instance().GetSettings().GetRarAdvExtra();
+    params.LoadFromSettings(App::Instance().GetSettings());
 
     CompressDlg dlg;
-    {
-        auto& sz7 = App::Instance().Get7z();
-        const auto* enc = sz7.IsLoaded() ? &sz7.GetEncoderNames() : nullptr;
-        const auto* wf  = sz7.IsLoaded() ? &sz7.GetWritableFormats() : nullptr;
-        if (dlg.Show(m_hwnd, params, enc, wf)) {
-            auto& s = App::Instance().GetSettings();
-            s.SetCompressionLevel(params.level);
-            s.SetRarLevel(params.rarLevel);
-            s.SetDefaultFormat(params.format.c_str());
-            s.SetAdvDictSize(params.dictSize.c_str());
-            s.SetAdvWordSize(params.wordSize.c_str());
-            s.SetAdvSolidBlock(params.solidBlock.c_str());
-            s.SetAdvThreads(params.threads.c_str());
-            s.SetAdvExtra(params.extra.c_str());
-            s.SetRarAdvDictSize(params.rarDictSize.c_str());
-            s.SetRarAdvSolid(params.rarSolid);
-            s.SetRarAdvThreads(params.rarThreads);
-            s.SetRarAdvRecovery(params.rarRecoveryPct);
-            s.SetRarAdvVolume(params.rarSplitVolume.c_str());
-            s.SetRarAdvExtra(params.rarExtra.c_str());
-            s.Save();
-            OnCompress(params);
-        }
+    auto& sz7 = App::Instance().Get7z();
+    const auto* enc = sz7.IsLoaded() ? &sz7.GetEncoderNames() : nullptr;
+    const auto* wf  = sz7.IsLoaded() ? &sz7.GetWritableFormats() : nullptr;
+    if (dlg.Show(m_hwnd, params, enc, wf)) {
+        auto& s = App::Instance().GetSettings();
+        params.SaveToSettings(s);
+        s.Save();
+        OnCompress(params);
     }
 }
 
@@ -846,46 +764,15 @@ void MainWindow::OnCompress(CompressDlg::Params& params) {
 
     HRESULT hrDone = S_OK;
 
-    auto runMsgLoop = [&](auto cancelFn) {
-        MSG msg;
-        while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
-            if (msg.message == WM_APP_DONE) {
-                hrDone = (HRESULT)msg.wParam;
-                progDlg.SetDone(hrDone);
-                progDlg.Dismiss();
-                break;
-            }
-            if (msg.message == WM_APP_PROGRESS) {
-                if (sink->IsCancelled()) cancelFn();
-                progDlg.SetProgress((int)msg.wParam, (wchar_t*)msg.lParam);
-                free((wchar_t*)msg.lParam);
-                continue;
-            }
-            TranslateMessage(&msg);
-            DispatchMessageW(&msg);
-        }
-    };
-
     if (format == L"rar") {
-        RarAdvancedParams rarAdv;
-        rarAdv.dictSize    = params.rarDictSize;
-        rarAdv.solid       = params.rarSolid;
-        rarAdv.threads     = params.rarThreads;
-        rarAdv.recoveryPct = params.rarRecoveryPct;
-        rarAdv.splitVolume = params.rarSplitVolume;
-        rarAdv.extra       = params.rarExtra;
-        RarProcess rarProc;
-        const wchar_t* rarPw = pw.empty() ? nullptr : pw.c_str();
-        bool started = rarProc.Compress(inputs, outPath.c_str(), method.c_str(),
-                                        App::Instance().GetSettings().GetRarExePath().c_str(),
-                                        rarPw, params.encryptHeaders,
-                                        m_hwnd, WM_APP_PROGRESS, WM_APP_DONE, &rarAdv);
-        if (!started) {
-            progDlg.Dismiss();
+        hrDone = RunRarCompressSync(m_hwnd, params,
+                                    App::Instance().GetSettings().GetRarExePath().c_str(),
+                                    progDlg, sink);
+        if (hrDone == E_FAIL) {
+            // 起動失敗時は progDlg を内部で Dismiss 済み
             delete sink; m_pSink = nullptr;
             return;
         }
-        runMsgLoop([&]{ rarProc.Cancel(); });
     } else {
         if (!App::Instance().Get7z().IsLoaded()) {
             progDlg.Dismiss();
@@ -912,7 +799,7 @@ void MainWindow::OnCompress(CompressDlg::Params& params) {
                                level, method.c_str(), pw.empty() ? nullptr : pw.c_str(),
                                sink, &adv, encHdr);
         }, m_hwnd, WM_APP_DONE);
-        runMsgLoop([]{});
+        hrDone = progDlg.RunMessageLoop();
         m_worker.Wait();
     }
 
@@ -1236,7 +1123,7 @@ void MainWindow::ShowError(const wchar_t* msg, HRESULT hr) {
 
 // パスワード入力ダイアログを表示し、入力された文字列を返す。
 // キャンセルされた場合は空文字列を返す。
-std::wstring MainWindow::PromptPassword(const wchar_t* /*hint*/) {
+std::wstring MainWindow::PromptPassword() {
     struct PwDlg {
         std::wstring result;
         static INT_PTR CALLBACK Proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
