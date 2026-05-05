@@ -1,6 +1,7 @@
 #pragma once
 #include <windows.h>
 #include <string>
+#include <functional>
 #include "WorkerThread.h"
 
 class ProgressDlg {
@@ -15,6 +16,13 @@ public:
 
     // Optional: attach sink so Cancel button sets it cancelled.
     void SetSink(ProgressPostSink* sink) { m_sink = sink; }
+
+    // 進捗メッセージループを駆動。WM_APP_DONE で抜けて HRESULT を返す。
+    // onCancel: SetSink 済みの sink がキャンセル状態のとき呼ばれる
+    //           （rar.exe の TerminateProcess 等、外部プロセス用）。
+    //           7z.dll の WorkerThread はコールバック内で E_ABORT を返すため不要。
+    // 終了時に SetDone と Dismiss を内部で呼ぶ。
+    HRESULT RunMessageLoop(std::function<void()> onCancel = {});
 
     HWND Hwnd() const { return m_hwnd; }
 

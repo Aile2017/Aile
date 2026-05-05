@@ -40,7 +40,7 @@
 
 ## RAR コンプレッションのルーティング
 
-`App::RunCompressMode()`（コマンドライン引数経由）と `MainWindow::OnCompress()`（D&D 経由）の 2 経路がある。両方とも `format == L"rar"` の場合は `RarProcess::Compress` を呼ぶ必要がある。`SevenZip::FormatToOutGuid("rar")` は対応せず `CLSID_Format_7z` にフォールバックするので、間違って 7z 形式で出力されてしまう。
+`App::RunCompressMode()`（コマンドライン引数経由）と `MainWindow::OnCompress()`（D&D / [追加] 経由）の 2 経路がある。**両経路は `CompressHelper.h` の `RunRarCompressSync()` 経由に集約済み** — ここで必ず `RarProcess::Compress` を呼ぶ。`SevenZip::FormatToOutGuid("rar")` は対応せず `CLSID_Format_7z` にフォールバックするので、間違って 7z で出力させない安全弁として 1 経路化している。
 
 ## unrar.dll の `RARHeaderDataEx` 構造体
 

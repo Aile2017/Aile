@@ -43,7 +43,7 @@
 3. **`COutFileStream` は `IOutStream` (シーカブル) が必要**。`SetSize` 後はファイルポインタを元に戻す。
 4. **unrar.dll の `RARHeaderDataEx` は `#pragma pack` を使わない**。デフォルトアラインメントで定義。
 5. **unrar.dll が返すパスはバックスラッシュ区切り**。`SevenZip` 流のフォワードスラッシュに正規化する。
-6. **RAR 圧縮ルーティングは 2 経路ある**（`App::RunCompressMode`, `MainWindow::OnCompress`）。`format == L"rar"` のとき必ず `RarProcess` 経由にする。
+6. **RAR 圧縮は `CompressHelper::RunRarCompressSync()` に集約済み**（`App::RunCompressMode` と `MainWindow::OnCompress` の両方から呼ぶ）。新たな圧縮起動経路を追加する際は必ずこのヘルパー経由にすること。
 
 ## ワーカースレッドの定石
 

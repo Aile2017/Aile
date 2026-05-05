@@ -1,10 +1,45 @@
 ﻿#include "CompressDlg.h"
 #include "AdvancedCompressDlg.h"
 #include "RarAdvancedDlg.h"
+#include "Settings.h"
 #include "resource.h"
 #include <shlobj.h>
 #include <commctrl.h>
 #include <commdlg.h>
+
+void CompressDlg::Params::LoadFromSettings(const Settings& s) {
+    format         = s.GetDefaultFormat();
+    level          = s.GetCompressionLevel();
+    rarLevel       = s.GetRarLevel();
+    dictSize       = s.GetAdvDictSize();
+    wordSize       = s.GetAdvWordSize();
+    solidBlock     = s.GetAdvSolidBlock();
+    threads        = s.GetAdvThreads();
+    extra          = s.GetAdvExtra();
+    rarDictSize    = s.GetRarAdvDictSize();
+    rarSolid       = s.GetRarAdvSolid();
+    rarThreads     = s.GetRarAdvThreads();
+    rarRecoveryPct = s.GetRarAdvRecovery();
+    rarSplitVolume = s.GetRarAdvVolume();
+    rarExtra       = s.GetRarAdvExtra();
+}
+
+void CompressDlg::Params::SaveToSettings(Settings& s) const {
+    s.SetDefaultFormat(format.c_str());
+    s.SetCompressionLevel(level);
+    s.SetRarLevel(rarLevel);
+    s.SetAdvDictSize(dictSize.c_str());
+    s.SetAdvWordSize(wordSize.c_str());
+    s.SetAdvSolidBlock(solidBlock.c_str());
+    s.SetAdvThreads(threads.c_str());
+    s.SetAdvExtra(extra.c_str());
+    s.SetRarAdvDictSize(rarDictSize.c_str());
+    s.SetRarAdvSolid(rarSolid);
+    s.SetRarAdvThreads(rarThreads);
+    s.SetRarAdvRecovery(rarRecoveryPct);
+    s.SetRarAdvVolume(rarSplitVolume.c_str());
+    s.SetRarAdvExtra(rarExtra.c_str());
+}
 
 struct MethodEntry { const wchar_t* label; const wchar_t* id; };
 

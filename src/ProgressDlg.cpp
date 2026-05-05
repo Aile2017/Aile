@@ -53,6 +53,31 @@ void ProgressDlg::Dismiss() {
     if (m_hwndParent) SetForegroundWindow(m_hwndParent);
 }
 
+HRESULT ProgressDlg::RunMessageLoop(std::function<void()> onCancel) {
+    HRESULT hr = S_OK;
+    MSG msg;
+    while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
+        if (msg.message == WM_APP_DONE) {
+            hr = (HRESULT)msg.wParam;
+            SetDone(hr);
+            Dismiss();
+            break;
+        }
+        if (msg.message == WM_APP_PROGRESS) {
+            if (onCancel && m_sink && m_sink->IsCancelled())
+                onCancel();
+            SetProgress((int)msg.wParam, (wchar_t*)msg.lParam);
+            free((wchar_t*)msg.lParam);
+            continue;
+        }
+        if (!IsDialogMessageW(m_hwnd, &msg)) {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+    }
+    return hr;
+}
+
 INT_PTR CALLBACK ProgressDlg::DlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     ProgressDlg* self = nullptr;
     if (msg == WM_INITDIALOG) {

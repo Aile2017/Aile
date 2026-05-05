@@ -4,6 +4,8 @@
 #include <vector>
 #include "SevenZip.h"  // WritableFormat
 
+class Settings;
+
 class CompressDlg {
 public:
     struct Params {
@@ -28,6 +30,11 @@ public:
         int          rarRecoveryPct = 0;
         std::wstring rarSplitVolume;
         std::wstring rarExtra;
+
+        // outputPath / inputFiles / password / encryptHeaders は対象外
+        // （ユーザ操作毎に変わる値で、永続化対象ではない）
+        void LoadFromSettings(const Settings& s);
+        void SaveToSettings(Settings& s) const;
     };
 
     // Returns true if user clicked OK.

@@ -48,7 +48,7 @@ private:
     std::wstring SelectedFolderPath() const;
     void ShowError(const wchar_t* msg, HRESULT hr = 0);
     // Returns entered password, or empty string if user cancelled.
-    std::wstring PromptPassword(const wchar_t* hint = nullptr);
+    std::wstring PromptPassword();
 
     HWND        m_hwnd         = nullptr;
     HWND        m_hToolbar     = nullptr;
