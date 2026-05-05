@@ -291,7 +291,7 @@ void MainWindow::CreateControls(HWND hwnd) {
 
     // Toolbar
     m_hToolbar = CreateWindowExW(0, TOOLBARCLASSNAME, nullptr,
-        WS_CHILD | WS_VISIBLE | TBSTYLE_FLAT | CCS_NODIVIDER | CCS_NORESIZE,
+        WS_CHILD | WS_VISIBLE | WS_TABSTOP | TBSTYLE_FLAT | CCS_NODIVIDER | CCS_NORESIZE,
         0, 0, 0, kToolbarH, hwnd, nullptr, hInst, nullptr);
     SendMessageW(m_hToolbar, TB_BUTTONSTRUCTSIZE, sizeof(TBBUTTON), 0);
     SendMessageW(m_hToolbar, TB_SETBITMAPSIZE, 0, MAKELPARAM(0, 0));
@@ -314,13 +314,13 @@ void MainWindow::CreateControls(HWND hwnd) {
 
     // TreeView (left pane)
     m_hTreeView = CreateWindowExW(WS_EX_CLIENTEDGE, WC_TREEVIEW, nullptr,
-        WS_CHILD | WS_VISIBLE | TVS_HASLINES | TVS_LINESATROOT |
+        WS_CHILD | WS_VISIBLE | WS_TABSTOP | TVS_HASLINES | TVS_LINESATROOT |
         TVS_HASBUTTONS | TVS_SHOWSELALWAYS,
         0, 0, 0, 0, hwnd, nullptr, hInst, nullptr);
 
     // ListView (right pane)
     m_hListView = CreateWindowExW(WS_EX_CLIENTEDGE, WC_LISTVIEW, nullptr,
-        WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SHOWSELALWAYS,
+        WS_CHILD | WS_VISIBLE | WS_TABSTOP | LVS_REPORT | LVS_SHOWSELALWAYS,
         0, 0, 0, 0, hwnd, nullptr, hInst, nullptr);
     ListView_SetExtendedListViewStyle(m_hListView,
         LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES | LVS_EX_HEADERDRAGDROP);
