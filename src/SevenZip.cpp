@@ -1125,7 +1125,8 @@ HRESULT SevenZip::Compress(const std::vector<std::wstring>& srcPaths,
                             const wchar_t* method,
                             const wchar_t* password,
                             IExtractProgressSink* sink,
-                            const CompressAdvanced* adv) {
+                            const CompressAdvanced* adv,
+                            bool encryptHeaders) {
     if (!IsLoaded()) return E_FAIL;
 
     // For stream formats (gz/bz2/xz) with multiple files or a single directory,
@@ -1237,6 +1238,16 @@ HRESULT SevenZip::Compress(const std::vector<std::wstring>& srcPaths,
             }
         }
 
+        // 7z ヘッダ暗号化（"Encrypt header" チェックボックス対応）
+        // 7z フォーマットかつパスワードありのときのみ有効。
+        if (encryptHeaders && password && password[0] &&
+            format && _wcsicmp(format, L"7z") == 0) {
+            PROPVARIANT pvHe; PropVariantInit(&pvHe);
+            pvHe.vt = VT_BSTR;
+            pvHe.bstrVal = SysAllocString(L"on");
+            names.push_back(L"he"); vals.push_back(pvHe);
+        }
+
         setProps->SetProperties(names.data(), vals.data(), (UInt32)names.size());
         for (auto& v : vals) PropVariantClear(&v);
         setProps->Release();
@@ -1246,9 +1257,10 @@ HRESULT SevenZip::Compress(const std::vector<std::wstring>& srcPaths,
     std::vector<SrcEntry> entries;
     EnumeratePaths(srcPaths, entries);
 
-    // Open output file
+    // 出力先を直接開かず一時ファイルに書いて成功時のみリネームする（失敗時のファイル破壊防止）
+    std::wstring tempPath = std::wstring(outPath) + L".~tmp";
     COutFileStream* outFile = new COutFileStream();
-    if (!outFile->Create(outPath)) {
+    if (!outFile->Create(tempPath.c_str())) {
         hr = HRESULT_FROM_WIN32(GetLastError());
         outFile->Release();
         archive->Release();
@@ -1261,5 +1273,12 @@ HRESULT SevenZip::Compress(const std::vector<std::wstring>& srcPaths,
     cb->Release();
     outFile->Release();
     archive->Release();
+
+    if (SUCCEEDED(hr)) {
+        if (!MoveFileExW(tempPath.c_str(), outPath, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+            hr = HRESULT_FROM_WIN32(GetLastError());
+    } else {
+        DeleteFileW(tempPath.c_str());
+    }
     return hr;
 }

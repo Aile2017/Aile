@@ -836,13 +836,14 @@ void MainWindow::OnCompress(CompressDlg::Params& params) {
             return;
         }
         auto& sz = App::Instance().Get7z();
-        auto advDict   = params.dictSize;
-        auto advWord   = params.wordSize;
-        auto advSolid  = params.solidBlock;
-        auto advThreads= params.threads;
-        auto advExtra  = params.extra;
+        auto advDict    = params.dictSize;
+        auto advWord    = params.wordSize;
+        auto advSolid   = params.solidBlock;
+        auto advThreads = params.threads;
+        auto advExtra   = params.extra;
+        bool encHdr     = params.encryptHeaders;
         m_worker.Start([&sz, inputs, outPath, format, level, method, pw, sink,
-                        advDict, advWord, advSolid, advThreads, advExtra]() -> HRESULT {
+                        advDict, advWord, advSolid, advThreads, advExtra, encHdr]() -> HRESULT {
             CompressAdvanced adv;
             adv.dictSize   = advDict;
             adv.wordSize   = advWord;
@@ -850,7 +851,8 @@ void MainWindow::OnCompress(CompressDlg::Params& params) {
             adv.threads    = advThreads;
             adv.extra      = advExtra;
             return sz.Compress(inputs, outPath.c_str(), format.c_str(),
-                               level, method.c_str(), pw.empty() ? nullptr : pw.c_str(), sink, &adv);
+                               level, method.c_str(), pw.empty() ? nullptr : pw.c_str(),
+                               sink, &adv, encHdr);
         }, m_hwnd, WM_APP_DONE);
         runMsgLoop([]{});
         m_worker.Wait();

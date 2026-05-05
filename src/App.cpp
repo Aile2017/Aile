@@ -182,7 +182,8 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
             adv.extra      = params.extra;
             return sz.Compress(params.inputFiles, params.outputPath.c_str(),
                                params.format.c_str(), params.level,
-                               params.method.c_str(), pw, sink, &adv);
+                               params.method.c_str(), pw, sink, &adv,
+                               params.encryptHeaders);
         }, wnd.Hwnd(), WM_APP_DONE);
 
         MSG msg = {};

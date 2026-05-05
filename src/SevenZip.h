@@ -54,7 +54,8 @@ public:
                      const wchar_t* method,   // "lzma","deflate","zstd", etc.
                      const wchar_t* password,
                      IExtractProgressSink* sink,
-                     const CompressAdvanced* adv = nullptr);
+                     const CompressAdvanced* adv = nullptr,
+                     bool encryptHeaders = false);
 
     // Auto-detect installed 7z.dll from registry or known paths.
     static std::wstring Find7zDll();
