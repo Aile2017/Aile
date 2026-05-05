@@ -126,44 +126,60 @@ HRESULT RunProgressLoop(ProgressDlg& dlg,
 - B-1 と B-2 は同一 PR でやらないと整合性が取れない
 - C-1 は他 PR のついでにやれば十分
 
-## 実施結果（2026-05-05）
+## 実施結果（2026-05-05 〜 2026-05-06）
 
-A-1 / A-2 / B-1 / B-2 を実施。Debug ビルド成功確認済み（コミットは未実施、作業ツリー上の差分）。
+### 第 1 段階（2026-05-05）
+
+A-1 / A-2 / B-1 / B-2 を実施・コミット。
 
 | 項目 | 状態 | 概要 |
 |---|---|---|
 | **A-1** Settings 読込／保存 3 箇所コピペ | ✅ 実施 | `CompressDlg::Params::LoadFromSettings` / `SaveToSettings` を追加。`OnDropFiles` / `OnAddFiles` / `RunCompressMode` の合計 80 行を 6 行に集約。**副次効果**: `OnDropFiles` の RAR 系設定保存漏れバグも解消 |
 | **A-2** `PromptPassword` 未使用引数 | ✅ 実施 | `MainWindow::PromptPassword(const wchar_t*)` の `hint` 引数を削除（宣言・実装・呼出側の整合維持） |
-| A-3 `getExt` ラムダ → `ExtOfPath` | ⏸ 未実施 | tar-in-stream 検出 (`SevenZip.cpp:587-593`) のローカルラムダを既存 `ExtOfPath` に置換 |
-| A-4 `OnProgress` / `OnDone` フォールバック整理 | ⏸ 未実施 | コメント追加程度の小改修 |
 | **B-1** 進捗ループ 4 箇所統合 | ✅ 実施 | `ProgressDlg::RunMessageLoop(std::function<void()> onCancel = {})` を追加。`App::RunCompressMode` (RAR/7z)、`MainWindow::OnCompress`、`MainWindow::OnExtract` の 4 箇所を集約。**副次効果**: `MainWindow::OnCompress` のループに抜けていた `IsDialogMessageW` が共通化で揃った |
 | **B-2** RAR 圧縮 2 経路の集約 | ✅ 実施 | 新規 `src/CompressHelper.{h,cpp}` に `RunRarCompressSync()` を実装。`App::RunCompressMode` と `MainWindow::OnCompress` の RAR ブランチを共通エントリ経由に変更。`docs/known-issues.md` の「2 経路」記述と `CLAUDE.md` の該当注意事項を「1 経路に集約済み」に更新 |
-| C-1 フォルダアイコンキャッシュ | ⏸ 未実施 | `m_iconIndexFolder` メンバキャッシュ化 |
-| C-2 静的フォーマットフォールバック削除 | ⏸ 保留 | 7z.dll 動的列挙の安全弁として残置判断 |
 
-### 累積差分（A-1 〜 B-2）
+**累積差分（A-1 〜 B-2）**
 
 ```
- CMakeLists.txt      |   1 +
- src/App.cpp         |  95 +++--------------
- src/CompressDlg.cpp |  35 +++++++
- src/CompressDlg.h   |   7 ++
- src/CompressHelper.cpp | (新規 30 行)
- src/CompressHelper.h   | (新規 21 行)
- src/MainWindow.cpp  | 136 ++++++--------------------
- src/MainWindow.h    |   2 +-
- src/ProgressDlg.cpp |  25 ++++
- src/ProgressDlg.h   |   8 ++
- 8 files changed, 106 insertions(+), 203 deletions(-)
+正味 97 行削減（追加 106 / 削除 203）
 ```
 
-**正味 97 行削減**（追加 106 / 削除 203）。新規ヘルパー追加分（CompressHelper 51 行 + ProgressDlg::RunMessageLoop 33 行）を差し引いても、複製コードの撤去で全体の見通しが大きく改善。
+### 第 2 段階（2026-05-06）
 
-### 残タスク
+A-1, A-3, C-1 からユーザ指定により A-3, C-1 を実施・コミット（A-1 は既実施）。
 
-実機の動作確認（A-1 / B-1 / B-2 影響範囲）:
+| 項目 | 状態 | 概要 | コミット |
+|---|---|---|---|
+| **A-1** Settings 読込／保存 3 箇所コピペ | ✅ 既実施 | 第 1 段階で実施済 | `c6ac9f6` |
+| **A-3** `getExt` ラムダ → `ExtOfPath` | ✅ 実施 | tar-in-stream 検出 (`SevenZip.cpp`) のローカルラムダを既存 `ExtOfPath` に置換。重複コード 9 行削減 | `abd0e95` |
+| **C-1** フォルダアイコンキャッシュ | ✅ 実施 | `MainWindow` に `m_iconIndexFolder` メンバを追加し、初回呼び出し時のみ `SHGetFileInfoW` を実行。以降はキャッシュ値を使用（ツリー/リスト構築時の無駄呼び出し削減） | `abd0e95` |
+
+---
+
+## 未実施項目（将来の拡張候補）
+
+### A-4. `OnProgress` / `OnDone` フォールバック整理（小規模）
+
+**現状**: `MainWindow.cpp` 内メッセージループが `WM_APP_PROGRESS` / `WM_APP_DONE` を吸収するため、メイン `WndProc` には到達しないコメント付き。
+
+**対応方針**: 完全削除よりも、フォールバックハンドラに診断ログ出力を追加する程度の整理が安全。
+
+---
+
+### C-2. 静的フォーマットフォールバック削除（判断保留）
+
+**現状**: `SevenZip::IsArchiveExt`、`SevenZip::FormatToInGuid`、`SevenZip::FormatToOutGuid` が `m_extToClsid.empty()` のときだけ静的リストにフォールバック。
+
+**判断**: 7z.dll が無いと何もできない構造なので保留。残置しても害は無く、DLL ロード前の早期パスが稀にある場合の安全弁として有効。
+
+---
+
+## 実機テスト計画（A-1 / B-1 / B-2 影響範囲）
+
+以下の項目について実装後の動作確認が推奨される（コード確認済みだが、エンドツーエンドテスト未実施）：
 
 - **D&D での圧縮**: RAR 詳細設定（dictSize 等）が次回起動でも保持されるか（A-1 の RAR 保存漏れ修正の確認）
 - **CLI 引数経由の RAR 圧縮**: 起動 → キャンセル → ダイアログが正しく閉じるか
-- **D&D / [追加] からの RAR 圧縮**: 同上
+- **D&D / [追加] からの RAR 圧縮**: 上記に同じ
 - **展開時のキャンセル**: 7z / unrar 両経路で進捗ダイアログのキャンセルが効くか
