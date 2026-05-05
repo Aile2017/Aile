@@ -1142,6 +1142,13 @@ void MainWindow::PopulateList(const std::wstring& folderPath) {
             ListView_SetItemText(m_hListView, row, 4, dateStr);
         }
     }
+
+    // アイテムが存在し、かつ何も選択されていない場合は先頭にフォーカスカーソルを置く
+    if (ListView_GetItemCount(m_hListView) > 0 &&
+        ListView_GetNextItem(m_hListView, -1, LVNI_SELECTED) < 0) {
+        ListView_SetItemState(m_hListView, 0, LVIS_FOCUSED, LVIS_FOCUSED);
+        ListView_EnsureVisible(m_hListView, 0, FALSE);
+    }
 }
 
 void MainWindow::UpdateSortHeader() {
