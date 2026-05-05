@@ -175,6 +175,13 @@ bool SevenZip::Load(const wchar_t* dllPath) {
     if (m_pfnGetNumFormats && m_pfnGetHandlerProp2) EnumerateFormats();
     return true;
 }
+std::wstring SevenZip::GetLoadedPath() const {
+    if (!m_hDll) return {};
+    wchar_t buf[MAX_PATH] = {};
+    DWORD n = GetModuleFileNameW(m_hDll, buf, MAX_PATH);
+    return n ? std::wstring(buf, n) : std::wstring();
+}
+
 void SevenZip::Unload() {
     if (m_hDll) { FreeLibrary(m_hDll); m_hDll = nullptr; }
     m_pfnCreateObject    = nullptr;
@@ -860,6 +867,138 @@ private:
     COutFileStream*       m_currentOut       = nullptr;
     LONG                  m_refCount         = 1;
 };
+
+// ============================================================
+// CTestCallback — IInArchive::Extract(testMode=1) 用コールバック
+// 出力ストリームは要らない。SetOperationResult で結果を集計する。
+// ============================================================
+class CTestCallback : public IArchiveExtractCallback, public ICryptoGetTextPassword {
+public:
+    CTestCallback(IInArchive* archive, const wchar_t* password, IExtractProgressSink* sink)
+        : m_archive(archive), m_sink(sink) {
+        if (password) m_password = password;
+        archive->AddRef();
+    }
+    ~CTestCallback() { m_archive->Release(); }
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void** ppv) override {
+        if (!ppv) return E_POINTER;
+        if (iid == IID_IUnknown || iid == IID_IArchiveExtractCallback)
+            *ppv = static_cast<IArchiveExtractCallback*>(this);
+        else if (iid == IID_ICryptoGetTextPassword)
+            *ppv = static_cast<ICryptoGetTextPassword*>(this);
+        else { *ppv = nullptr; return E_NOINTERFACE; }
+        AddRef(); return S_OK;
+    }
+    ULONG STDMETHODCALLTYPE AddRef() override {
+        return (ULONG)InterlockedIncrement(&m_refCount);
+    }
+    ULONG STDMETHODCALLTYPE Release() override {
+        LONG r = InterlockedDecrement(&m_refCount);
+        if (r == 0) delete this;
+        return (ULONG)r;
+    }
+
+    HRESULT STDMETHODCALLTYPE SetTotal(UInt64 total) override {
+        if (m_sink) m_sink->OnSetTotal(total);
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE SetCompleted(const UInt64* done) override {
+        if (m_sink && m_sink->IsCancelled()) return E_ABORT;
+        if (m_sink && done) m_sink->OnProgress(*done, m_currentFile.c_str());
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE GetStream(UInt32 index, ISequentialOutStream** outStream,
+                                        Int32 askExtractMode) override {
+        // testMode では出力ストリーム不要。kTest 以外は無視。
+        *outStream = nullptr;
+        if (askExtractMode != NArchive::NExtract::NAskMode::kTest) return S_OK;
+
+        PROPVARIANT prop; PropVariantInit(&prop);
+        m_archive->GetProperty(index, kpidPath, &prop);
+        m_currentFile = (prop.vt == VT_BSTR && prop.bstrVal) ? prop.bstrVal : L"";
+        PropVariantClear(&prop);
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE PrepareOperation(Int32) override { return S_OK; }
+
+    HRESULT STDMETHODCALLTYPE SetOperationResult(Int32 opRes) override {
+        if (opRes != NArchive::NExtract::NOperationResult::kOK) ++m_failures;
+        if (opRes == NArchive::NExtract::NOperationResult::kWrongPassword)
+            return E_ACCESSDENIED;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE CryptoGetTextPassword(BSTR* pw) override {
+        *pw = SysAllocString(m_password.c_str());
+        return *pw ? S_OK : E_OUTOFMEMORY;
+    }
+
+    int Failures() const { return m_failures; }
+
+private:
+    IInArchive*           m_archive;
+    std::wstring          m_password;
+    IExtractProgressSink* m_sink;
+    std::wstring          m_currentFile;
+    int                   m_failures = 0;
+    LONG                  m_refCount = 1;
+};
+
+// ============================================================
+// Test — IInArchive::Extract(testMode=1) で全エントリを検証
+// ============================================================
+
+HRESULT SevenZip::Test(const wchar_t* archivePath,
+                       const wchar_t* password,
+                       IExtractProgressSink* sink) {
+    if (!IsLoaded()) return E_FAIL;
+
+    CInFileStream* fileSpec = new CInFileStream();
+    if (!fileSpec->Open(archivePath)) {
+        fileSpec->Release();
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+
+    GUID clsid = FormatToInGuid(archivePath);
+    IInArchive* archive = nullptr;
+    HRESULT hr = CreateInArchive(clsid, &archive);
+    if (FAILED(hr)) { fileSpec->Release(); return hr; }
+
+    COpenCallback* openCb = new COpenCallback(password);
+    const UInt64 maxCheck = 1ULL << 23;
+    hr = archive->Open(fileSpec, &maxCheck, openCb);
+    openCb->Release();
+
+    // RAR5 ミスマッチ → RAR4 フォールバック（Extract と同じ流儀）
+    if ((FAILED(hr) || hr == S_FALSE) && IsEqualGUID(clsid, CLSID_Format_Rar5)) {
+        archive->Release(); archive = nullptr;
+        hr = CreateInArchive(CLSID_Format_Rar, &archive);
+        if (SUCCEEDED(hr) && archive) {
+            fileSpec->Seek(0, 0, nullptr);
+            COpenCallback* cb2 = new COpenCallback(password);
+            hr = archive->Open(fileSpec, &maxCheck, cb2);
+            cb2->Release();
+        }
+    }
+
+    fileSpec->Release();
+    if (FAILED(hr) || hr == S_FALSE) {
+        if (archive) archive->Release();
+        return FAILED(hr) ? hr : E_FAIL;
+    }
+
+    CTestCallback* cb = new CTestCallback(archive, password, sink);
+    hr = archive->Extract(nullptr, (UInt32)-1, /*testMode=*/1, cb);
+    int failures = cb->Failures();
+    cb->Release();
+    archive->Release();
+
+    if (FAILED(hr)) return hr;
+    return failures > 0 ? E_FAIL : S_OK;
+}
 
 // ============================================================
 // Extract

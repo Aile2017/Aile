@@ -52,6 +52,13 @@ bool UnrarDll::Load(const wchar_t* dllPath) {
     return true;
 }
 
+std::wstring UnrarDll::GetLoadedPath() const {
+    if (!m_hDll) return {};
+    wchar_t buf[MAX_PATH] = {};
+    DWORD n = GetModuleFileNameW(m_hDll, buf, MAX_PATH);
+    return n ? std::wstring(buf, n) : std::wstring();
+}
+
 void UnrarDll::Unload() {
     if (m_hDll) { FreeLibrary(m_hDll); m_hDll = nullptr; }
     m_pfnOpen = nullptr; m_pfnRead = nullptr;
@@ -115,6 +122,43 @@ bool UnrarDll::ListArchive(const wchar_t* path, std::vector<ArchiveItem>& items,
         items.push_back(std::move(it));
 
         m_pfnProc(hArc, RAR_SKIP, nullptr, nullptr);
+    }
+    m_pfnClose(hArc);
+    return (res == ERAR_END_ARCHIVE);
+}
+
+bool UnrarDll::TestArchive(const wchar_t* path,
+                            const wchar_t* password,
+                            IExtractProgressSink* sink) {
+    if (!IsLoaded()) return false;
+
+    RAROpenArchiveDataEx od = {};
+    od.ArcNameW  = const_cast<wchar_t*>(path);
+    od.OpenMode  = RAR_OM_EXTRACT;  // RAR_TEST にも EXTRACT モードでオープンする
+    HANDLE hArc  = m_pfnOpen(&od);
+    if (!hArc || od.OpenResult != ERAR_SUCCESS) return false;
+
+    if (m_pfnSetCb && password && password[0]) {
+        auto cb = [](UINT msg, LPARAM ud, LPARAM p1, LPARAM p2) -> int {
+            if (msg == UCM_NEEDPASSWORDW) {
+                const wchar_t* pw = reinterpret_cast<const wchar_t*>(ud);
+                wcsncpy_s(reinterpret_cast<wchar_t*>(p1), (size_t)(p2 / sizeof(wchar_t)), pw, _TRUNCATE);
+            }
+            return 1;
+        };
+        m_pfnSetCb(hArc, cb, (LPARAM)password);
+    }
+
+    RARHeaderDataEx hdr = {};
+    int res;
+    UINT64 totalDone = 0;
+    while ((res = m_pfnRead(hArc, &hdr)) == ERAR_SUCCESS) {
+        if (sink && sink->IsCancelled()) { m_pfnClose(hArc); return false; }
+        if (sink) sink->OnProgress(totalDone, hdr.FileNameW);
+
+        int r = m_pfnProc(hArc, RAR_TEST, nullptr, nullptr);
+        if (r != ERAR_SUCCESS) { m_pfnClose(hArc); return false; }
+        totalDone += ((UINT64)hdr.UnpSizeHigh << 32) | hdr.UnpSize;
     }
     m_pfnClose(hArc);
     return (res == ERAR_END_ARCHIVE);

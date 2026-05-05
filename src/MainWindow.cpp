@@ -4,16 +4,20 @@
 #include "CompressHelper.h"
 #include "InfoDlg.h"
 #include "ProgressDlg.h"
+#include "RarProcess.h"
 #include "SettingsDlg.h"
 #include "resource.h"
 #include <shellapi.h>
 #include <shlobj.h>
 #include <shobjidl_core.h>
+#include <shlwapi.h>
 #include <commdlg.h>
 #include <map>
 #include <commctrl.h>
 #include <algorithm>
 #include <set>
+
+#pragma comment(lib, "version.lib")
 
 namespace {
 // ランチャー経由起動などで親プロセスが既に終了しているケース向けの
@@ -57,11 +61,12 @@ bool MainWindow::Create(HINSTANCE hInst, int nCmdShow) {
     int ww = s.GetWindowW(), wh = s.GetWindowH();
     if (wx < 0) { wx = CW_USEDEFAULT; wy = CW_USEDEFAULT; }
 
+    HMENU hMenu = LoadMenuW(hInst, MAKEINTRESOURCEW(IDR_MAIN_MENU));
     HWND hwnd = CreateWindowExW(
         0, ClassName(), L"AileEx",
         WS_OVERLAPPEDWINDOW,
         wx, wy, ww, wh,
-        nullptr, nullptr, hInst, this);
+        nullptr, hMenu, hInst, this);
 
     if (!hwnd) return false;
     // If maximized was saved and caller did not request a specific show command, honour it
@@ -470,6 +475,9 @@ void MainWindow::OnCommand(WORD id) {
     case ID_ADD:
         OnAddFiles();
         break;
+    case ID_TEST:
+        OnTest();
+        break;
     case ID_INFO:
         OnInfo();
         break;
@@ -479,7 +487,16 @@ void MainWindow::OnCommand(WORD id) {
         break;
     }
     case ID_CLOSE:
+        CloseArchive();
+        break;
+    case IDM_FILE_OPEN:
+        OnFileOpen();
+        break;
+    case IDM_FILE_EXIT:
         DestroyWindow(m_hwnd);
+        break;
+    case IDM_HELP_ABOUT:
+        OnAbout();
         break;
     }
 }
@@ -689,6 +706,237 @@ void MainWindow::OnExtract() {
 
     if (FAILED(hrDone) && hrDone != E_ABORT)
         ShowError(L"展開に失敗しました。", hrDone);
+}
+
+void MainWindow::OnTest() {
+    if (m_archivePath.empty()) {
+        MessageBoxW(m_hwnd, L"テスト対象のアーカイブがありません。",
+                    L"AileEx", MB_ICONINFORMATION);
+        return;
+    }
+
+    App& app = App::Instance();
+    bool useUnrar = m_openedWithUnrar;
+    if (!useUnrar && !app.Get7z().IsLoaded()) {
+        ShowError(L"7z.dll が読み込まれていません。");
+        return;
+    }
+
+    ProgressDlg progDlg;
+    progDlg.Show(m_hwnd, L"テスト中...");
+
+    auto* sink = new ProgressPostSink(m_hwnd, WM_APP_PROGRESS, WM_APP_DONE);
+    m_pSink    = sink;
+    progDlg.SetSink(sink);
+
+    auto archivePath = m_archivePath;
+
+    if (useUnrar) {
+        auto& unrar = app.GetUnrar();
+        m_worker.Start([&unrar, archivePath, sink]() -> HRESULT {
+            return unrar.TestArchive(archivePath.c_str(), nullptr, sink) ? S_OK : E_FAIL;
+        }, m_hwnd, WM_APP_DONE);
+    } else {
+        auto& sz = app.Get7z();
+        m_worker.Start([&sz, archivePath, sink]() -> HRESULT {
+            return sz.Test(archivePath.c_str(), nullptr, sink);
+        }, m_hwnd, WM_APP_DONE);
+    }
+
+    HRESULT hrDone = progDlg.RunMessageLoop();
+    m_worker.Wait();
+    // unrar.dll の TestArchive はキャンセル時も false (= E_FAIL) を返してしまうため、
+    // sink のキャンセルフラグを見て E_ABORT 相当に正規化する。
+    bool wasCancelled = sink->IsCancelled();
+    delete sink;
+    m_pSink = nullptr;
+
+    if (hrDone == E_ABORT || wasCancelled) {
+        // キャンセル時は無音
+    } else if (FAILED(hrDone)) {
+        ShowError(L"テストに失敗しました。", hrDone);
+    } else {
+        MessageBoxW(m_hwnd, L"アーカイブの整合性を確認しました。",
+                    L"AileEx", MB_ICONINFORMATION);
+    }
+}
+
+void MainWindow::OnFileOpen() {
+    IFileOpenDialog* pfd = nullptr;
+    if (FAILED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER,
+                                IID_PPV_ARGS(&pfd))))
+        return;
+
+    COMDLG_FILTERSPEC filter[] = {
+        { L"アーカイブファイル",
+          L"*.7z;*.zip;*.rar;*.tar;*.gz;*.bz2;*.xz;*.cab;*.iso;*.jar;*.wim;*.lzma;*.lzh;*.arj" },
+        { L"すべてのファイル", L"*.*" },
+    };
+    pfd->SetFileTypes((UINT)_countof(filter), filter);
+    pfd->SetTitle(L"アーカイブファイルを開く");
+
+    if (SUCCEEDED(pfd->Show(m_hwnd))) {
+        IShellItem* psi = nullptr;
+        if (SUCCEEDED(pfd->GetResult(&psi))) {
+            PWSTR psz = nullptr;
+            if (SUCCEEDED(psi->GetDisplayName(SIGDN_FILESYSPATH, &psz)) && psz) {
+                OpenArchive(psz);
+                CoTaskMemFree(psz);
+            }
+            psi->Release();
+        }
+    }
+    pfd->Release();
+}
+
+// ファイルから VS_VERSION_INFO の FileVersion 文字列を取り出す。
+// 取得できない場合は空文字列。
+static std::wstring GetFileVersionString(const wchar_t* path) {
+    if (!path || !path[0]) return {};
+    DWORD handle = 0;
+    DWORD size = GetFileVersionInfoSizeW(path, &handle);
+    if (!size) return {};
+    std::vector<BYTE> buf(size);
+    if (!GetFileVersionInfoW(path, handle, size, buf.data())) return {};
+
+    // 翻訳テーブルから言語コードを取得し StringFileInfo\xxxx\FileVersion を引く。
+    // 一般のサードパーティ製 DLL/EXE は "26.00ZSv1.5.7R1" のような表示用文字列を入れている。
+    struct LangCp { WORD lang; WORD cp; };
+    LangCp* trans = nullptr;
+    UINT len = 0;
+    if (VerQueryValueW(buf.data(), L"\\VarFileInfo\\Translation",
+                       (void**)&trans, &len) && trans && len >= sizeof(LangCp)) {
+        wchar_t key[80];
+        swprintf_s(key, L"\\StringFileInfo\\%04x%04x\\FileVersion",
+                   trans[0].lang, trans[0].cp);
+        wchar_t* val = nullptr;
+        UINT vlen = 0;
+        if (VerQueryValueW(buf.data(), key, (void**)&val, &vlen) && val && vlen > 0) {
+            std::wstring s = val;
+            // 末尾の制御文字や空白を整理
+            while (!s.empty() && (s.back() == L' ' || s.back() == L'\0')) s.pop_back();
+            if (!s.empty()) return s;
+        }
+    }
+
+    // フォールバック: VS_FIXEDFILEINFO の数値フィールド
+    VS_FIXEDFILEINFO* ffi = nullptr;
+    if (VerQueryValueW(buf.data(), L"\\", (void**)&ffi, &len) && ffi) {
+        wchar_t out[64];
+        swprintf_s(out, L"%u.%u.%u.%u",
+                   HIWORD(ffi->dwFileVersionMS), LOWORD(ffi->dwFileVersionMS),
+                   HIWORD(ffi->dwFileVersionLS), LOWORD(ffi->dwFileVersionLS));
+        return out;
+    }
+    return {};
+}
+
+// パスから leaf 名のみを抜き出す (バックスラッシュ区切り)
+static std::wstring LeafName(const std::wstring& path) {
+    auto pos = path.find_last_of(L"\\/");
+    return (pos == std::wstring::npos) ? path : path.substr(pos + 1);
+}
+
+static INT_PTR CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM /*lp*/) {
+    if (msg == WM_INITDIALOG) {
+        App& app = App::Instance();
+
+        struct Entry { std::wstring name; std::wstring path; };
+        std::vector<Entry> entries;
+
+        auto& sz = app.Get7z();
+        if (sz.IsLoaded()) {
+            std::wstring p = sz.GetLoadedPath();
+            entries.push_back({ LeafName(p), p });
+        }
+        auto& ur = app.GetUnrar();
+        if (ur.IsLoaded()) {
+            std::wstring p = ur.GetLoadedPath();
+            entries.push_back({ LeafName(p), p });
+        }
+        // RAR exe: 設定が空の場合は auto-detect（レジストリ + 既知パス）に
+        // フォールバックすることで Settings 未設定でも About ダイアログに表示する。
+        std::wstring rarExe = app.GetSettings().GetRarExePath();
+        if (rarExe.empty() || !PathFileExistsW(rarExe.c_str()))
+            rarExe = RarProcess::FindRarExe();
+        if (!rarExe.empty() && PathFileExistsW(rarExe.c_str()))
+            entries.push_back({ LeafName(rarExe), rarExe });
+
+        // バージョン取得 + 名前列の最大幅で揃える
+        size_t maxName = 0;
+        std::vector<std::wstring> versions;
+        versions.reserve(entries.size());
+        for (auto& e : entries) {
+            if (e.name.size() > maxName) maxName = e.name.size();
+            versions.push_back(GetFileVersionString(e.path.c_str()));
+        }
+
+        std::wstring text;
+        for (size_t i = 0; i < entries.size(); ++i) {
+            text += entries[i].name;
+            // 名前列の右にパディングしてバージョンを揃える
+            text.append(maxName + 2 - entries[i].name.size(), L' ');
+            text += versions[i].empty() ? L"(バージョン情報なし)" : versions[i];
+            text += L"\r\n";
+        }
+        if (entries.empty())
+            text = L"(コンポーネントが読み込まれていません)";
+
+        SetDlgItemTextW(hwnd, IDC_ABOUT_LIST, text.c_str());
+
+        // 等幅フォントでバージョン表示を綺麗に揃える
+        HFONT hMono = CreateFontW(-13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                                  DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                                  CLEARTYPE_QUALITY, FIXED_PITCH | FF_MODERN, L"Consolas");
+        if (hMono) {
+            SendDlgItemMessageW(hwnd, IDC_ABOUT_LIST, WM_SETFONT, (WPARAM)hMono, TRUE);
+            // ダイアログ破棄時に解放
+            SetPropW(hwnd, L"AboutMonoFont", hMono);
+        }
+
+        // タイトルラベルを少し大きめにする
+        HFONT hTitle = CreateFontW(-15, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+                                   DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                                   CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE,
+                                   L"Segoe UI");
+        if (hTitle) {
+            SendDlgItemMessageW(hwnd, IDC_ABOUT_TITLE, WM_SETFONT, (WPARAM)hTitle, TRUE);
+            SetPropW(hwnd, L"AboutTitleFont", hTitle);
+        }
+        return TRUE;
+    }
+    if (msg == WM_COMMAND) {
+        WORD id = LOWORD(wp);
+        if (id == IDOK || id == IDCANCEL) {
+            EndDialog(hwnd, id);
+            return TRUE;
+        }
+    }
+    if (msg == WM_DESTROY) {
+        if (HFONT f = (HFONT)GetPropW(hwnd, L"AboutMonoFont"))  { DeleteObject(f); RemovePropW(hwnd, L"AboutMonoFont"); }
+        if (HFONT f = (HFONT)GetPropW(hwnd, L"AboutTitleFont")) { DeleteObject(f); RemovePropW(hwnd, L"AboutTitleFont"); }
+    }
+    return FALSE;
+}
+
+void MainWindow::OnAbout() {
+    DialogBoxParamW(GetModuleHandleW(nullptr),
+                    MAKEINTRESOURCEW(IDD_ABOUT),
+                    m_hwnd, AboutDlgProc, 0);
+}
+
+void MainWindow::CloseArchive() {
+    if (m_archivePath.empty()) return;
+    m_archivePath.clear();
+    m_items.clear();
+    m_folderPaths.clear();
+    m_openedWithUnrar = false;
+
+    if (m_hTreeView) TreeView_DeleteAllItems(m_hTreeView);
+    if (m_hListView) ListView_DeleteAllItems(m_hListView);
+
+    SetWindowTextW(m_hwnd, L"AileEx");
+    if (m_hStatus) SetWindowTextW(m_hStatus, L"");
 }
 
 void MainWindow::OnProgress(int pct, wchar_t* filename) {

@@ -66,16 +66,25 @@ int App::RunBrowseMode(const std::vector<std::wstring>& archivePaths, int nCmdSh
         { FVIRTKEY,              VK_F5,     ID_EXTRACT },
         { FVIRTKEY | FCONTROL, (WORD)'E',  ID_EXTRACT },
         { FVIRTKEY | FCONTROL, (WORD)'A',  ID_ADD },
+        { FVIRTKEY | FCONTROL, (WORD)'O',  IDM_FILE_OPEN },
+        { FVIRTKEY | FCONTROL, (WORD)'T',  ID_TEST },
+        { FVIRTKEY | FCONTROL, VK_F4,     ID_CLOSE      },  // 閉じる: アーカイブを閉じる
         // VK_RETURN は ListView/TreeView 内でコンテキストに応じて処理するためここでは定義しない
-        { FVIRTKEY,              VK_ESCAPE, ID_CLOSE   },
+        { FVIRTKEY,              VK_ESCAPE, IDM_FILE_EXIT },  // 終了: アプリ終了
     };
     HACCEL hAccel = CreateAcceleratorTable(accelTable, _countof(accelTable));
 
     MSG msg = {};
     while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
-        if (!wnd.PreTranslateMessage(msg) &&
-            !TranslateAccelerator(wnd.Hwnd(), hAccel, &msg) &&
-            !IsDialogMessageW(wnd.Hwnd(), &msg)) {
+        bool consumed = wnd.PreTranslateMessage(msg) ||
+                        TranslateAccelerator(wnd.Hwnd(), hAccel, &msg);
+        // IsDialogMessageW は Tab ナビゲーション専用に絞る。
+        // WM_SYSKEYDOWN を渡すと Alt+F 等のメニューニーモニックを内部で消費してしまい、
+        // 「Alt 単独で一度メニューを有効化してから F」の二段操作が必要になる。
+        if (!consumed && msg.message == WM_KEYDOWN && msg.wParam == VK_TAB) {
+            consumed = IsDialogMessageW(wnd.Hwnd(), &msg) != 0;
+        }
+        if (!consumed) {
             TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }

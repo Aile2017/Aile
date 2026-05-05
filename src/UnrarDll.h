@@ -107,6 +107,8 @@ public:
     void Unload();
     bool IsLoaded() const { return m_hDll != nullptr; }
     const std::wstring& GetLoadedName() const { return m_loadedName; }
+    // ロード済み unrar.dll のフルパス。未ロード時は空。
+    std::wstring GetLoadedPath() const;
 
     // Auto-detect UnRAR64.dll from known install paths.
     static std::wstring FindUnrarDll();
@@ -117,6 +119,12 @@ public:
     bool ExtractArchive(const wchar_t* path, const wchar_t* destDir,
                         const wchar_t* password,
                         IExtractProgressSink* sink);
+
+    // 全エントリの整合性検証（RARProcessFileW に RAR_TEST を渡す）。
+    // 成功時 true、失敗・キャンセル時 false。
+    bool TestArchive(const wchar_t* path,
+                     const wchar_t* password,
+                     IExtractProgressSink* sink);
 
 private:
     HMODULE              m_hDll      = nullptr;

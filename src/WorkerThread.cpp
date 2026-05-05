@@ -14,6 +14,13 @@ void ProgressPostSink::OnSetTotal(UINT64 total) {
 
 void ProgressPostSink::OnProgress(UINT64 done, const wchar_t* currentFile) {
     if (!m_hwnd) return;
+    // ~50ms スロットル。これがないと数千件/秒の WM_APP_PROGRESS で
+    // メッセージキューが溢れ、キャンセルボタンへの WM_LBUTTONDOWN が
+    // 何秒も遅延 (= 反応しないように見える) する。
+    DWORD now = GetTickCount();
+    if (now - m_lastPostTick < 50) return;
+    m_lastPostTick = now;
+
     int pct = (m_total > 0) ? (int)(done * 100 / m_total) : 0;
     if (pct > 100) pct = 100;
     wchar_t* copy = currentFile ? _wcsdup(currentFile) : nullptr;

@@ -15,6 +15,7 @@
 #define IDD_COMPRESS_ADV    205
 #define IDD_RAR_COMPRESS_ADV  206
 #define IDD_PASSWORD        207
+#define IDD_ABOUT           208
 
 // Compress dialog controls
 #define IDC_OUTPUT_PATH     1001
@@ -64,6 +65,11 @@
 
 #define IDC_PASSWORD_INPUT  8001
 
+// About dialog controls
+#define IDC_ABOUT_TITLE     8101
+#define IDC_ABOUT_URL       8102
+#define IDC_ABOUT_LIST      8103
+
 // Toolbar / Menu commands
 #define ID_EXTRACT          40001
 #define ID_ADD              40002
@@ -74,6 +80,16 @@
 #define ID_CLOSE            40007
 #define ID_INFO             40008
 #define ID_OPEN_ASSOC       40009
+
+// Menu-only commands (Phase 1 menubar)
+#define IDM_FILE_OPEN       40010
+#define IDM_FILE_EXIT       40011
+#define IDM_FILE_MRU_PH     40012   // 最近使ったアーカイブ - "履歴なし" プレースホルダ
+#define IDM_VIEW_TREE       40013   // ツリー表示トグル (次フェーズで実装)
+#define IDM_HELP_ABOUT      40014
+
+// Menu resource
+#define IDR_MAIN_MENU       301
 
 // Worker thread messages (WM_APP range)
 #define WM_APP_PROGRESS     (WM_APP + 1)

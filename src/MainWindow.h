@@ -32,9 +32,13 @@ private:
     void OnTreeSelChanged();
     void OnListDblClick();
     void OnExtract();
+    void OnTest();
     void OnOpenAssoc();
     void OnAddFiles();
     void OnInfo();
+    void OnFileOpen();
+    void OnAbout();
+    void CloseArchive();  // 開いているアーカイブを閉じてビューを空にする (アプリ終了ではない)
     void OnCompress(CompressDlg::Params& params);
     void OnProgress(int pct, wchar_t* filename);  // takes ownership of filename
     void OnDone(HRESULT hr);

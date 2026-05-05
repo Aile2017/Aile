@@ -34,6 +34,8 @@ public:
     void Unload();
     bool IsLoaded() const { return m_hDll != nullptr; }
     const std::wstring& GetLoadedName() const { return m_loadedName; }
+    // ロード済み 7z.dll のフルパス。未ロード時は空。
+    std::wstring GetLoadedPath() const;
 
     // Detect archive format by extension and open, filling items.
     HRESULT OpenArchive(const wchar_t* path, std::vector<ArchiveItem>& items,
@@ -45,6 +47,12 @@ public:
                     const wchar_t* destDir,
                     const wchar_t* password,
                     IExtractProgressSink* sink);
+
+    // 全エントリの整合性検証（IInArchive::Extract に testMode=1 を渡す）。
+    // 1 件でも検証失敗があれば E_FAIL を返す。
+    HRESULT Test(const wchar_t* archivePath,
+                 const wchar_t* password,
+                 IExtractProgressSink* sink);
 
     // Compress srcPaths into outPath.
     HRESULT Compress(const std::vector<std::wstring>& srcPaths,

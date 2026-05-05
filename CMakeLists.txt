@@ -47,6 +47,7 @@ target_link_libraries(AileEx PRIVATE
     oleaut32
     advapi32
     comdlg32
+    version
 )
 
 if(MSVC)

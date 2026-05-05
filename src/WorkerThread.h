@@ -29,6 +29,10 @@ private:
     UINT         m_doneMsg;
     UINT64       m_total       = 0;
     volatile bool m_cancelled  = false;
+    // PostMessage を 20Hz 程度に絞るためのスロットル。連続して
+    // WM_APP_PROGRESS を投げ続けるとメッセージキューが溢れ、
+    // キャンセルボタンのクリックが遅延・破棄される (キャンセル不能に見える) ため。
+    DWORD        m_lastPostTick = 0;
 };
 
 // Generic worker: runs a std::function<HRESULT()> on a new thread.

@@ -11,6 +11,44 @@ IDI_AILEEX ICON "AileEx.ico"
 1 RT_MANIFEST "manifest.xml"
 
 /////////////////////////////////////////////////////////////////////////////
+// Main menu
+/////////////////////////////////////////////////////////////////////////////
+IDR_MAIN_MENU MENU
+BEGIN
+    POPUP "ファイル(&F)"
+    BEGIN
+        MENUITEM "開く(&O)...\tCtrl+O",                IDM_FILE_OPEN
+        POPUP "最近使ったアーカイブ(&R)"
+        BEGIN
+            MENUITEM "(履歴なし)",                      IDM_FILE_MRU_PH, GRAYED
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "閉じる(&C)\tCtrl+F4",                ID_CLOSE
+        MENUITEM "終了(&X)\tEsc",                       IDM_FILE_EXIT
+    END
+    POPUP "操作(&A)"
+    BEGIN
+        MENUITEM "展開(&E)...\tF5",                    ID_EXTRACT
+        MENUITEM "追加(&A)...\tCtrl+A",                ID_ADD
+        MENUITEM "テスト(&T)\tCtrl+T",                  ID_TEST
+        MENUITEM SEPARATOR
+        MENUITEM "関連付けで開く(&O)\tEnter",           ID_OPEN_ASSOC
+        MENUITEM "削除(&D)\tDel",                      ID_DELETE, GRAYED
+        MENUITEM "情報(&I)",                            ID_INFO
+        MENUITEM SEPARATOR
+        MENUITEM "設定(&S)...",                         ID_SETTINGS_DLG
+    END
+    POPUP "表示(&V)"
+    BEGIN
+        MENUITEM "ツリー表示(&T)",                      IDM_VIEW_TREE, GRAYED
+    END
+    POPUP "ヘルプ(&H)"
+    BEGIN
+        MENUITEM "バージョン情報(&A)...",               IDM_HELP_ABOUT
+    END
+END
+
+/////////////////////////////////////////////////////////////////////////////
 // Compression dialog
 /////////////////////////////////////////////////////////////////////////////
 IDD_COMPRESS DIALOGEX 0, 0, 360, 180
@@ -167,4 +205,21 @@ BEGIN
     EDITTEXT        IDC_PASSWORD_INPUT, 10, 26, 200, 14, ES_AUTOHSCROLL | ES_PASSWORD
     DEFPUSHBUTTON   "OK",           IDOK,     104, 50, 50, 14
     PUSHBUTTON      "キャンセル",   IDCANCEL, 158, 50, 50, 14
+END
+
+/////////////////////////////////////////////////////////////////////////////
+// About dialog
+/////////////////////////////////////////////////////////////////////////////
+IDD_ABOUT DIALOGEX 0, 0, 300, 170
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "バージョン情報"
+FONT 9, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    ICON            IDI_AILEEX,     IDC_STATIC,         12,  12,  20,  20
+    LTEXT           "AileEx Archive Manager", IDC_ABOUT_TITLE, 44, 14, 240, 14
+    LTEXT           "https://github.com/Aile2017/AileEx", IDC_ABOUT_URL, 44, 32, 240, 10
+    LTEXT           "コンポーネント:", IDC_STATIC,       12,  60, 100,  10
+    EDITTEXT        IDC_ABOUT_LIST,                     12,  74, 276,  68,
+                    ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | NOT WS_TABSTOP | WS_VSCROLL | WS_BORDER
+    DEFPUSHBUTTON   "OK",           IDOK,              228, 150,  60,  14
 END

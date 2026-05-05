@@ -23,6 +23,12 @@ void ProgressDlg::Show(HWND hwndParent, const wchar_t* title) {
     if (hwndParent) EnableWindow(hwndParent, FALSE);
     ShowWindow(m_hwnd, SW_SHOW);
     UpdateWindow(m_hwnd);
+    // 親が EnableWindow(FALSE) になった直後はフォーカス・アクティブ状態が
+    // 不定になりがち。明示的にダイアログをアクティブにし、キャンセルボタンに
+    // フォーカスを置くことで初手のクリック・Esc に確実に反応させる。
+    SetForegroundWindow(m_hwnd);
+    SetActiveWindow(m_hwnd);
+    if (m_hwndCancel) SetFocus(m_hwndCancel);
 }
 
 void ProgressDlg::SetTotal(UINT64 total) {
@@ -96,7 +102,9 @@ INT_PTR ProgressDlg::HandleMsg(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return TRUE;
 
     case WM_COMMAND:
-        if (LOWORD(wp) == IDC_CANCEL) {
+        // IDCANCEL は Esc 押下で IsDialogMessageW が合成する (ダイアログのデフォルト)。
+        // IDC_CANCEL はキャンセルボタンクリック時。両方ともキャンセル扱いにする。
+        if (LOWORD(wp) == IDC_CANCEL || LOWORD(wp) == IDCANCEL) {
             if (m_sink) m_sink->SetCancelled(true);
             if (m_hwndCancel) EnableWindow(m_hwndCancel, FALSE);
             if (m_hwndLabel) SetWindowTextW(m_hwndLabel, L"キャンセル中...");
