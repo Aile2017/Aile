@@ -409,6 +409,35 @@ void MainWindow::CreateControls(HWND hwnd) {
     SendMessageW(m_hToolbar, TB_ADDBUTTONS, _countof(btns), (LPARAM)btns);
     SendMessageW(m_hToolbar, TB_AUTOSIZE, 0, 0);
 
+    // Setup tooltips
+    HWND hwndTooltip = CreateWindowExW(0, TOOLTIPS_CLASS, nullptr,
+        WS_POPUP | TTS_ALWAYSTIP, 0, 0, 0, 0, hwnd, nullptr, hInst, nullptr);
+    
+    TOOLINFOW ti = {};
+    ti.cbSize = sizeof(TOOLINFOW);
+    ti.uFlags = TTF_SUBCLASS;
+    ti.hwnd = m_hToolbar;
+    
+    const wchar_t* tooltips[] = {
+        L"展開\n選択したファイルを展開します",
+        L"閲覧\n関連付けのあるアプリで開きます",
+        L"追加\nアーカイブにファイルを追加します",
+        L"情報\nアーカイブの詳細情報を表示します",
+        nullptr, // separator
+        L"設定\nアプリケーション設定を開きます"
+    };
+    
+    for (int i = 0; i < _countof(btns); i++) {
+        if (tooltips[i] == nullptr) continue;
+        
+        ti.uId = (UINT_PTR)m_hToolbar;
+        ti.rect = { 0, 0, 0, 0 };
+        ti.lpszText = (wchar_t*)tooltips[i];
+        ti.lParam = 0;
+        
+        SendMessageW(hwndTooltip, TTM_ADDTOOLW, 0, (LPARAM)&ti);
+    }
+
     // 設定で非表示なら起動直後に隠す
     if (!m_toolbarVisible)
         ShowWindow(m_hToolbar, SW_HIDE);
