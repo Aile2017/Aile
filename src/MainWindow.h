@@ -14,6 +14,9 @@ public:
     bool Create(HINSTANCE hInst, int nCmdShow);
     void OpenArchive(const wchar_t* path);
     HWND Hwnd() const { return m_hwnd; }
+    // メッセージループで TranslateAccelerator / IsDialogMessage より先に呼ぶ。
+    // 消費した場合 true を返す。
+    bool PreTranslateMessage(const MSG& msg);
 
     static const wchar_t* ClassName() { return L"AileEx_MainWnd"; }
     static bool RegisterClass(HINSTANCE hInst);

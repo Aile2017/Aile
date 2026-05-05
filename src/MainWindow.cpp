@@ -146,6 +146,18 @@ LRESULT CALLBACK MainWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
+bool MainWindow::PreTranslateMessage(const MSG& msg) {
+    // ListView フォーカス中に Enter → フォルダナビゲート or 展開
+    if (msg.message == WM_KEYDOWN && msg.wParam == VK_RETURN) {
+        HWND hFocus = GetFocus();
+        if (hFocus == m_hListView || IsChild(m_hListView, hFocus)) {
+            OnListDblClick();
+            return true;
+        }
+    }
+    return false;
+}
+
 LRESULT MainWindow::HandleMsg(UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_CREATE:
@@ -172,6 +184,12 @@ LRESULT MainWindow::HandleMsg(UINT msg, WPARAM wp, LPARAM lp) {
             OnListDblClick();
         if (hdr->hwndFrom == m_hListView && hdr->code == NM_RETURN)
             OnListDblClick();
+        if (hdr->hwndFrom == m_hListView && hdr->code == LVN_KEYDOWN) {
+            // NM_RETURN が IsDialogMessage に横取りされた場合のフォールバック
+            auto* kd = reinterpret_cast<NMLVKEYDOWN*>(lp);
+            if (kd->wVKey == VK_RETURN)
+                OnListDblClick();
+        }
         if (hdr->hwndFrom == m_hListView && hdr->code == LVN_COLUMNCLICK) {
             auto* nm = reinterpret_cast<NMLISTVIEW*>(lp);
             OnColumnClick(nm->iSubItem);
@@ -452,8 +470,11 @@ void MainWindow::OnCommand(WORD id) {
     case IDOK:
         // IsDialogMessage が Enter を WM_COMMAND(IDOK) に変換して届ける。
         // フォーカスに応じてコンテキスト処理する。
-        if (GetFocus() == m_hListView)
-            OnListDblClick();
+        {
+            HWND hFocus = GetFocus();
+            if (hFocus == m_hListView || IsChild(m_hListView, hFocus))
+                OnListDblClick();
+        }
         break;
     case ID_EXTRACT:
         OnExtract();

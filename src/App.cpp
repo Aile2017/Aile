@@ -73,7 +73,8 @@ int App::RunBrowseMode(const std::vector<std::wstring>& archivePaths, int nCmdSh
 
     MSG msg = {};
     while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
-        if (!TranslateAccelerator(wnd.Hwnd(), hAccel, &msg) &&
+        if (!wnd.PreTranslateMessage(msg) &&
+            !TranslateAccelerator(wnd.Hwnd(), hAccel, &msg) &&
             !IsDialogMessageW(wnd.Hwnd(), &msg)) {
             TranslateMessage(&msg);
             DispatchMessageW(&msg);
