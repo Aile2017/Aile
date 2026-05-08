@@ -287,6 +287,16 @@ LRESULT MainWindow::HandleMsg(UINT msg, WPARAM wp, LPARAM lp) {
             auto* nm = reinterpret_cast<NMLISTVIEW*>(lp);
             OnColumnClick(nm->iSubItem);
         }
+        if (hdr->code == TTN_GETDISPINFOW) {
+            auto* pdi = reinterpret_cast<NMTTDISPINFOW*>(lp);
+            switch (pdi->hdr.idFrom) {
+            case ID_EXTRACT:      pdi->lpszText = L"展開"; break;
+            case ID_OPEN_ASSOC:   pdi->lpszText = L"閲覧"; break;
+            case ID_ADD:          pdi->lpszText = L"追加"; break;
+            case ID_INFO:         pdi->lpszText = L"情報"; break;
+            case ID_SETTINGS_DLG: pdi->lpszText = L"設定"; break;
+            }
+        }
         return 0;
     }
 
@@ -429,7 +439,7 @@ void MainWindow::CreateControls(HWND hwnd) {
 
     // Toolbar
     m_hToolbar = CreateWindowExW(0, TOOLBARCLASSNAME, nullptr,
-        WS_CHILD | WS_VISIBLE | WS_TABSTOP | TBSTYLE_FLAT | CCS_NODIVIDER | CCS_NORESIZE,
+        WS_CHILD | WS_VISIBLE | WS_TABSTOP | TBSTYLE_FLAT | TBSTYLE_TOOLTIPS | CCS_NODIVIDER | CCS_NORESIZE,
         0, 0, 0, kToolbarH, hwnd, nullptr, hInst, nullptr);
     SendMessageW(m_hToolbar, TB_BUTTONSTRUCTSIZE, sizeof(TBBUTTON), 0);
     SendMessageW(m_hToolbar, TB_SETBITMAPSIZE, 0, MAKELPARAM(48, 36));
@@ -463,35 +473,6 @@ void MainWindow::CreateControls(HWND hwnd) {
     };
     SendMessageW(m_hToolbar, TB_ADDBUTTONS, _countof(btns), (LPARAM)btns);
     SendMessageW(m_hToolbar, TB_AUTOSIZE, 0, 0);
-
-    // Setup tooltips
-    HWND hwndTooltip = CreateWindowExW(0, TOOLTIPS_CLASS, nullptr,
-        WS_POPUP | TTS_ALWAYSTIP, 0, 0, 0, 0, hwnd, nullptr, hInst, nullptr);
-    
-    TOOLINFOW ti = {};
-    ti.cbSize = sizeof(TOOLINFOW);
-    ti.uFlags = TTF_SUBCLASS;
-    ti.hwnd = m_hToolbar;
-    
-    const wchar_t* tooltips[] = {
-        L"展開\n選択したファイルを展開します",
-        L"閲覧\n関連付けのあるアプリで開きます",
-        L"追加\nアーカイブにファイルを追加します",
-        L"情報\nアーカイブの詳細情報を表示します",
-        nullptr, // separator
-        L"設定\nアプリケーション設定を開きます"
-    };
-    
-    for (int i = 0; i < _countof(btns); i++) {
-        if (tooltips[i] == nullptr) continue;
-        
-        ti.uId = (UINT_PTR)m_hToolbar;
-        ti.rect = { 0, 0, 0, 0 };
-        ti.lpszText = (wchar_t*)tooltips[i];
-        ti.lParam = 0;
-        
-        SendMessageW(hwndTooltip, TTM_ADDTOOLW, 0, (LPARAM)&ti);
-    }
 
     // 設定で非表示なら起動直後に隠す
     if (!m_toolbarVisible)
