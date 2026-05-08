@@ -32,6 +32,8 @@ private:
     void OnTreeSelChanged();
     void OnListDblClick();
     void OnExtract();
+    void OnExtractSelected();
+    void OnContextMenu(HWND hwndFrom, int x, int y);
     void OnTest();
     void OnOpenAssoc();
     void OnAddFiles();
@@ -87,6 +89,6 @@ private:
     static constexpr int kSplitterW = 5;
     static constexpr int kTreeMinW  = 80;
     static constexpr int kListMinW  = 80;
-    static constexpr int kToolbarH  = 42;
+    static constexpr int kToolbarH  = 40;
     static constexpr int kStatusH   = 22;
 };
