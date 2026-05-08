@@ -65,8 +65,57 @@ void UnrarDll::Unload() {
     m_pfnProc = nullptr; m_pfnClose = nullptr; m_pfnSetCb = nullptr;
 }
 
+bool UnrarDll::ExtractArchiveSelected(const wchar_t* path, const wchar_t* destDir,
+                                       const std::set<std::wstring>& targetPaths,
+                                       const wchar_t* password,
+                                       IExtractProgressSink* sink) {
+    if (!IsLoaded()) return false;
+    if (targetPaths.empty())
+        return ExtractArchive(path, destDir, password, sink);
+
+    RAROpenArchiveDataEx od = {};
+    od.ArcNameW  = const_cast<wchar_t*>(path);
+    od.OpenMode  = RAR_OM_EXTRACT;
+    HANDLE hArc  = m_pfnOpen(&od);
+    if (!hArc || od.OpenResult != ERAR_SUCCESS) return false;
+
+    if (m_pfnSetCb && password && password[0]) {
+        auto cb = [](UINT msg, LPARAM ud, LPARAM p1, LPARAM p2) -> int {
+            if (msg == UCM_NEEDPASSWORDW) {
+                const wchar_t* pw = reinterpret_cast<const wchar_t*>(ud);
+                wcsncpy_s(reinterpret_cast<wchar_t*>(p1), (size_t)(p2 / sizeof(wchar_t)), pw, _TRUNCATE);
+            }
+            return 1;
+        };
+        m_pfnSetCb(hArc, cb, (LPARAM)password);
+    }
+
+    RARHeaderDataEx hdr = {};
+    int res;
+    UINT64 totalDone = 0;
+    while ((res = m_pfnRead(hArc, &hdr)) == ERAR_SUCCESS) {
+        if (sink && sink->IsCancelled()) { m_pfnClose(hArc); return false; }
+
+        // パスを正規化してターゲットセットと照合
+        std::wstring normalPath = hdr.FileNameW;
+        for (auto& c : normalPath) if (c == L'\\') c = L'/';
+        while (!normalPath.empty() && normalPath.back() == L'/') normalPath.pop_back();
+
+        bool extract = (targetPaths.count(normalPath) > 0);
+        if (extract && sink) sink->OnProgress(totalDone, hdr.FileNameW);
+
+        int r = m_pfnProc(hArc, extract ? RAR_EXTRACT : RAR_SKIP,
+                          const_cast<wchar_t*>(destDir), nullptr);
+        if (r != ERAR_SUCCESS) break;
+        if (extract)
+            totalDone += ((UINT64)hdr.UnpSizeHigh << 32) | hdr.UnpSize;
+    }
+    m_pfnClose(hArc);
+    return (res == ERAR_END_ARCHIVE);
+}
+
 bool UnrarDll::ListArchive(const wchar_t* path, std::vector<ArchiveItem>& items,
-                            const wchar_t* /*password*/) {
+                           const wchar_t* /*password*/) {
     if (!IsLoaded()) return false;
     items.clear();
 

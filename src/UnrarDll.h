@@ -1,6 +1,7 @@
 #pragma once
 #include <windows.h>
 #include <vector>
+#include <set>
 #include <string>
 #include "ArchiveItem.h"
 #include "WorkerThread.h"
@@ -119,6 +120,13 @@ public:
     bool ExtractArchive(const wchar_t* path, const wchar_t* destDir,
                         const wchar_t* password,
                         IExtractProgressSink* sink);
+
+    // 指定パスセットのエントリのみ展開する（パスはフォワードスラッシュ区切り）。
+    // targetPaths が空の場合は全展開（ExtractArchive と同等）。
+    bool ExtractArchiveSelected(const wchar_t* path, const wchar_t* destDir,
+                                const std::set<std::wstring>& targetPaths,
+                                const wchar_t* password,
+                                IExtractProgressSink* sink);
 
     // 全エントリの整合性検証（RARProcessFileW に RAR_TEST を渡す）。
     // 成功時 true、失敗・キャンセル時 false。

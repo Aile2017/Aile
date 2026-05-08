@@ -12,6 +12,7 @@
 #include <shobjidl_core.h>
 #include <shlwapi.h>
 #include <commdlg.h>
+#include <windowsx.h>
 #include <map>
 #include <commctrl.h>
 #include <algorithm>
@@ -271,6 +272,10 @@ LRESULT MainWindow::HandleMsg(UINT msg, WPARAM wp, LPARAM lp) {
         OnCommand(LOWORD(wp));
         return 0;
 
+    case WM_CONTEXTMENU:
+        if ((HWND)wp == m_hListView)
+            OnContextMenu((HWND)wp, GET_X_LPARAM(lp), GET_Y_LPARAM(lp));
+        return 0;
     case WM_INITMENUPOPUP:
         // HIWORD(lp) != 0 はシステムメニュー (タイトルバー右クリック等) のため対象外
         if (HIWORD(lp) == 0)
@@ -442,7 +447,9 @@ void MainWindow::CreateControls(HWND hwnd) {
         WS_CHILD | WS_VISIBLE | WS_TABSTOP | TBSTYLE_FLAT | TBSTYLE_TOOLTIPS | CCS_NODIVIDER | CCS_NORESIZE,
         0, 0, 0, kToolbarH, hwnd, nullptr, hInst, nullptr);
     SendMessageW(m_hToolbar, TB_BUTTONSTRUCTSIZE, sizeof(TBBUTTON), 0);
-    SendMessageW(m_hToolbar, TB_SETBITMAPSIZE, 0, MAKELPARAM(48, 36));
+    SendMessageW(m_hToolbar, TB_SETBITMAPSIZE, 0, MAKELPARAM(32, 32));
+    SendMessageW(m_hToolbar, TB_SETBUTTONSIZE, 0, MAKELPARAM(36, 36));
+    SendMessageW(m_hToolbar, TB_SETPADDING,    0, MAKELPARAM(2, 2));
 
     // Load toolbar bitmaps
     TBADDBITMAP ab = {};
@@ -610,6 +617,9 @@ void MainWindow::OnCommand(WORD id) {
     switch (id) {
     case ID_EXTRACT:
         OnExtract();
+        break;
+    case ID_EXTRACT_SELECTED:
+        OnExtractSelected();
         break;
     case ID_OPEN_ASSOC:
         OnOpenAssoc();
@@ -867,15 +877,7 @@ void MainWindow::OnExtract() {
     }
 
     // Collect selected indices (empty = all; ignored by unrar path)
-    std::vector<UINT32> indices;
-    int item = -1;
-    while ((item = ListView_GetNextItem(m_hListView, item, LVNI_SELECTED)) != -1) {
-        LVITEMW lvi = {};
-        lvi.iItem = item;
-        lvi.mask  = LVIF_PARAM;
-        ListView_GetItem(m_hListView, &lvi);
-        indices.push_back((UINT32)lvi.lParam);
-    }
+    std::vector<UINT32> indices; // 空 = 全展開
 
     ProgressDlg progDlg;
     progDlg.Show(m_hwnd, L"展開中...");
@@ -910,6 +912,150 @@ void MainWindow::OnExtract() {
     if (FAILED(hrDone) && hrDone != E_ABORT)
         ShowError(L"展開に失敗しました。", hrDone);
 }
+
+void MainWindow::OnExtractSelected() {
+    if (m_archivePath.empty()) return;
+
+    // lParam を実アーカイブインデックスに解決する
+    // - lParam < m_items.size()  : 実エントリ（ディレクトリなら配下も展開）
+    // - lParam >= m_items.size() : 仮想フォルダ（m_folderPaths 配下を展開）
+    std::set<UINT32> indexSet;
+    int item = -1;
+    while ((item = ListView_GetNextItem(m_hListView, item, LVNI_SELECTED)) != -1) {
+        LVITEMW lvi = {};
+        lvi.iItem = item;
+        lvi.mask  = LVIF_PARAM;
+        ListView_GetItem(m_hListView, &lvi);
+        UINT32 lp = (UINT32)lvi.lParam;
+
+        std::wstring folder;
+        if (lp < (UINT32)m_items.size()) {
+            indexSet.insert(lp);
+            if (m_items[lp].isDir) folder = m_items[lp].path;
+        } else {
+            int fpIdx = (int)(lp - (UINT32)m_items.size());
+            if (fpIdx >= 0 && fpIdx < (int)m_folderPaths.size())
+                folder = m_folderPaths[fpIdx];
+        }
+        if (!folder.empty()) {
+            std::wstring prefix = folder + L"/";
+            for (UINT32 j = 0; j < (UINT32)m_items.size(); ++j) {
+                if (m_items[j].path.size() >= prefix.size() &&
+                    m_items[j].path.compare(0, prefix.size(), prefix) == 0)
+                    indexSet.insert(j);
+            }
+        }
+    }
+    if (indexSet.empty()) {
+        MessageBoxW(m_hwnd, L"ファイルが選択されていません。", L"AileEx", MB_ICONINFORMATION);
+        return;
+    }
+    std::vector<UINT32> indices(indexSet.begin(), indexSet.end());
+
+    App& app = App::Instance();
+    bool useUnrar = m_openedWithUnrar;
+    if (!useUnrar && !app.Get7z().IsLoaded()) {
+        ShowError(L"7z.dll が読み込まれていません。");
+        return;
+    }
+
+    wchar_t destDir[MAX_PATH] = {};
+    {
+        IFileOpenDialog* pfd = nullptr;
+        if (SUCCEEDED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER,
+                                       IID_PPV_ARGS(&pfd)))) {
+            FILEOPENDIALOGOPTIONS opts = 0;
+            pfd->GetOptions(&opts);
+            pfd->SetOptions(opts | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM);
+            pfd->SetTitle(L"展開先フォルダを選択してください");
+            if (SUCCEEDED(pfd->Show(m_hwnd))) {
+                IShellItem* psi = nullptr;
+                if (SUCCEEDED(pfd->GetResult(&psi))) {
+                    PWSTR psz = nullptr;
+                    psi->GetDisplayName(SIGDN_FILESYSPATH, &psz);
+                    if (psz) { wcsncpy_s(destDir, psz, MAX_PATH - 1); CoTaskMemFree(psz); }
+                    psi->Release();
+                }
+            }
+            pfd->Release();
+        }
+    }
+    if (!destDir[0]) return;
+
+    // MkDir ポリシーはアーカイブ全体の構造で評価する（全展開と同じ基準）
+    std::wstring finalDest = destDir;
+    {
+        int mkDir = app.GetSettings().GetMkDir();
+        if (ShouldCreateSubfolder(mkDir, m_items))
+            finalDest = std::wstring(destDir) + L"\\" + ArchiveBaseName(m_archivePath);
+    }
+
+    ProgressDlg progDlg;
+    progDlg.Show(m_hwnd, L"展開中...");
+
+    auto* sink = new ProgressPostSink(m_hwnd, WM_APP_PROGRESS, WM_APP_DONE);
+    m_pSink    = sink;
+    progDlg.SetSink(sink);
+
+    auto archivePath = m_archivePath;
+
+    if (useUnrar) {
+        // unrar 経路: 対象パスセットを構築して選択展開
+        std::set<std::wstring> targetPaths;
+        for (UINT32 idx : indices) targetPaths.insert(m_items[idx].path);
+        auto& unrar = app.GetUnrar();
+        m_worker.Start([&unrar, archivePath, destDir = finalDest, targetPaths, sink]() -> HRESULT {
+            SHCreateDirectoryExW(nullptr, destDir.c_str(), nullptr);
+            bool ok = unrar.ExtractArchiveSelected(archivePath.c_str(), destDir.c_str(),
+                                                   targetPaths, nullptr, sink);
+            return ok ? S_OK : E_FAIL;
+        }, m_hwnd, WM_APP_DONE);
+    } else {
+        auto& sz = app.Get7z();
+        m_worker.Start([&sz, archivePath, indices, destDir = finalDest, sink]() -> HRESULT {
+            return sz.Extract(archivePath.c_str(), indices, destDir.c_str(), nullptr, sink);
+        }, m_hwnd, WM_APP_DONE);
+    }
+
+    HRESULT hrDone = progDlg.RunMessageLoop();
+    m_worker.Wait();
+    delete sink;
+    m_pSink = nullptr;
+
+    if (FAILED(hrDone) && hrDone != E_ABORT)
+        ShowError(L"展開に失敗しました。", hrDone);
+}
+
+void MainWindow::OnContextMenu(HWND /*hwndFrom*/, int x, int y) {
+    if (m_archivePath.empty()) return;
+
+    bool readOnly = m_openedWithUnrar;
+    int selCount  = ListView_GetSelectedCount(m_hListView);
+
+    HMENU hMenu = CreatePopupMenu();
+    AppendMenuW(hMenu, MF_STRING | (selCount > 0 ? MF_ENABLED : MF_GRAYED),
+                ID_EXTRACT_SELECTED, L"選択ファイルを展開(&E)");
+    AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(hMenu, MF_STRING | (!readOnly && selCount > 0 ? MF_ENABLED : MF_GRAYED),
+                ID_OPEN_ASSOC, L"関連付けで開く(&O)");
+    AppendMenuW(hMenu, MF_STRING | MF_ENABLED, ID_TEST, L"テスト(&T)");
+    AppendMenuW(hMenu, MF_STRING | (selCount > 0 ? MF_ENABLED : MF_GRAYED),
+                ID_INFO, L"情報(&I)");
+    AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(hMenu, MF_STRING | (!readOnly && selCount > 0 ? MF_ENABLED : MF_GRAYED),
+                ID_DELETE, L"削除(&D)");
+
+    // キーボードから呼ばれた場合 (x==-1, y==-1) はカーソル位置を使う
+    if (x == -1 && y == -1) {
+        POINT pt = {};
+        GetCursorPos(&pt);
+        x = pt.x; y = pt.y;
+    }
+
+    TrackPopupMenu(hMenu, TPM_RIGHTBUTTON, x, y, 0, m_hwnd, nullptr);
+    DestroyMenu(hMenu);
+}
+
 
 void MainWindow::OnTest() {
     if (m_archivePath.empty()) {
@@ -1764,10 +1910,10 @@ void MainWindow::PopulateList(const std::wstring& folderPath) {
         }
     }
 
-    // アイテムが存在し、かつ何も選択されていない場合は先頭にフォーカスカーソルを置く
+    // アイテムが存在し、かつ何も選択されていない場合は先頭にフォーカスカーソルを置く（選択はしない）
     if (ListView_GetItemCount(m_hListView) > 0 &&
         ListView_GetNextItem(m_hListView, -1, LVNI_SELECTED) < 0) {
-        ListView_SetItemState(m_hListView, 0, LVIS_FOCUSED | LVIS_SELECTED, LVIS_FOCUSED | LVIS_SELECTED);
+        ListView_SetItemState(m_hListView, 0, LVIS_FOCUSED, LVIS_FOCUSED);
         ListView_EnsureVisible(m_hListView, 0, FALSE);
     }
 }
