@@ -13,6 +13,7 @@
 #define IDB_TOOLBAR_ADD     113
 #define IDB_TOOLBAR_INFO    114
 #define IDB_TOOLBAR_SETTINGS 115
+#define IDB_TOOLBAR_TEST     116
 
 // Dialogs
 #define IDD_COMPRESS        201
@@ -92,6 +93,7 @@
 #define ID_CLOSE            40007
 #define ID_INFO             40008
 #define ID_OPEN_ASSOC       40009
+#define ID_EXTRACT_SELECTED 40016
 
 // Menu-only commands (Phase 1 menubar)
 #define IDM_FILE_OPEN       40010

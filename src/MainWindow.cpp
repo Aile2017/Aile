@@ -299,6 +299,7 @@ LRESULT MainWindow::HandleMsg(UINT msg, WPARAM wp, LPARAM lp) {
             case ID_OPEN_ASSOC:   pdi->lpszText = L"閲覧"; break;
             case ID_ADD:          pdi->lpszText = L"追加"; break;
             case ID_INFO:         pdi->lpszText = L"情報"; break;
+            case ID_TEST:         pdi->lpszText = L"テスト"; break;
             case ID_SETTINGS_DLG: pdi->lpszText = L"設定"; break;
             }
         }
@@ -470,11 +471,15 @@ void MainWindow::CreateControls(HWND hwnd) {
     ab.nID = IDB_TOOLBAR_SETTINGS;
     int idxSettings = (int)SendMessageW(m_hToolbar, TB_ADDBITMAP, 1, (LPARAM)&ab);
 
+    ab.nID = IDB_TOOLBAR_TEST;
+    int idxTest = (int)SendMessageW(m_hToolbar, TB_ADDBITMAP, 1, (LPARAM)&ab);
+
     TBBUTTON btns[] = {
         {idxExtract, ID_EXTRACT,      TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
         {idxOpen,    ID_OPEN_ASSOC,   TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
         {idxAdd,     ID_ADD,          TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
         {idxInfo,    ID_INFO,         TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
+        {idxTest,    ID_TEST,         TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
         {0,          0,               0,               BTNS_SEP,    {}, 0, 0},
         {idxSettings, ID_SETTINGS_DLG, TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
     };
