@@ -1,185 +1,187 @@
-# コード整理候補（2026-05-05）
+# Code Cleanup Candidates (2026-05-05)
 
-review-2026-05-05.md 対応後、過去の改修の積み重ねで「今となっては不要・冗長」になっている処理を抽出した結果。
-3 つの観点（デッドコード／重複／効率）で並列調査し、実コードで裏取りした候補のみを記録。
+Following completion of review-2026-05-05.md, extracted processing that has become "unnecessary/redundant" from accumulated past changes.
+Conducted parallel investigation from 3 perspectives (dead code/duplication/efficiency), recording only candidates verified in actual code.
 
-優先度はコスト対効果（重複行数 × 副次バグ解消の有無）で見積もった主観値。
+Priority is subjective estimate based on cost-benefit (duplicate lines × bug remediation).
 
-## A. すぐ消せる／まとめられる（小〜中規模）
+## A. Quick fixes / Consolidations (Small-Medium scale)
 
-### A-1. `CompressDlg::Params` の Settings 読込／保存が 3 箇所でコピペ（最大の重複）
+### A-1. `CompressDlg::Params` Settings read/save duplicated in 3 places (largest duplication)
 
-**読込側**:
-- `MainWindow.cpp:411-424`（`OnDropFiles`）
-- `MainWindow.cpp:741-754`（`OnAddFiles`）
-- `App.cpp:91-106`（`RunCompressMode`）
+**Read side:**
+- `MainWindow.cpp:411-424` (`OnDropFiles`)
+- `MainWindow.cpp:741-754` (`OnAddFiles`)
+- `App.cpp:91-106` (`RunCompressMode`)
 
-7z 系 5 行 + RAR 系 6 行 = 計 11〜14 行が完全コピペ。
+7z section 5 lines + RAR section 6 lines = 11-14 lines perfect copy-paste.
 
-**保存側**:
-- `MainWindow.cpp:431-440`（`OnDropFiles` — **RAR 系の保存が無い**）
-- `MainWindow.cpp:762-776`（`OnAddFiles`）
-- `App.cpp:115-128`（`RunCompressMode`）
+**Save side:**
+- `MainWindow.cpp:431-440` (`OnDropFiles` — **RAR save missing**)
+- `MainWindow.cpp:762-776` (`OnAddFiles`)
+- `App.cpp:115-128` (`RunCompressMode`)
 
-**対応方針**:
-`Settings.h` に以下を追加し、3 箇所を 1 行ずつに置換。
+**Resolution:**
+Add to `Settings.h`:
 
 ```cpp
 void FillCompressParams(CompressDlg::Params& p) const;
 void StoreCompressParams(const CompressDlg::Params& p);
 ```
 
-**副次効果**: `OnDropFiles` の RAR パラメータ保存漏れバグが自動的に解消する（D&D で開いた CompressDlg で RAR 詳細値を変えても保存されない問題）。
+Replace 3 locations with single lines.
 
-### A-2. `PromptPassword` の `hint` 引数が完全未使用
+**Side effect:** RAR parameter save leak in `OnDropFiles` automatically fixed (RAR advanced values changed in D&D CompressDlg weren't saved).
 
-- 宣言: `MainWindow.h:48` `std::wstring PromptPassword(const wchar_t* hint = nullptr);`
-- 実装: `MainWindow.cpp:1200` で `/*hint*/` とコメントアウト済み
-- 呼出側: `MainWindow.cpp:97` も無引数
+### A-2. `PromptPassword` `hint` argument completely unused
 
-**対応方針**: 引数ごと削除（ヘッダ・実装の両方）。
+- Declaration: `MainWindow.h:48` `std::wstring PromptPassword(const wchar_t* hint = nullptr);`
+- Implementation: `MainWindow.cpp:1200` has `/*hint*/` commented out
+- Call site: `MainWindow.cpp:97` no argument
 
-### A-3. tar-in-stream 検出の `getExt` ラムダが `ExtOfPath` の再実装
+**Resolution:** Remove argument entirely (header and implementation).
 
-- `SevenZip.cpp:587-593` のローカルラムダ `getExt`
-- 同ファイル `SevenZip.cpp:309` の `SevenZip::ExtOfPath` と完全同一の処理
+### A-3. tar-in-stream detection `getExt` lambda is duplicate of `ExtOfPath`
 
-**対応方針**: ラムダを削除し、`ExtOfPath(path)` 呼出に置換。
+- Local lambda `getExt` in `SevenZip.cpp:587-593`
+- Identical processing to `SevenZip::ExtOfPath` in `SevenZip.cpp:309`
 
-### A-4. `MainWindow::OnProgress` / `OnDone` のフォールバック
+**Resolution:** Remove lambda, replace with `ExtOfPath(path)` call.
 
-- `MainWindow.cpp:240-248` の `WM_APP_PROGRESS` / `WM_APP_DONE` ハンドラ
-- 既に「通常は到達しない」コメント付き（前回 review 2-5 対応）
-- 内側メッセージループが必ず吸収するため、メインの WndProc には来ない
+### A-4. `MainWindow::OnProgress` / `OnDone` fallback
 
-**対応方針**: 削除より「メンバ関数 `OnProgress` / `OnDone` を残し、フォールバックでログのみ出す」程度の整理。完全削除はリスクと比べて旨味が小さい。
+- `WM_APP_PROGRESS` / `WM_APP_DONE` handlers in `MainWindow.cpp:240-248`
+- Already has "normally unreached" comment (previous review 2-5 fix)
+- Inner message loops always absorb, never reach main WndProc
 
-## B. 構造改善（中〜大規模）
+**Resolution:** Keep and add diagnostic logging rather than delete. Deletion risk vs. benefit small.
 
-### B-1. 進捗ループが 3 箇所で個別実装
+## B. Structure improvements (Medium-Large scale)
 
-- `App.cpp:155-172`（RAR、`rar.Cancel()` 呼出あり）
-- `App.cpp:194-210`（7z、キャンセル経路なし）
-- `MainWindow.cpp:817-835`（`runMsgLoop` ラムダ、cancelFn を引数で受ける汎用版）
+### B-1. Progress loop individually implemented in 3 places
 
-`MainWindow` 側のラムダ版が最もきれいに `cancelFn` を抽象化している。
+- `App.cpp:155-172` (RAR, with `rar.Cancel()` call)
+- `App.cpp:194-210` (7z, no cancel path)
+- `MainWindow.cpp:817-835` (`runMsgLoop` lambda, generic with cancelFn argument)
 
-**対応方針**:
-共通ヘルパーを 1 個作って 3 箇所を集約。
+`MainWindow` lambda version cleanest in abstracting `cancelFn`.
+
+**Resolution:**
+Create single common helper to consolidate 3 locations.
 
 ```cpp
-// App.cpp/MainWindow.cpp 内のローカルヘルパで十分
+// Local helper sufficient in App.cpp/MainWindow.cpp
 HRESULT RunProgressLoop(ProgressDlg& dlg,
                         ProgressPostSink* sink,
-                        std::function<void()> cancelFn = nullptr);
+                        std::function<void()> cancelFn = {});
 ```
 
-### B-2. RAR 圧縮経路が 2 箇所（known-issues.md 記載の罠）
+### B-2. RAR compression path in 2 places (known-issues.md recorded trap)
 
-- `App::RunCompressMode` の RAR ブランチ（`App.cpp:134-173`）
-- `MainWindow::OnCompress` の RAR ブランチ（`MainWindow.cpp:837-856` 周辺）
+- RAR branch in `App::RunCompressMode` (`App.cpp:134-173`)
+- RAR branch in `MainWindow::OnCompress` (`MainWindow.cpp:837-856` area)
 
-両方とも `RarProcess` + `ProgressPostSink` + メッセージループの組合せ。
+Both RarProcess + ProgressPostSink + message loop combinations.
 
-**対応方針**:
-`RunRarCompress(HWND parent, const CompressDlg::Params&, const std::wstring& rarExePath, ...)` のような関数に切り出せれば、known-issues.md の「2 経路」問題そのものが消せる。B-1 と同じ PR でやるのが筋。
+**Resolution:**
+Extract to `RunRarCompress(HWND parent, const CompressDlg::Params&, const std::wstring& rarExePath, ...)` function. Eliminates "2 paths" issue itself from known-issues.md. Same PR as B-1 recommended.
 
-## C. 効率（やる価値はあるが体感差は規模次第）
+## C. Efficiency (worthwhile but perceived benefit depends on scale)
 
-### C-1. `GetIconIndex(L"folder", true)` のキャッシュ漏れ
+### C-1. `GetIconIndex(L"folder", true)` caching leak
 
-- `MainWindow.cpp:939`（`PopulateTree` 直前）
-- `MainWindow.cpp:1085`（`PopulateList` 直前）
-- フォルダアイコンは不変なのにツリー／リスト構築のたびに `SHGetFileInfoW` 呼出
+- `MainWindow.cpp:939` (before `PopulateTree`)
+- `MainWindow.cpp:1085` (before `PopulateList`)
+- Folder icon constant yet calls `SHGetFileInfoW` every tree/list build
 
-**対応方針**: `MainWindow` のメンバに `int m_iconIndexFolder = -1;` を持たせ、`OnCreate` で 1 回だけ取得。
+**Resolution:** Add `int m_iconIndexFolder = -1;` member to `MainWindow`, fetch once in `OnCreate`.
 
-### C-2. SevenZip フォーマット判定の静的フォールバック（要判断）
+### C-2. SevenZip format detection static fallback (requires decision)
 
-- `SevenZip::IsArchiveExt`（`SevenZip.cpp:289-305`）
-- `SevenZip::FormatToInGuid`（`SevenZip.cpp:317-334`）
-- `SevenZip::FormatToOutGuid`（`SevenZip.cpp:336-351`）
+- `SevenZip::IsArchiveExt` (`SevenZip.cpp:289-305`)
+- `SevenZip::FormatToInGuid` (`SevenZip.cpp:317-334`)
+- `SevenZip::FormatToOutGuid` (`SevenZip.cpp:336-351`)
 
-いずれも `m_extToClsid.empty()` のときだけ静的リストにフォールバック。
-7z.dll が無いとアプリは何もできない構造なので、フォールバック自体の存在意義が薄い。
+All fallback to static list only when `m_extToClsid.empty()`.
+Since no 7z.dll makes app useless, fallback existence has thin justification.
 
-**対応方針**:
-- 残す判断: 「DLL ロード前の早期パスがある」「diagnostics でフォールバック発火を確認したい」場合
-- 消す判断: 動的列挙が確実に動くと自信があり、コードベースを薄くしたい場合
-- **保留推奨**。残しても害は無く、消す場合は呼出順を慎重に確認。
+**Resolution:**
+- Keep decision: "Early paths before DLL load exist", "Want to confirm fallback triggers diagnostically"
+- Remove decision: Confident dynamic enumeration works, want thinner codebase
+- **Recommend hold.** No harm in keeping, removal requires careful call order verification.
 
-## 優先順位（提案）
+## Priority (Proposed)
 
-| 順位 | 項目 | コスト | 効果 |
+| Priority | Item | Cost | Effect |
 |---|---|---|---|
-| 1 | **A-1** Settings 読込／保存の 3 箇所コピペ | 中 | 重複 30〜40 行削減 + RAR 保存漏れバグ解消 |
-| 2 | A-2 + A-3 + A-4 の小ネタまとめて | 小 | 累計 20 行程度の整理 |
-| 3 | **B-1** 進捗ループ共通化 | 中 | 重複 30 行削減 + RAR キャンセル経路の対称性向上 |
-| 4 | **B-2** RAR 圧縮 2 経路の統合 | 大 | known-issues.md の罠を 1 個減らせる |
-| 5 | C-1 フォルダアイコンキャッシュ | 極小 | UI 描画でわずかに軽量化 |
-| — | C-2 静的フォールバック削除 | 小 | 保留推奨 |
+| 1 | **A-1** Settings read/save 3-place copy-paste | Medium | 30-40 line duplication reduction + RAR save leak fix |
+| 2 | A-2 + A-3 + A-4 small batch | Small | ~20 line cleanup total |
+| 3 | **B-1** Progress loop consolidation | Medium | 30 line duplication reduction + RAR cancel symmetry |
+| 4 | **B-2** RAR compression 2-path integration | Large | Eliminate 1 known-issues.md trap |
+| 5 | C-1 Folder icon cache | Minimal | Slight UI render optimization |
+| — | C-2 Static fallback removal | Small | Hold recommended |
 
-## 着手方針メモ
+## Implementation Plan Notes
 
-- A-1 単独で 1 PR が効果対コスト比で最良
-- A-2 / A-3 / A-4 を 1 PR でまとめる「小掃除」コミットも可
-- B-1 と B-2 は同一 PR でやらないと整合性が取れない
-- C-1 は他 PR のついでにやれば十分
+- A-1 alone yields best cost-to-benefit ratio for single PR
+- A-2 / A-3 / A-4 grouped in 1 PR makes good "small cleanup" commit
+- B-1 and B-2 must be same PR for consistency
+- C-1 doable as side-effect of other PR
 
-## 実施結果（2026-05-05 〜 2026-05-06）
+## Completion Status (2026-05-05 through 2026-05-06)
 
-### 第 1 段階（2026-05-05）
+### Phase 1 (2026-05-05)
 
-A-1 / A-2 / B-1 / B-2 を実施・コミット。
+Completed and committed A-1 / A-2 / B-1 / B-2.
 
-| 項目 | 状態 | 概要 |
+| Item | Status | Summary |
 |---|---|---|
-| **A-1** Settings 読込／保存 3 箇所コピペ | ✅ 実施 | `CompressDlg::Params::LoadFromSettings` / `SaveToSettings` を追加。`OnDropFiles` / `OnAddFiles` / `RunCompressMode` の合計 80 行を 6 行に集約。**副次効果**: `OnDropFiles` の RAR 系設定保存漏れバグも解消 |
-| **A-2** `PromptPassword` 未使用引数 | ✅ 実施 | `MainWindow::PromptPassword(const wchar_t*)` の `hint` 引数を削除（宣言・実装・呼出側の整合維持） |
-| **B-1** 進捗ループ 4 箇所統合 | ✅ 実施 | `ProgressDlg::RunMessageLoop(std::function<void()> onCancel = {})` を追加。`App::RunCompressMode` (RAR/7z)、`MainWindow::OnCompress`、`MainWindow::OnExtract` の 4 箇所を集約。**副次効果**: `MainWindow::OnCompress` のループに抜けていた `IsDialogMessageW` が共通化で揃った |
-| **B-2** RAR 圧縮 2 経路の集約 | ✅ 実施 | 新規 `src/CompressHelper.{h,cpp}` に `RunRarCompressSync()` を実装。`App::RunCompressMode` と `MainWindow::OnCompress` の RAR ブランチを共通エントリ経由に変更。`docs/known-issues.md` の「2 経路」記述と `CLAUDE.md` の該当注意事項を「1 経路に集約済み」に更新 |
+| **A-1** Settings read/save 3-place copy-paste | ✅ Done | Added `CompressDlg::Params::LoadFromSettings` / `SaveToSettings`. Consolidated 80 lines from `OnDropFiles` / `OnAddFiles` / `RunCompressMode` to 6 lines. **Side effect**: RAR settings save leak in `OnDropFiles` also fixed |
+| **A-2** `PromptPassword` unused argument | ✅ Done | Removed `hint` parameter from `MainWindow::PromptPassword` (maintained consistency in declaration/implementation/call sites) |
+| **B-1** Progress loop 4-place consolidation | ✅ Done | Added `ProgressDlg::RunMessageLoop(std::function<void()> onCancel = {})`. Consolidated 4 locations in `App::RunCompressMode` (RAR/7z), `MainWindow::OnCompress`, `MainWindow::OnExtract`. **Side effect**: Missing `IsDialogMessageW` in `MainWindow::OnCompress` now aligned in consolidation |
+| **B-2** RAR compression 2-path consolidation | ✅ Done | New `src/CompressHelper.{h,cpp}` with `RunRarCompressSync()`. Changed RAR branches in `App::RunCompressMode` and `MainWindow::OnCompress` to go through common entry. Updated `docs/known-issues.md` "2 paths" note and `CLAUDE.md` note to "consolidated to 1 path" |
 
-**累積差分（A-1 〜 B-2）**
+**Cumulative diff (A-1 through B-2)**
 
 ```
-正味 97 行削減（追加 106 / 削除 203）
+Net 97 lines reduced (added 106 / deleted 203)
 ```
 
-### 第 2 段階（2026-05-06）
+### Phase 2 (2026-05-06)
 
-A-1, A-3, C-1 からユーザ指定により A-3, C-1 を実施・コミット（A-1 は既実施）。
+User-selected A-3, C-1 from candidates (A-1 already done).
 
-| 項目 | 状態 | 概要 | コミット |
+| Item | Status | Summary | Commit |
 |---|---|---|---|
-| **A-1** Settings 読込／保存 3 箇所コピペ | ✅ 既実施 | 第 1 段階で実施済 | `c6ac9f6` |
-| **A-3** `getExt` ラムダ → `ExtOfPath` | ✅ 実施 | tar-in-stream 検出 (`SevenZip.cpp`) のローカルラムダを既存 `ExtOfPath` に置換。重複コード 9 行削減 | `abd0e95` |
-| **C-1** フォルダアイコンキャッシュ | ✅ 実施 | `MainWindow` に `m_iconIndexFolder` メンバを追加し、初回呼び出し時のみ `SHGetFileInfoW` を実行。以降はキャッシュ値を使用（ツリー/リスト構築時の無駄呼び出し削減） | `abd0e95` |
+| **A-1** Settings read/save 3-place copy-paste | ✅ Already done | Completed in Phase 1 | `c6ac9f6` |
+| **A-3** `getExt` lambda → `ExtOfPath` | ✅ Done | Replaced local tar-in-stream detection lambda in `SevenZip.cpp` with existing `ExtOfPath`. 9 lines duplicate code eliminated | `abd0e95` |
+| **C-1** Folder icon cache | ✅ Done | Added `m_iconIndexFolder` member to `MainWindow`, call `SHGetFileInfoW` only first time. Subsequent tree/list builds use cached value (eliminates wasted calls) | `abd0e95` |
 
 ---
 
-## 未実施項目（将来の拡張候補）
+## Unimplemented Items (Future expansion candidates)
 
-### A-4. `OnProgress` / `OnDone` フォールバック整理（小規模）
+### A-4. `OnProgress` / `OnDone` fallback cleanup (Small scale)
 
-**現状**: `MainWindow.cpp` 内メッセージループが `WM_APP_PROGRESS` / `WM_APP_DONE` を吸収するため、メイン `WndProc` には到達しないコメント付き。
+**Current:** Message loops in `MainWindow.cpp` absorb `WM_APP_PROGRESS` / `WM_APP_DONE`, never reach main WndProc, with comment.
 
-**対応方針**: 完全削除よりも、フォールバックハンドラに診断ログ出力を追加する程度の整理が安全。
-
----
-
-### C-2. 静的フォーマットフォールバック削除（判断保留）
-
-**現状**: `SevenZip::IsArchiveExt`、`SevenZip::FormatToInGuid`、`SevenZip::FormatToOutGuid` が `m_extToClsid.empty()` のときだけ静的リストにフォールバック。
-
-**判断**: 7z.dll が無いと何もできない構造なので保留。残置しても害は無く、DLL ロード前の早期パスが稀にある場合の安全弁として有効。
+**Resolution:** Safer to add diagnostic logging to fallback handler rather than complete removal.
 
 ---
 
-## 実機テスト計画（A-1 / B-1 / B-2 影響範囲）
+### C-2. Static format fallback removal (Decision hold)
 
-以下の項目について実装後の動作確認が推奨される（コード確認済みだが、エンドツーエンドテスト未実施）：
+**Current:** `SevenZip::IsArchiveExt`, `FormatToInGuid`, `FormatToOutGuid` fallback to static only when `m_extToClsid.empty()`.
 
-- **D&D での圧縮**: RAR 詳細設定（dictSize 等）が次回起動でも保持されるか（A-1 の RAR 保存漏れ修正の確認）
-- **CLI 引数経由の RAR 圧縮**: 起動 → キャンセル → ダイアログが正しく閉じるか
-- **D&D / [追加] からの RAR 圧縮**: 上記に同じ
-- **展開時のキャンセル**: 7z / unrar 両経路で進捗ダイアログのキャンセルが効くか
+**Decision:** Hold due to no 7z.dll making app useless anyway. Keeping causes no harm, serves as safety net for rare early pre-DLL-load paths.
+
+---
+
+## Real machine test plan (A-1 / B-1 / B-2 impact scope)
+
+Following items recommended for post-implementation verification (code verified, end-to-end test not done):
+
+- **Compress via D&D**: RAR advanced settings (dictSize etc.) persist at next startup (confirm A-1 RAR save fix)
+- **RAR compression via CLI args**: Launch → Cancel → Dialog closes correctly
+- **RAR compression from D&D / Add button**: Same as above
+- **Cancel on extract**: Both 7z / unrar paths progress dialog cancel works

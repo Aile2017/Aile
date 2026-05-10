@@ -1,14 +1,14 @@
-# 既知の落とし穴・歴史的バグ
+# Known Pitfalls and Historical Bugs
 
-開発中に踏んだ罠と、その回避方法を記録。同じ問題に再びハマらないため。
+Record of traps encountered during development and their workarounds. Prevention against hitting the same issue again.
 
-## 7-Zip フォーマット CLSID
+## 7-Zip Format CLSID
 
-7z.dll の `CreateObject` に渡すフォーマット CLSID は `{23170F69-40C1-278A-1000-00011000XX0000}` の `XX` バイトで識別される。**この `XX` の値は SDK ドキュメントや古いサンプルコードと食い違うことがある**。
+Format CLSID passed to 7z.dll's `CreateObject` is identified by byte `XX` in `{23170F69-40C1-278A-1000-00011000XX0000}`. **This `XX` value can differ from SDK documentation and old sample code.**
 
-実測値（7-Zip 26.00 ZS で確認、`GetNumberOfFormats` / `GetHandlerProperty2` で列挙）:
+Measured values (verified with 7-Zip 26.00 ZS, enumerated via `GetNumberOfFormats` / `GetHandlerProperty2`):
 
-| Name | byte | 拡張子 |
+| Name | byte | Extensions |
 |---|---|---|
 | 7z   | `0x07` | 7z |
 | Zip  | `0x01` | zip jar ... |
@@ -22,90 +22,101 @@
 | **Rar5** | **`0xCC`** | rar (RAR 5+) |
 | Arj  | `0x04` | arj |
 
-**注意:** 古い情報源では Rar5 のバイトを `0x04` と記載していることがあるが、これは **誤り**。`0x04` は Arj。`Rar5 = 0x04` で実装すると、`CreateObject` は Arj ハンドラを返し、Arj ハンドラは RAR ファイルを認識せず `S_FALSE` を返すため、原因が分かりにくいバグになる。
+**Warning:** Old sources sometimes list Rar5 byte as `0x04`, but this is **incorrect**. `0x04` is Arj. Implementing `Rar5 = 0x04` causes `CreateObject` to return Arj handler, which doesn't recognize RAR files and returns `S_FALSE`, resulting in a hard-to-debug bug.
 
-別の DLL ビルドを使う場合は、起動時に `GetNumberOfFormats` と `GetHandlerProperty2` で列挙して検証するのが安全。
+When using a different DLL build, enumerate and verify with `GetNumberOfFormats` and `GetHandlerProperty2` at startup for safety.
 
-## IInArchive::Open の戻り値
+## IInArchive::Open Return Values
 
-`archive->Open()` は format mismatch で `S_FALSE` を返す。`FAILED(S_FALSE) == false` なので、エラー判定は `FAILED(hr) || hr == S_FALSE` の両方をチェックする必要がある。`E_FAIL` への変換は呼び出し側で行う。
+`archive->Open()` returns `S_FALSE` on format mismatch. Since `FAILED(S_FALSE) == false`, error checking must test both `FAILED(hr) || hr == S_FALSE`. Conversion to `E_FAIL` is caller's responsibility.
 
-## RAR4 / RAR5 振り分け
+## RAR4 / RAR5 Routing
 
-`.rar` 拡張子だけでは RAR4 / RAR5 を判別できない（マジックバイトを見ないと分からない）。当初は RAR5 ハンドラを試して `S_FALSE` なら RAR4 にフォールバックする実装。フォールバック対象は `archive->Open` が `S_FALSE` を返したときだけでなく、`FAILED(hr)` のときも含める必要がある。
+Cannot distinguish RAR4 / RAR5 by `.rar` extension alone (magic bytes required). Initial implementation tries RAR5 handler and falls back to RAR4 on `S_FALSE`. Must fallback not only when `archive->Open` returns `S_FALSE`, but also on `FAILED(hr)`.
 
-## COutFileStream は IOutStream が必要
+## COutFileStream Requires IOutStream
 
-7z アーカイブ書き出しでは、ヘッダを後から書き戻すために**シーカブルな** `IOutStream` が必要。`ISequentialOutStream` だけ実装すると空のアーカイブができる。`IOutStream::Seek` と `SetSize` も実装すること。`SetSize` は呼出後にファイルポインタを元の位置に戻すこと（戻さないと後続の Write が壊れる）。
+Writing 7z archives requires **seekable** `IOutStream` to rewrite headers later. Implementing `ISequentialOutStream` alone produces empty archives. Must also implement `IOutStream::Seek` and `SetSize`. After `SetSize` is called, restore file pointer to original position (otherwise subsequent Writes corrupt data).
 
-## RAR コンプレッションのルーティング
+## RAR Compression Routing
 
-`App::RunCompressMode()`（コマンドライン引数経由）と `MainWindow::OnCompress()`（D&D / [追加] 経由）の 2 経路がある。**両経路は `CompressHelper.h` の `RunRarCompressSync()` 経由に集約済み** — ここで必ず `RarProcess::Compress` を呼ぶ。`SevenZip::FormatToOutGuid("rar")` は対応せず `CLSID_Format_7z` にフォールバックするので、間違って 7z で出力させない安全弁として 1 経路化している。
+Two paths exist: `App::RunCompressMode()` (via command-line args) and `MainWindow::OnCompress()` (via drag-drop / Add button). **Both are consolidated via `RunRarCompressSync()` in `CompressHelper.h`** — always calls `RarProcess::Compress`. Since `SevenZip::FormatToOutGuid("rar")` is unsupported and falls back to `CLSID_Format_7z`, consolidating to single path prevents accidental 7z output (safety measure).
 
-## unrar.dll の `RARHeaderDataEx` 構造体
+## unrar.dll `RARHeaderDataEx` Struct
 
-`#pragma pack(push, 1)` を適用すると、`CmtBuf` (8 バイトポインタ) が 8 バイト境界からズレる（`FileAttr` の後、本来 4 バイトのパディングがあるべき位置）。結果、unrar.dll は構造体境界より 4 バイト先まで書き込み、スタックオーバーフローを起こす。**`#pragma pack` を使わずデフォルトアラインメントで定義すること**。
+Applying `#pragma pack(push, 1)` causes `CmtBuf` (8-byte pointer) to misalign from 8-byte boundary (after `FileAttr`, where 4 bytes padding should be). Result: unrar.dll writes 4 bytes past struct boundary, causing stack overflow. **Define with default alignment without `#pragma pack`.**
 
-## unrar.dll の path 区切り
+## unrar.dll Path Separator
 
-`RARHeaderDataEx::FileNameW` は **バックスラッシュ** で区切られる。`SevenZip::OpenArchive` の流儀（フォワードスラッシュ）と統一するため、`UnrarDll::ListArchive` で正規化する：
+`RARHeaderDataEx::FileNameW` uses **backslash** separator. To unify with `SevenZip::OpenArchive` convention (forward slash), normalize in `UnrarDll::ListArchive`:
 
 ```cpp
 for (auto& c : it.path) if (c == L'\\') c = L'/';
 while (!it.path.empty() && it.path.back() == L'/') it.path.pop_back();
 ```
 
-正規化しないと TreeView/ListView のフォルダ振り分けロジックが破綻する。
+Without normalization, TreeView/ListView folder routing logic breaks.
 
-## マニフェストの埋め込み
+## Manifest Embedding
 
-CMakeLists.txt で `target_link_options(AileEx PRIVATE "/MANIFEST:NO")` を指定し、リンカ自動生成のマニフェストを抑制している。マニフェストは `res/AileEx.rc` から `1 RT_MANIFEST "manifest.xml"` で埋め込み。両方やると重複してリソースエラー。
+CMakeLists.txt specifies `target_link_options(AileEx PRIVATE "/MANIFEST:NO")` to suppress linker auto-generation. Manifest embedded from `res/AileEx.rc` via `1 RT_MANIFEST "manifest.xml"`. Both would cause duplicate resource error.
 
-## DPI 対応
+## DPI Support
 
-マニフェストの `dpiAwareness = PerMonitorV2` だけで Windows 10+ は OK。古い Windows のために `wWinMain` 冒頭で `SetProcessDpiAwarenessContext` を `GetProcAddress` で動的呼び出し。マニフェストとの二重宣言は問題なし（マニフェスト優先）。
+Manifest's `dpiAwareness = PerMonitorV2` alone OK for Windows 10+. For older Windows, dynamically call `SetProcessDpiAwarenessContext` with `GetProcAddress` at start of `wWinMain`. Double declaration with manifest is harmless (manifest takes priority).
 
-## `WM_INITMENUPOPUP` のシステムメニュー除外
+## `WM_INITMENUPOPUP` System Menu Exclusion
 
-`WM_INITMENUPOPUP` はメニューバーの popup だけでなく、**タイトルバー右クリック等のシステムメニュー**にも発火する。`HIWORD(lParam) != 0` がシステムメニューのフラグなので、`if (HIWORD(lp) == 0) OnInitMenuPopup(...)` で弾かないと、システムメニューに対して `EnableMenuItem(ID_DELETE, ...)` 等が呼ばれて意味不明な状態になる（実害は出にくいが、`MF_BYCOMMAND` で見つからない ID を渡し続けることになる）。
+`WM_INITMENUPOPUP` fires not only on menu bar popups, but also on **system menus like title bar right-click**. `HIWORD(lParam) != 0` is the system menu flag, so must exclude with `if (HIWORD(lp) == 0) OnInitMenuPopup(...)`. Otherwise, `EnableMenuItem(ID_DELETE, ...)` etc. get called on system menu causing nonsensical state (harmless in practice but passes unfound IDs repeatedly with `MF_BYCOMMAND`).
 
-## メニューラベルの `&` エスケープ
+## Menu Label `&` Escaping
 
-`AppendMenuW` の文字列で `&` は **次の文字を下線（アクセラレータ）化**する。MRU 等で**ファイルパスを動的にメニューに入れる**場合、`&` を含むパス（例: `C:\Tools\AT&T\foo.7z`）はそのままだとアクセラレータ扱いされて表示が壊れる。`&` を `&&` に二重化してエスケープする必要がある。
+In `AppendMenuW` strings, `&` **underlines (accelerator) the next character**. When **dynamically inserting file paths in menus** (e.g., MRU), paths with `&` (example: `C:\Tools\AT&T\foo.7z`) appear corrupted if treated literally as accelerators. Must escape `&` to `&&`.
 
-## `ProgressPostSink` のスロットリング
+## `ProgressPostSink` Throttling
 
-7z.dll のコールバックは進捗を非常に高頻度で呼ぶ。コールバック毎に `PostMessage(WM_APP_PROGRESS, ...)` するとメッセージキューが溢れ、**キャンセルボタンのクリックが遅延・破棄されてキャンセル不能に見える**。`ProgressPostSink::OnProgress` 内で `GetTickCount` を見て **20Hz 程度に絞る**（`m_lastPostTick` で間引き）必要がある。
+7z.dll callbacks invoke progress very frequently. Calling `PostMessage(WM_APP_PROGRESS, ...)` per callback overflows message queue, **canceling cancel button click is delayed/discarded, making cancellation appear impossible**. Must check `GetTickCount` in `ProgressPostSink::OnProgress` to **throttle to ~20Hz** (filter via `m_lastPostTick`).
 
-## `IsDialogMessageW` を VK_TAB 専用に絞る
+## `IsDialogMessageW` Limited to VK_TAB Only
 
-メッセージループで `IsDialogMessageW(hwnd, &msg)` を全 `WM_KEYDOWN` に対して呼ぶと、内部で `WM_SYSKEYDOWN` を消費して **Alt+F 等のメニューニーモニックが効かなくなる**（Alt 単独でメニューを有効化してから F、の二段操作になる）。`if (msg.message == WM_KEYDOWN && msg.wParam == VK_TAB)` のようにタブナビゲーション専用に絞る。
+Calling `IsDialogMessageW(hwnd, &msg)` on all `WM_KEYDOWN` in message loop consumes `WM_SYSKEYDOWN` internally, **disabling menu mnemonics like Alt+F** (becomes two-step: Alt alone, then F). Restrict to tab navigation only: `if (msg.message == WM_KEYDOWN && msg.wParam == VK_TAB)`.
 
-## `unrar.dll TestArchive` のキャンセル戻り値
+## `unrar.dll TestArchive` Cancel Return Value
 
-`UnrarDll::TestArchive` は `RARProcessFileW(... RAR_TEST ...)` の戻りを単純に true/false に変換するため、**ユーザがキャンセルしても false（= 失敗）と区別がつかない**。`MainWindow::OnTest` で `sink->IsCancelled()` を見て `E_ABORT` 相当に正規化し、エラーダイアログ表示を抑止する。
+`UnrarDll::TestArchive` converts `RARProcessFileW(... RAR_TEST ...)` return to simple true/false, **so user cancellation indistinguishable from failure (false)**. In `MainWindow::OnTest`, check `sink->IsCancelled()` to normalize to `E_ABORT` equivalent, suppressing error dialog.
 
-## `ForceForeground` (フォアグラウンド奪取)
+## `ForceForeground` (Foreground Theft)
 
-ランチャー経由起動などで親プロセスが既に終了しているケースでは、`SetForegroundWindow` 単独では Windows のフォーカス制限で降格される。`AttachThreadInput(myTid, fgTid, TRUE)` で前景アプリのスレッドにアタッチした上で `HWND_TOPMOST` を一瞬付けて Z オーダーを押し出してから `SetForegroundWindow` を呼ぶ二段構え（`MainWindow.cpp` の `ForceForeground` 名前空間関数）。
+When parent process already exited (e.g., launcher-spawned), `SetForegroundWindow` alone gets demoted by Windows focus restriction. Two-step: `AttachThreadInput(myTid, fgTid, TRUE)` to attach foreground app's thread, momentarily add `HWND_TOPMOST` to push Z-order, then call `SetForegroundWindow` (`ForceForeground` namespace function in `MainWindow.cpp`).
 
-## RAR 削除のキャンセル経路
+## RAR Delete Cancel Path
 
-`RarProcess::Delete` (= `rar.exe d`) には現状 **キャンセル経路が実装されていない**。7z.dll 経由 (`SevenZip::DeleteItems`) は `CDeleteCallback::SetCompleted` が `E_ABORT` を返してキャンセルできるが、RAR 経路はプロセスが完了するまで戻らない。`RarProcess::Cancel()` (TerminateProcess) を `Delete` でも使うように拡張する必要がある（TODO）。
+`RarProcess::Delete` (= `rar.exe d`) currently **has no cancel path implemented**. Via 7z.dll (`SevenZip::DeleteItems`), `CDeleteCallback::SetCompleted` can return `E_ABORT` to cancel, but RAR path doesn't return until process completes. Must extend `RarProcess::Cancel()` (TerminateProcess) for use in Delete as well (TODO).
 
-## 7z.dll の分割書き出しはホスト側責任
+## Self-Extracting (SFX) Module Location
 
-7z.dll の各フォーマットハンドラ (`7zHandlerOut.cpp` 等) は `UpdateItems(outStream, ...)` で渡されたストリームに**そのまま書き続ける**。分割ロジック (N MB ごとに次のファイルへ切り替え) は **DLL に入っていない**。`IArchiveUpdateCallback2::GetVolumeSize/GetVolumeStream` というインターフェイスは存在するが、これは 7-Zip CLI / 7zFM の `Update.cpp` が**自前で実装した分割ストリーム** (`COutMultiVolStream`) が呼び出すコールバックであって、ハンドラ側からは呼ばれない。
+7z SFX is simple: read `7z.sfx` (GUI) or `7zCon.sfx` (console) from **same directory as `7z.dll`**, then prepend to compressed .7z data. SDK doesn't include SFX modules; they come with standard 7-Zip install (e.g., Files\7-Zip). Search by deriving parent dir from DLL full path obtained via `SevenZip::GetLoadedPath()` (`CompressHelper::Resolve7zSfxModulePath`).
 
-そのため AileEx も分割書き出しは `CMultiVolOutStream` (`SevenZip.cpp`) を自前で実装し、それを `IOutStream` として `UpdateItems` に渡している。7z.dll は単一の seekable stream に見える。
+RAR specified via `rar.exe -sfx<modulePath>`. WinRAR / Rar.exe bundles `Default.SFX` (GUI) and `WinCon.SFX` (console). 32-bit modules (`Zip.SFX` etc.) excluded.
 
-注意点:
-- `IOutStream::Seek` は **グローバルオフセット** ⇄ (volIdx, volOffset) のマッピングが必要 (7z.dll はヘッダ書き込みのため先頭付近に頻繁にシークする)
-- `IOutStream::SetSize` は最終アーカイブサイズで呼ばれるため、境界ボリュームを切り詰めて以降を削除する
-- 各ボリュームの HANDLE を保持し続ける (Seek で過去ボリュームに戻る場合があるため)
+Notes:
+- When combining split volumes and SFX, prepend SFX module only to **volume 1** (`.001`); volumes 2+ are normal. `CMultiVolOutStream::FinalizeWithSfx` handles this difference.
+- Mixing 7z SFX console/GUI changes runtime behavior but doesn't affect build/extraction (both are valid PE stubs).
+- If SFX module detection fails, abort with error without creating `.7z` / `.rar` (`Resolve*SfxModulePath` returns empty string → caller displays `MessageBox`). Do not implement fallback to "just create normal .7z" (confuses users).
 
-## 分割アーカイブの読み込みは Split ハンドラ + `IArchiveOpenVolumeCallback`
+## 7z.dll Split Writing is Host Responsibility
 
-`archive.7z.001` を開く際は 7z.dll が**拡張子マップから Split ハンドラを選ぶ**。Split ハンドラは `IArchiveOpenVolumeCallback::GetStream` でホストに `archive.7z.002`, `.003`, ... を要求し、内部で連結ストリームを構築してから本来のハンドラ (例: 7z) に渡す。`COpenVolumeCallback` (`SevenZip.cpp`) はこの要求に対し同じディレクトリの該当ファイルを開いて返すだけ。存在しないファイルを要求された場合は `S_FALSE` を返す (DLL は最終巻シグナルとして扱う)。
+7z.dll format handlers (`7zHandlerOut.cpp` etc.) simply **write directly to stream** passed to `UpdateItems(outStream, ...)`. Split logic (switch to next file every N MB) **not in DLL**. `IArchiveUpdateCallback2::GetVolumeSize/GetVolumeStream` interface exists, but it's called by 7-Zip CLI / 7zFM's **self-implemented split stream** (`COutMultiVolStream`), not by handler.
 
-`OpenArchive` で第1巻を判定するロジック: 拡張子が**全て数字** (`001`, `002` 等) なら分割アーカイブとみなして volume callback を渡す。RAR の `.partN.rar` は `.rar` 拡張子なので unrar.dll / 7z.dll の RAR ハンドラが内部で次巻を解決する (callback 不要)。
+So AileEx also self-implements `CMultiVolOutStream` (`SevenZip.cpp`) for split writing, passing it as `IOutStream` to `UpdateItems`. 7z.dll sees single seekable stream.
+
+Notes:
+- `IOutStream::Seek` requires **global offset** ⇄ (volIdx, volOffset) mapping (7z.dll frequently seeks near start for header writing)
+- `IOutStream::SetSize` called with final archive size, so truncate boundary volume and delete after
+- Keep HANDLE for each volume (Seek may return to past volumes)
+
+## Split Archive Reading is Split Handler + `IArchiveOpenVolumeCallback`
+
+Opening `archive.7z.001`, 7z.dll **selects Split handler from extension map**. Split handler requests `archive.7z.002`, `.003`, ... from host via `IArchiveOpenVolumeCallback::GetStream`, builds concatenated stream internally, then passes to actual handler (e.g., 7z). `COpenVolumeCallback` (`SevenZip.cpp`) simply opens matching file from same dir and returns it. If requested file doesn't exist, return `S_FALSE` (DLL treats as final volume signal).
+
+Volume 1 detection in `OpenArchive`: if extension is **all digits** (`001`, `002` etc.), treat as split archive and pass volume callback. RAR's `.partN.rar` has `.rar` extension, so unrar.dll / 7z.dll RAR handler resolves next volume internally (callback unnecessary).

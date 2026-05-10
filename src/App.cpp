@@ -2,6 +2,7 @@
 #include "MainWindow.h"
 #include "CompressDlg.h"
 #include "CompressHelper.h"
+#include "I18n.h"
 #include "ProgressDlg.h"
 #include "WorkerThread.h"
 #include "resource.h"
@@ -66,12 +67,14 @@ int App::RunBrowseMode(const std::vector<std::wstring>& archivePaths, int nCmdSh
         { FVIRTKEY,              VK_F5,     ID_EXTRACT },
         { FVIRTKEY | FCONTROL, (WORD)'E',  ID_EXTRACT },
         { FVIRTKEY | FCONTROL, (WORD)'A',  ID_ADD },
+        { FVIRTKEY | FCONTROL, (WORD)'U',  ID_ADD_TO_CURRENT },
         { FVIRTKEY | FCONTROL, (WORD)'O',  IDM_FILE_OPEN },
         { FVIRTKEY | FCONTROL, (WORD)'T',  ID_TEST },
         { FVIRTKEY,              VK_DELETE, ID_DELETE     },
-        { FVIRTKEY | FCONTROL, VK_F4,     ID_CLOSE      },  // 閉じる: アーカイブを閉じる
-        // VK_RETURN は ListView/TreeView 内でコンテキストに応じて処理するためここでは定義しない
-        { FVIRTKEY,              VK_ESCAPE, IDM_FILE_EXIT },  // 終了: アプリ終了
+        { FVIRTKEY | FCONTROL, VK_F4,     ID_CLOSE      },  // Close: close the archive
+        { FVIRTKEY | FALT,     VK_RETURN, IDM_FILE_PROPERTIES }, // Alt+Enter: archive properties
+        // VK_RETURN is handled contextually inside ListView/TreeView so not defined here
+        { FVIRTKEY,              VK_ESCAPE, IDM_FILE_EXIT },  // Exit: quit the application
     };
     HACCEL hAccel = CreateAcceleratorTable(accelTable, _countof(accelTable));
 
@@ -79,9 +82,9 @@ int App::RunBrowseMode(const std::vector<std::wstring>& archivePaths, int nCmdSh
     while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
         bool consumed = wnd.PreTranslateMessage(msg) ||
                         TranslateAccelerator(wnd.Hwnd(), hAccel, &msg);
-        // IsDialogMessageW は Tab ナビゲーション専用に絞る。
-        // WM_SYSKEYDOWN を渡すと Alt+F 等のメニューニーモニックを内部で消費してしまい、
-        // 「Alt 単独で一度メニューを有効化してから F」の二段操作が必要になる。
+        // IsDialogMessageW is restricted to Tab navigation only.
+        // Passing WM_SYSKEYDOWN causes it to internally consume Alt+F and similar menu mnemonics,
+        // requiring a two-step operation (Alt alone to activate menu, then F) instead of Alt+F directly.
         if (!consumed && msg.message == WM_KEYDOWN && msg.wParam == VK_TAB) {
             consumed = IsDialogMessageW(wnd.Hwnd(), &msg) != 0;
         }
@@ -113,7 +116,7 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
     m_settings.Save();
 
     ProgressDlg progDlg;
-    progDlg.Show(wnd.Hwnd(), L"圧縮中...");
+    progDlg.Show(wnd.Hwnd(), I18n::Tr(IDS_PROGRESS_COMPRESSING).c_str());
 
     if (params.format == L"rar") {
         auto* sink = new ProgressPostSink(wnd.Hwnd(), WM_APP_PROGRESS, WM_APP_DONE);
@@ -122,20 +125,35 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
                            progDlg, sink);
         delete sink;
     } else {
+        // Resolve 7z SFX module (search same folder as 7z.dll if specified)
+        std::wstring sfxModulePath;
+        if (!params.sfxMode.empty()) {
+            sfxModulePath = Resolve7zSfxModulePath(
+                m_sevenZip.GetLoadedPath().c_str(), params.sfxMode.c_str());
+            if (sfxModulePath.empty()) {
+                progDlg.Dismiss();
+                const wchar_t* leaf = (params.sfxMode == L"console") ? L"7zCon.sfx" : L"7z.sfx";
+                std::wstring msg = I18n::TrFmt(IDS_FMT_SFX_NOT_FOUND_7Z, leaf);
+                MessageBoxW(wnd.Hwnd(), msg.c_str(), I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
+                return 0;
+            }
+        }
+
         auto* sink = new ProgressPostSink(wnd.Hwnd(), WM_APP_PROGRESS, WM_APP_DONE);
         auto& sz   = m_sevenZip;
         progDlg.SetSink(sink);
 
         WorkerThread worker;
-        worker.Start([&sz, params, sink]() -> HRESULT {
+        worker.Start([&sz, params, sink, sfxModulePath]() -> HRESULT {
             const wchar_t* pw = params.password.empty() ? nullptr : params.password.c_str();
             CompressAdvanced adv;
-            adv.dictSize   = params.dictSize;
-            adv.wordSize   = params.wordSize;
-            adv.solidBlock = params.solidBlock;
-            adv.threads    = params.threads;
-            adv.extra      = params.extra;
-            adv.volumeSize = params.volumeSize;
+            adv.dictSize      = params.dictSize;
+            adv.wordSize      = params.wordSize;
+            adv.solidBlock    = params.solidBlock;
+            adv.threads       = params.threads;
+            adv.extra         = params.extra;
+            adv.volumeSize    = params.volumeSize;
+            adv.sfxModulePath = sfxModulePath;
             return sz.Compress(params.inputFiles, params.outputPath.c_str(),
                                params.format.c_str(), params.level,
                                params.method.c_str(), pw, sink, &adv,

@@ -1,11 +1,14 @@
 #define DEFINE_7Z_GUIDS
 #include "SevenZip.h"
+#include "I18n.h"
+#include "resource.h"
 #include "7zip/IPassword.h"
 #include <shlwapi.h>
 #include <shlobj.h>     // SHCreateDirectoryExW
 #include <ole2.h>       // PropVariantClear, PropVariantInit
 #include <oleauto.h>    // SysAllocString, SysFreeString
 #include <wctype.h>
+#include <set>
 
 // ============================================================
 // CInFileStream — wraps a Win32 file handle as IInStream
@@ -106,9 +109,9 @@ private:
 };
 
 // ============================================================
-// COpenVolumeCallback — 分割アーカイブ (.001/.002/...) の読み込み
-// 7z.dll の Split ハンドラから IArchiveOpenVolumeCallback::GetStream
-// で要求された名前のボリュームファイルを開いて返す。
+// COpenVolumeCallback — Load split archives (.001/.002/...)
+// When 7z.dll's Split handler requests a volume file via
+// IArchiveOpenVolumeCallback::GetStream, open and return it.
 // ============================================================
 class COpenVolumeCallback : public IArchiveOpenCallback,
                             public IArchiveOpenVolumeCallback,
@@ -116,7 +119,7 @@ class COpenVolumeCallback : public IArchiveOpenCallback,
 public:
     COpenVolumeCallback(const wchar_t* firstVolPath, const wchar_t* pw) {
         if (pw) m_password = pw;
-        // ディレクトリと現在のリーフ名 (例: "archive.7z.001") を分離
+        // Separate directory and current leaf name (e.g., "archive.7z.001")
         const wchar_t* slash = wcsrchr(firstVolPath, L'\\');
         if (!slash) slash = wcsrchr(firstVolPath, L'/');
         if (slash) {
@@ -153,8 +156,8 @@ public:
     HRESULT STDMETHODCALLTYPE SetCompleted(const UInt64*, const UInt64*) override { return S_OK; }
 
     // IArchiveOpenVolumeCallback
-    // 7z.dll は kpidName で「現在の」ボリュームのパスを問い合わせ、
-    // そこから次のボリューム名 (例: .001 → .002) を推測する。
+    // 7z.dll queries the current volume path via kpidName,
+    // then infers the next volume name (e.g., .001 → .002).
     HRESULT STDMETHODCALLTYPE GetProperty(PROPID propID, PROPVARIANT* value) override {
         PropVariantInit(value);
         if (propID == kpidName) {
@@ -172,7 +175,7 @@ public:
         CInFileStream* s = new CInFileStream();
         if (!s->Open(path.c_str())) {
             s->Release();
-            // ファイルが存在しなければ S_FALSE を返す（7z.dll はこれを最終巻シグナルとして扱う）
+            // Return S_FALSE if file doesn't exist (7z.dll treats this as end-of-volumes signal)
             return S_FALSE;
         }
         m_currentName = name;
@@ -187,8 +190,8 @@ public:
     }
 
 private:
-    std::wstring m_dir;          // 末尾にセパレータ付き
-    std::wstring m_currentName;  // 現在の巻のリーフ名 (例: "archive.7z.001")
+    std::wstring m_dir;          // Directory path with trailing separator
+    std::wstring m_currentName;  // Current volume leaf name (e.g., "archive.7z.001")
     std::wstring m_password;
     LONG         m_refCount = 1;
 };
@@ -254,7 +257,7 @@ bool SevenZip::Load(const wchar_t* dllPath) {
     GetModuleFileNameW(m_hDll, nameBuf, MAX_PATH);
     const wchar_t* leaf = wcsrchr(nameBuf, L'\\');
     m_loadedName = leaf ? (leaf + 1) : nameBuf;
-    // コーデック一覧を取得できる場合は列挙しておく
+    // Enumerate codecs if available
     m_pfnGetNumMethods   = (Func_GetNumberOfMethods)GetProcAddress(m_hDll, "GetNumberOfMethods");
     m_pfnGetMethodProp   = (Func_GetMethodProperty)GetProcAddress(m_hDll, "GetMethodProperty");
     m_pfnGetNumFormats   = (Func_GetNumberOfFormats)GetProcAddress(m_hDll, "GetNumberOfFormats");
@@ -324,7 +327,7 @@ void SevenZip::EnumerateFormats() {
     if (FAILED(m_pfnGetNumFormats(&n))) return;
 
     for (UINT32 i = 0; i < n; i++) {
-        // CLSID — VT_BSTR で 16 バイト（GUID をバイト列として格納）
+        // CLSID — 16 bytes as VT_BSTR (GUID stored as byte sequence)
         PROPVARIANT pvClsid; PropVariantInit(&pvClsid);
         HRESULT hr = m_pfnGetHandlerProp2(i, 1 /*kClassID*/, &pvClsid);
         if (FAILED(hr) || pvClsid.vt != VT_BSTR ||
@@ -336,7 +339,7 @@ void SevenZip::EnumerateFormats() {
         memcpy(&clsid, pvClsid.bstrVal, sizeof(GUID));
         PropVariantClear(&pvClsid);
 
-        // 拡張子（スペース区切り）
+        // Extensions (space-separated)
         PROPVARIANT pvExt; PropVariantInit(&pvExt);
         hr = m_pfnGetHandlerProp2(i, 2 /*kExtension*/, &pvExt);
         std::wstring primaryExt;
@@ -357,7 +360,7 @@ void SevenZip::EnumerateFormats() {
         }
         PropVariantClear(&pvExt);
 
-        // フォーマット名
+        // Format name
         PROPVARIANT pvName; PropVariantInit(&pvName);
         std::wstring name;
         hr = m_pfnGetHandlerProp2(i, 0 /*kName*/, &pvName);
@@ -365,7 +368,7 @@ void SevenZip::EnumerateFormats() {
             name = pvName.bstrVal;
         PropVariantClear(&pvName);
 
-        // 書き込みサポートの有無
+        // Write support capability
         PROPVARIANT pvUpdate; PropVariantInit(&pvUpdate);
         hr = m_pfnGetHandlerProp2(i, 4 /*kUpdate*/, &pvUpdate);
         bool canWrite = SUCCEEDED(hr) && pvUpdate.vt == VT_BOOL &&
@@ -385,10 +388,10 @@ bool SevenZip::IsArchiveExt(const wchar_t* ext) const {
     if (!ext || !ext[0]) return false;
     std::wstring lower(ext);
     for (auto& c : lower) c = (wchar_t)towlower(c);
-    // 動的マップが利用可能な場合はそちらを優先
+    // Prefer dynamic map if available
     if (!m_extToClsid.empty())
         return m_extToClsid.count(lower) > 0;
-    // フォールバック：静的リスト
+    // Fallback: static list
     static const wchar_t* kFallback[] = {
         L"7z", L"zip", L"rar", L"tar", L"gz", L"bz2", L"xz",
         L"cab", L"iso", L"jar", L"wim", L"lzma", L"lzh", L"arj",
@@ -415,7 +418,7 @@ GUID SevenZip::FormatToInGuid(const wchar_t* path) const {
         auto it = m_extToClsid.find(ext);
         return (it != m_extToClsid.end()) ? it->second : CLSID_Format_7z;
     }
-    // 動的列挙が使えない場合の静的フォールバック
+    // Static fallback when dynamic enumeration is unavailable
     if (ext == L"7z")  return CLSID_Format_7z;
     if (ext == L"zip" || ext == L"jar") return CLSID_Format_Zip;
     if (ext == L"tar") return CLSID_Format_Tar;
@@ -436,7 +439,7 @@ GUID SevenZip::FormatToOutGuid(const wchar_t* format) const {
         auto it = m_extToClsid.find(f);
         return (it != m_extToClsid.end()) ? it->second : CLSID_Format_7z;
     }
-    // 静的フォールバック
+    // Static fallback
     if (f == L"zip") return CLSID_Format_Zip;
     if (f == L"tar") return CLSID_Format_Tar;
     if (f == L"gz")  return CLSID_Format_GZip;
@@ -538,8 +541,8 @@ HRESULT SevenZip::OpenArchive(const wchar_t* path, std::vector<ArchiveItem>& ite
         return HRESULT_FROM_WIN32(err ? err : ERROR_OPEN_FAILED);
     }
 
-    // 拡張子が全数字 (.001 等) の場合は分割アーカイブ第1巻として
-    // Split ハンドラ (拡張子マップ経由) で開き、IArchiveOpenVolumeCallback を渡す。
+    // If extension is all-digits (.001 etc.), treat as split archive volume 1.
+    // Open via Split handler (using extension map) and pass IArchiveOpenVolumeCallback.
     bool isSplit = false;
     {
         std::wstring ext = ExtOfPath(path);
@@ -747,15 +750,15 @@ HRESULT SevenZip::OpenArchive(const wchar_t* path, std::vector<ArchiveItem>& ite
         }
     }
 
-    // 分割アーカイブの自動アンラップ:
-    // .001 で開いた結果が「結合された 1 ファイル」だった場合、それを一時ファイルへ展開し、
-    // マジックバイトから内部フォーマットを推定して該当拡張子に rename → 再オープンして
-    // 中身のエントリを直接見せる。一時ファイルは effectivePath に書き戻し、後続の
-    // Extract/Test 等はこちらを使う。
+    // Auto-unwrap for split archives:
+    // If opening .001 yields a single concatenated file, extract it to a temp file,
+    // detect inner format from magic bytes, rename to correct extension, re-open,
+    // and show inner entries directly. Return temp path via effectivePath for
+    // subsequent Extract/Test operations.
     if (isSplit && items.size() == 1 && !items[0].isDir) {
         std::wstring innerName = !items[0].name.empty() ? items[0].name : items[0].path;
         if (innerName.empty()) innerName = L"archive";
-        // ファイル名に使えない文字を置換
+        // Replace characters invalid in filenames
         for (auto& c : innerName)
             if (c == L'\\' || c == L'/' || c == L':' || c == L'*' || c == L'?') c = L'_';
 
@@ -779,9 +782,9 @@ HRESULT SevenZip::OpenArchive(const wchar_t* path, std::vector<ArchiveItem>& ite
         }
 
         if (extractOk) {
-            // マジックバイト検出で内部フォーマットを特定し、必要なら拡張子をリネーム。
-            // OpenArchive は拡張子 → CLSID マップで dispatch するため、正しい拡張子が
-            // 必須。検出できないファイルは未対応フォーマット扱いで unwrap をあきらめる。
+            // Detect inner format via magic bytes and rename extension if needed.
+            // OpenArchive dispatches via extension→CLSID map, so correct extension is
+            // essential. Undetectable files are treated as unsupported (abort unwrap).
             const wchar_t* detectedExt = nullptr;
             BYTE magic[512] = {};
             DWORD readBytes = 0;
@@ -827,11 +830,492 @@ HRESULT SevenZip::OpenArchive(const wchar_t* path, std::vector<ArchiveItem>& ite
                     return S_OK;
                 }
             }
-            // unwrap 失敗 (マジック未検出 or 内部 OpenArchive 失敗) は一時ファイル掃除
+            // Unwrap failed (magic undetected or inner OpenArchive failed) — clean up temp file
             DeleteFileW(tmpFinal.c_str());
         }
     }
 
+    archive->Release();
+    return S_OK;
+}
+
+// ============================================================
+// GetArchiveProperties — Retrieve archive-wide metadata
+// ============================================================
+
+namespace {
+
+// Convert PROPVARIANT to human-readable string. Empty string = no value to display.
+std::wstring PropVariantToReadable(const PROPVARIANT& p) {
+    wchar_t buf[64];
+    switch (p.vt) {
+    case VT_EMPTY:
+    case VT_NULL:
+        return L"";
+    case VT_BSTR:
+        return p.bstrVal ? std::wstring(p.bstrVal) : L"";
+    case VT_BOOL:
+        return p.boolVal != VARIANT_FALSE ? L"+" : L"-";
+    case VT_UI1:
+        swprintf_s(buf, L"%u", (unsigned)p.bVal); return buf;
+    case VT_UI2:
+        swprintf_s(buf, L"%u", (unsigned)p.uiVal); return buf;
+    case VT_UI4:
+        swprintf_s(buf, L"%u", (unsigned)p.ulVal); return buf;
+    case VT_UI8:
+        swprintf_s(buf, L"%llu", (unsigned long long)p.uhVal.QuadPart); return buf;
+    case VT_I1:
+        swprintf_s(buf, L"%d", (int)p.cVal); return buf;
+    case VT_I2:
+        swprintf_s(buf, L"%d", (int)p.iVal); return buf;
+    case VT_I4:
+        swprintf_s(buf, L"%d", (int)p.lVal); return buf;
+    case VT_I8:
+        swprintf_s(buf, L"%lld", (long long)p.hVal.QuadPart); return buf;
+    case VT_FILETIME: {
+        FILETIME local = {};
+        SYSTEMTIME st = {};
+        FileTimeToLocalFileTime(&p.filetime, &local);
+        FileTimeToSystemTime(&local, &st);
+        swprintf_s(buf, L"%04d/%02d/%02d %02d:%02d:%02d",
+                   st.wYear, st.wMonth, st.wDay,
+                   st.wHour, st.wMinute, st.wSecond);
+        return buf;
+    }
+    default:
+        // Unsupported type — output type number only
+        swprintf_s(buf, L"(VT=%u)", (unsigned)p.vt); return buf;
+    }
+}
+
+// PROPID → label in current language. Fallback for BSTR names returned by GetArchivePropertyInfo.
+// Returns 0 if IDS is unassigned (e.g., CRC).
+UINT PropIdToLabelId(PROPID id) {
+    switch (id) {
+    case kpidPath:             return IDS_PROP_PATH;
+    case kpidName:             return IDS_PROP_NAME;
+    case kpidExtension:        return IDS_PROP_EXTENSION;
+    case kpidIsDir:            return IDS_PROP_IS_DIR;
+    case kpidSize:             return IDS_PROP_SIZE;
+    case kpidPackSize:         return IDS_PROP_PACK_SIZE;
+    case kpidAttrib:           return IDS_PROP_ATTRIB;
+    case kpidCTime:            return IDS_PROP_CTIME;
+    case kpidATime:            return IDS_PROP_ATIME;
+    case kpidMTime:            return IDS_PROP_MTIME;
+    case kpidSolid:            return IDS_PROP_SOLID;
+    case kpidCommented:        return IDS_PROP_COMMENTED;
+    case kpidEncrypted:        return IDS_PROP_ENCRYPTED;
+    case kpidDictionarySize:   return IDS_PROP_DICT_SIZE;
+    case kpidType:             return IDS_PROP_TYPE;
+    case kpidMethod:           return IDS_PROP_METHOD;
+    case kpidHostOS:           return IDS_PROP_HOST_OS;
+    case kpidFileSystem:       return IDS_PROP_FILE_SYSTEM;
+    case kpidUser:             return IDS_PROP_USER;
+    case kpidGroup:            return IDS_PROP_GROUP;
+    case kpidBlock:            return IDS_PROP_BLOCK;
+    case kpidComment:          return IDS_PROP_COMMENT;
+    case kpidNumSubDirs:       return IDS_PROP_NUM_SUBDIRS;
+    case kpidNumSubFiles:      return IDS_PROP_NUM_SUBFILES;
+    case kpidUnpackVer:        return IDS_PROP_UNPACK_VER;
+    case kpidVolume:           return IDS_PROP_VOLUME;
+    case kpidIsVolume:         return IDS_PROP_IS_VOLUME;
+    case kpidNumBlocks:        return IDS_PROP_NUM_BLOCKS;
+    case kpidNumVolumes:       return IDS_PROP_NUM_VOLUMES;
+    case kpidPhySize:          return IDS_PROP_PHY_SIZE;
+    case kpidHeadersSize:      return IDS_PROP_HEADERS_SIZE;
+    case kpidChecksum:         return IDS_PROP_CHECKSUM;
+    case kpidCharacts:         return IDS_PROP_CHARACTS;
+    case kpidCreatorApp:       return IDS_PROP_CREATOR_APP;
+    case kpidTotalSize:        return IDS_PROP_TOTAL_SIZE;
+    case kpidFreeSpace:        return IDS_PROP_FREE_SPACE;
+    case kpidClusterSize:      return IDS_PROP_CLUSTER_SIZE;
+    case kpidVolumeName:       return IDS_PROP_VOLUME_NAME;
+    case kpidLocalName:        return IDS_PROP_LOCAL_NAME;
+    case kpidProvider:         return IDS_PROP_PROVIDER;
+    case kpidErrorType:        return IDS_PROP_ERROR_TYPE;
+    case kpidNumErrors:        return IDS_PROP_NUM_ERRORS;
+    case kpidErrorFlags:       return IDS_PROP_ERROR_FLAGS;
+    case kpidWarningFlags:     return IDS_PROP_WARNING_FLAGS;
+    case kpidWarning:          return IDS_PROP_WARNING;
+    case kpidNumStreams:       return IDS_PROP_NUM_STREAMS;
+    case kpidCodePage:         return IDS_PROP_CODE_PAGE;
+    case kpidEmbeddedStubSize: return IDS_PROP_EMBEDDED_STUB_SIZE;
+    default:                   return 0;
+    }
+}
+
+} // namespace
+
+HRESULT SevenZip::GetArchiveComment(const wchar_t* path,
+                                    const wchar_t* password,
+                                    std::wstring& out) {
+    out.clear();
+    if (!IsLoaded()) return E_FAIL;
+
+    CInFileStream* fileSpec = new CInFileStream();
+    if (!fileSpec->Open(path)) {
+        DWORD err = GetLastError();
+        fileSpec->Release();
+        return HRESULT_FROM_WIN32(err ? err : ERROR_OPEN_FAILED);
+    }
+
+    IInArchive* archive = nullptr;
+    GUID primaryGuid = FormatToInGuid(path);
+    HRESULT hr = CreateInArchive(primaryGuid, &archive);
+    if (FAILED(hr) || !archive) {
+        fileSpec->Release();
+        return FAILED(hr) ? hr : E_FAIL;
+    }
+
+    const UInt64 maxCheck = 1ULL << 23;
+    COpenCallback* openCb = new COpenCallback(password);
+    hr = archive->Open(fileSpec, &maxCheck, openCb);
+    openCb->Release();
+
+    if ((FAILED(hr) || hr == S_FALSE) && IsEqualGUID(primaryGuid, CLSID_Format_Rar5)) {
+        archive->Release();
+        hr = CreateInArchive(CLSID_Format_Rar, &archive);
+        if (SUCCEEDED(hr) && archive) {
+            fileSpec->Seek(0, 0, nullptr);
+            COpenCallback* cb2 = new COpenCallback(password);
+            hr = archive->Open(fileSpec, &maxCheck, cb2);
+            cb2->Release();
+        }
+    }
+
+    fileSpec->Release();
+
+    if (FAILED(hr) || hr == S_FALSE) {
+        if (archive) archive->Release();
+        return FAILED(hr) ? hr : E_FAIL;
+    }
+
+    PROPVARIANT prop;
+    PropVariantInit(&prop);
+    if (SUCCEEDED(archive->GetArchiveProperty(kpidComment, &prop))) {
+        if (prop.vt == VT_BSTR && prop.bstrVal) out = prop.bstrVal;
+    }
+    PropVariantClear(&prop);
+
+    archive->Close();
+    archive->Release();
+    return S_OK;
+}
+
+// Set ZIP archive comment by directly modifying EOCD record.
+// 7z.dll's Out path doesn't handle ZIP archive comment, so follow ZIP spec (APPNOTE 4.3.16)
+// to locate and modify EOCD from the end. Copy via temp file, rename only on success
+// (protects original if modification fails).
+HRESULT SevenZip::SetZipArchiveComment(const wchar_t* archivePath,
+                                       const std::wstring& comment) {
+    // wstring → OEM code page (CP_OEMCP).
+    // ZIP archive-wide comment traditionally interpreted as OEM (MS-DOS convention);
+    // 7z.dll's ZIP handler also converts OEM→wide via GetArchiveProperty(kpidComment).
+    // UTF-8 would cause corruption on re-read, so use CP_OEMCP.
+    std::string oem;
+    if (!comment.empty()) {
+        int len = WideCharToMultiByte(CP_OEMCP, 0,
+                                      comment.c_str(), (int)comment.size(),
+                                      nullptr, 0, nullptr, nullptr);
+        if (len > 0) {
+            oem.resize(len);
+            WideCharToMultiByte(CP_OEMCP, 0,
+                                comment.c_str(), (int)comment.size(),
+                                oem.data(), len, nullptr, nullptr);
+        }
+    }
+    if (oem.size() > 0xFFFF) return E_INVALIDARG; // ZIP spec: comment ≤ 65535 bytes
+
+    // Copy original file to .~tmp
+    std::wstring tempPath = std::wstring(archivePath) + L".~tmp";
+    DeleteFileW(tempPath.c_str());
+    if (!CopyFileW(archivePath, tempPath.c_str(), FALSE)) {
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+
+    // Open .~tmp for reading and writing
+    HANDLE hFile = CreateFileW(tempPath.c_str(),
+                               GENERIC_READ | GENERIC_WRITE,
+                               0, nullptr, OPEN_EXISTING,
+                               FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (hFile == INVALID_HANDLE_VALUE) {
+        DWORD err = GetLastError();
+        DeleteFileW(tempPath.c_str());
+        return HRESULT_FROM_WIN32(err);
+    }
+
+    LARGE_INTEGER fileSize;
+    if (!GetFileSizeEx(hFile, &fileSize)) {
+        DWORD err = GetLastError();
+        CloseHandle(hFile);
+        DeleteFileW(tempPath.c_str());
+        return HRESULT_FROM_WIN32(err);
+    }
+
+    // EOCD exists in last 22+0..65535 bytes. Allocate read area and search backwards.
+    static const DWORD kEocdMin   = 22;
+    static const DWORD kMaxComm   = 65535;
+    static const DWORD kScanBytes = kEocdMin + kMaxComm;
+    DWORD readSize = (fileSize.QuadPart >= (LONGLONG)kScanBytes)
+                     ? kScanBytes : (DWORD)fileSize.QuadPart;
+    if (readSize < kEocdMin) {
+        CloseHandle(hFile);
+        DeleteFileW(tempPath.c_str());
+        return E_FAIL; // Invalid ZIP
+    }
+
+    LARGE_INTEGER scanStart;
+    scanStart.QuadPart = fileSize.QuadPart - readSize;
+    if (!SetFilePointerEx(hFile, scanStart, nullptr, FILE_BEGIN)) {
+        DWORD err = GetLastError();
+        CloseHandle(hFile);
+        DeleteFileW(tempPath.c_str());
+        return HRESULT_FROM_WIN32(err);
+    }
+
+    std::vector<BYTE> tail(readSize);
+    DWORD got = 0;
+    if (!ReadFile(hFile, tail.data(), readSize, &got, nullptr) || got != readSize) {
+        DWORD err = GetLastError();
+        CloseHandle(hFile);
+        DeleteFileW(tempPath.c_str());
+        return HRESULT_FROM_WIN32(err ? err : ERROR_READ_FAULT);
+    }
+
+    // Search backwards for EOCD signature 0x06054b50.
+    // When found, verify "comment length field" matches actual trailing bytes.
+    int eocdOffsetInTail = -1;
+    for (int i = (int)readSize - (int)kEocdMin; i >= 0; --i) {
+        if (tail[i]     == 0x50 && tail[i + 1] == 0x4B &&
+            tail[i + 2] == 0x05 && tail[i + 3] == 0x06)
+        {
+            UINT16 commentLen = (UINT16)tail[i + 20] | ((UINT16)tail[i + 21] << 8);
+            // EOCD starts at i; total EOCD (22 + commentLen bytes) should match end
+            if ((DWORD)i + kEocdMin + commentLen == readSize) {
+                eocdOffsetInTail = i;
+                break;
+            }
+        }
+    }
+    if (eocdOffsetInTail < 0) {
+        CloseHandle(hFile);
+        DeleteFileW(tempPath.c_str());
+        return E_FAIL;
+    }
+
+    // Absolute offset of EOCD
+    LONGLONG eocdAbsOffset = scanStart.QuadPart + eocdOffsetInTail;
+
+    // Overwrite comment length field (offset 20, 21)
+    LARGE_INTEGER posLen;
+    posLen.QuadPart = eocdAbsOffset + 20;
+    if (!SetFilePointerEx(hFile, posLen, nullptr, FILE_BEGIN)) {
+        DWORD err = GetLastError();
+        CloseHandle(hFile);
+        DeleteFileW(tempPath.c_str());
+        return HRESULT_FROM_WIN32(err);
+    }
+    BYTE lenBytes[2] = { (BYTE)(oem.size() & 0xFF), (BYTE)((oem.size() >> 8) & 0xFF) };
+    DWORD written = 0;
+    if (!WriteFile(hFile, lenBytes, 2, &written, nullptr) || written != 2) {
+        DWORD err = GetLastError();
+        CloseHandle(hFile);
+        DeleteFileW(tempPath.c_str());
+        return HRESULT_FROM_WIN32(err ? err : ERROR_WRITE_FAULT);
+    }
+
+    // Write comment body (empty comment = write 0 bytes = no-op)
+    if (!oem.empty()) {
+        if (!WriteFile(hFile, oem.data(), (DWORD)oem.size(), &written, nullptr) ||
+            written != (DWORD)oem.size()) {
+            DWORD err = GetLastError();
+            CloseHandle(hFile);
+            DeleteFileW(tempPath.c_str());
+            return HRESULT_FROM_WIN32(err ? err : ERROR_WRITE_FAULT);
+        }
+    }
+
+    // Truncate file at end (if old comment was longer than new)
+    if (!SetEndOfFile(hFile)) {
+        DWORD err = GetLastError();
+        CloseHandle(hFile);
+        DeleteFileW(tempPath.c_str());
+        return HRESULT_FROM_WIN32(err);
+    }
+
+    CloseHandle(hFile);
+
+    // Replace temp file with original path
+    if (!MoveFileExW(tempPath.c_str(), archivePath,
+                     MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        DWORD err = GetLastError();
+        DeleteFileW(tempPath.c_str());
+        return HRESULT_FROM_WIN32(err);
+    }
+    return S_OK;
+}
+
+HRESULT SevenZip::GetArchiveProperties(const wchar_t* path,
+                                       const wchar_t* password,
+                                       ArchiveProperties& out) {
+    out = {};
+    if (!IsLoaded()) return E_FAIL;
+
+    CInFileStream* fileSpec = new CInFileStream();
+    if (!fileSpec->Open(path)) {
+        DWORD err = GetLastError();
+        fileSpec->Release();
+        return HRESULT_FROM_WIN32(err ? err : ERROR_OPEN_FAILED);
+    }
+
+    IInArchive* archive = nullptr;
+    GUID primaryGuid = FormatToInGuid(path);
+    HRESULT hr = CreateInArchive(primaryGuid, &archive);
+    if (FAILED(hr) || !archive) {
+        fileSpec->Release();
+        return FAILED(hr) ? hr : E_FAIL;
+    }
+
+    const UInt64 maxCheck = 1ULL << 23;
+    COpenCallback* openCb = new COpenCallback(password);
+    hr = archive->Open(fileSpec, &maxCheck, openCb);
+    openCb->Release();
+
+    // RAR5 mismatch → fall back to RAR4 (same behaviour as OpenArchive)
+    if ((FAILED(hr) || hr == S_FALSE) && IsEqualGUID(primaryGuid, CLSID_Format_Rar5)) {
+        archive->Release();
+        hr = CreateInArchive(CLSID_Format_Rar, &archive);
+        if (SUCCEEDED(hr) && archive) {
+            fileSpec->Seek(0, 0, nullptr);
+            COpenCallback* cb2 = new COpenCallback(password);
+            hr = archive->Open(fileSpec, &maxCheck, cb2);
+            cb2->Release();
+        }
+    }
+
+    fileSpec->Release();
+
+    if (FAILED(hr) || hr == S_FALSE) {
+        if (archive) archive->Release();
+        return FAILED(hr) ? hr : E_FAIL;
+    }
+
+    // ---- Enumerate archive-level properties ----
+    UInt32 numArcProps = 0;
+    if (SUCCEEDED(archive->GetNumberOfArchiveProperties(&numArcProps))) {
+        for (UInt32 i = 0; i < numArcProps; ++i) {
+            BSTR    propName = nullptr;
+            PROPID  pid      = 0;
+            VARTYPE vt       = 0;
+            if (FAILED(archive->GetArchivePropertyInfo(i, &propName, &pid, &vt))) {
+                if (propName) SysFreeString(propName);
+                continue;
+            }
+
+            PROPVARIANT prop;
+            PropVariantInit(&prop);
+            HRESULT hrGet = archive->GetArchiveProperty(pid, &prop);
+
+            if (SUCCEEDED(hrGet)) {
+                std::wstring value = PropVariantToReadable(prop);
+                if (!value.empty()) {
+                    // Label: prefer localized map; fallback to DLL's English name
+                    UINT labelId = PropIdToLabelId(pid);
+                    std::wstring label;
+                    if (labelId != 0)      label = I18n::Tr(labelId);
+                    else if (pid == kpidCRC) label = L"CRC";
+                    else if (propName)     label = propName;
+                    else { wchar_t b[16]; swprintf_s(b, L"#%u", (unsigned)pid); label = b; }
+
+                    if (pid == kpidType) out.formatName = value;
+                    out.rawProps.emplace_back(std::move(label), std::move(value));
+                }
+            }
+            PropVariantClear(&prop);
+            if (propName) SysFreeString(propName);
+        }
+    }
+
+    // ---- Item aggregation ----
+    // Folder count equals MainWindow::PopulateTree logic: union of explicit directory entries
+    // and ancestor paths of all files. Some archives lack explicit entries, so counting
+    // kpidIsDir==true alone would undercount.
+    UInt32 count = 0;
+    archive->GetNumberOfItems(&count);
+    std::set<std::wstring> filePaths;
+    std::set<std::wstring> folderSet;
+    for (UInt32 i = 0; i < count; ++i) {
+        PROPVARIANT prop;
+
+        bool isDir = false;
+        PropVariantInit(&prop);
+        if (SUCCEEDED(archive->GetProperty(i, kpidIsDir, &prop)) && prop.vt == VT_BOOL)
+            isDir = (prop.boolVal != VARIANT_FALSE);
+        PropVariantClear(&prop);
+
+        std::wstring p;
+        PropVariantInit(&prop);
+        if (SUCCEEDED(archive->GetProperty(i, kpidPath, &prop)) &&
+            prop.vt == VT_BSTR && prop.bstrVal)
+        {
+            p = prop.bstrVal;
+            for (auto& c : p) if (c == L'\\') c = L'/';
+            while (!p.empty() && p.back() == L'/') p.pop_back();
+        }
+        PropVariantClear(&prop);
+
+        if (isDir) {
+            if (!p.empty()) folderSet.insert(p);
+        } else {
+            ++out.fileCount;
+            filePaths.insert(p);
+            // Register ancestor folders implicitly
+            auto pos = p.rfind(L'/');
+            while (pos != std::wstring::npos) {
+                folderSet.insert(p.substr(0, pos));
+                p = p.substr(0, pos);
+                pos = p.rfind(L'/');
+            }
+
+            PropVariantInit(&prop);
+            if (SUCCEEDED(archive->GetProperty(i, kpidSize, &prop)) && prop.vt == VT_UI8)
+                out.totalSize += prop.uhVal.QuadPart;
+            PropVariantClear(&prop);
+
+            PropVariantInit(&prop);
+            if (SUCCEEDED(archive->GetProperty(i, kpidPackSize, &prop)) && prop.vt == VT_UI8)
+                out.packedTotal += prop.uhVal.QuadPart;
+            PropVariantClear(&prop);
+        }
+
+        PropVariantInit(&prop);
+        if (SUCCEEDED(archive->GetProperty(i, kpidEncrypted, &prop)) && prop.vt == VT_BOOL) {
+            if (prop.boolVal != VARIANT_FALSE) out.hasEncrypted = true;
+        }
+        PropVariantClear(&prop);
+
+        PropVariantInit(&prop);
+        if (SUCCEEDED(archive->GetProperty(i, kpidMethod, &prop)) &&
+            prop.vt == VT_BSTR && prop.bstrVal && prop.bstrVal[0])
+        {
+            std::wstring m = prop.bstrVal;
+            // Check if method already seen (small list, linear search is fine)
+            bool seen = false;
+            for (auto& s : out.methods) if (_wcsicmp(s.c_str(), m.c_str()) == 0) { seen = true; break; }
+            if (!seen) out.methods.push_back(std::move(m));
+        }
+        PropVariantClear(&prop);
+    }
+
+    // Rare case: same path appears as both file and folder entry.
+    // File takes precedence (same convention as PopulateTree).
+    for (auto it = folderSet.begin(); it != folderSet.end();) {
+        if (filePaths.count(*it)) it = folderSet.erase(it);
+        else                       ++it;
+    }
+    out.folderCount = (UINT32)folderSet.size();
+
+    archive->Close();
     archive->Release();
     return S_OK;
 }
@@ -923,21 +1407,56 @@ private:
 };
 
 // ============================================================
+// ConcatFiles — write prefix followed by body sequentially into dst.
+// Used to concatenate an SFX module + .7z data.
+// ============================================================
+static HRESULT ConcatFiles(const wchar_t* prefix,
+                            const wchar_t* body,
+                            const wchar_t* dst) {
+    HANDLE hOut = CreateFileW(dst, GENERIC_WRITE, 0, nullptr,
+                              CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (hOut == INVALID_HANDLE_VALUE) return HRESULT_FROM_WIN32(GetLastError());
+
+    auto pump = [&](const wchar_t* src) -> HRESULT {
+        HANDLE hIn = CreateFileW(src, GENERIC_READ, FILE_SHARE_READ, nullptr,
+                                 OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (hIn == INVALID_HANDLE_VALUE) return HRESULT_FROM_WIN32(GetLastError());
+        BYTE  buf[64 * 1024];
+        DWORD r = 0;
+        HRESULT hr = S_OK;
+        while (ReadFile(hIn, buf, sizeof(buf), &r, nullptr) && r > 0) {
+            DWORD w = 0;
+            if (!WriteFile(hOut, buf, r, &w, nullptr) || w != r) {
+                hr = HRESULT_FROM_WIN32(GetLastError());
+                break;
+            }
+        }
+        CloseHandle(hIn);
+        return hr;
+    };
+
+    HRESULT hr = pump(prefix);
+    if (SUCCEEDED(hr)) hr = pump(body);
+    CloseHandle(hOut);
+    if (FAILED(hr)) DeleteFileW(dst);
+    return hr;
+}
+
+// ============================================================
 // CMultiVolOutStream — IOutStream wrapper that splits across multiple files
-// 7z.dll は単一の出力ストリームに書き込むつもりで動作するが、内部的には
-// 固定サイズで境界をまたぐと自動的に次のボリュームファイル
-// (archive.7z.001, .002, ...) に切り替える。
-// 7z.dll はヘッダ書き込みのため先頭付近にシークするため、過去ボリューム
-// への書き込みも必要 (各ボリュームの HANDLE を保持して切替時に Seek)。
+// 7z.dll writes to a single stream as-is, but internally switches to the next
+// volume file (archive.7z.001, .002, ...) when crossing fixed-size boundaries.
+// Since 7z.dll seeks near the start to write headers, past volumes need writes too
+// (maintain HANDLE for each volume and Seek on switch).
 // ============================================================
 class CMultiVolOutStream : public IOutStream {
 public:
-    // basePath は "archive.7z.~tmp" など (拡張子は含む)。
-    // ボリュームは "{basePath}.001", "{basePath}.002", ... と作成される。
+    // basePath is "archive.7z.~tmp" etc. (includes extension).
+    // Volumes created as "{basePath}.001", "{basePath}.002", ...
     bool Init(const std::wstring& basePath, UInt64 volumeSize) {
         m_basePath  = basePath;
         m_volSize   = volumeSize;
-        // 親ディレクトリ生成
+        // Create parent directory
         auto slash = m_basePath.find_last_of(L"\\/");
         if (slash != std::wstring::npos) {
             std::wstring dir = m_basePath.substr(0, slash);
@@ -950,7 +1469,7 @@ public:
         for (auto h : m_files) if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
     }
 
-    // 失敗時のロールバック。すべてのボリュームファイルを削除。
+    // Rollback on failure. Delete all volume files.
     void DeleteAll() {
         for (size_t i = 0; i < m_files.size(); ++i) {
             if (m_files[i] != INVALID_HANDLE_VALUE) {
@@ -963,10 +1482,10 @@ public:
         m_fileSizes.clear();
     }
 
-    // 成功時に basePath を outPath に置換 (.~tmp.001 → .001 等)。
-    // origBase は basePath の置換元、newBase は置換先。
+    // On success, replace basePath with outPath (.~tmp.001 → .001 etc.).
+    // origBase: source basePath; newBase: target basePath.
     HRESULT FinalizeRename(const std::wstring& origBase, const std::wstring& newBase) {
-        // すべてのハンドルを閉じる
+        // Close all handles
         for (auto& h : m_files) {
             if (h != INVALID_HANDLE_VALUE) { CloseHandle(h); h = INVALID_HANDLE_VALUE; }
         }
@@ -976,6 +1495,31 @@ public:
             if (!MoveFileExW(src.c_str(), dst.c_str(),
                              MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
                 return HRESULT_FROM_WIN32(GetLastError());
+            }
+        }
+        return S_OK;
+    }
+
+    // Finalize with SFX. Prepend sfxPath content to volume 1;
+    // rename volumes 2+ normally.
+    HRESULT FinalizeWithSfx(const std::wstring& origBase,
+                             const std::wstring& newBase,
+                             const wchar_t*      sfxPath) {
+        for (auto& h : m_files) {
+            if (h != INVALID_HANDLE_VALUE) { CloseHandle(h); h = INVALID_HANDLE_VALUE; }
+        }
+        for (size_t i = 0; i < m_files.size(); ++i) {
+            std::wstring src = VolumePathFor(origBase, i);
+            std::wstring dst = VolumePathFor(newBase, i);
+            if (i == 0) {
+                HRESULT hr = ConcatFiles(sfxPath, src.c_str(), dst.c_str());
+                if (FAILED(hr)) return hr;
+                DeleteFileW(src.c_str());
+            } else {
+                if (!MoveFileExW(src.c_str(), dst.c_str(),
+                                 MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+                    return HRESULT_FROM_WIN32(GetLastError());
+                }
             }
         }
         return S_OK;
@@ -1033,7 +1577,7 @@ public:
             m_curPos    += written;
             if (m_curPos > m_totalSize) m_totalSize = m_curPos;
 
-            if ((UInt32)written < chunk) break;  // 部分書き込み (ディスクフル等)
+            if ((UInt32)written < chunk) break;  // Partial write (disk full, etc.)
         }
         if (processedSize) *processedSize = totalWritten;
         return S_OK;
@@ -1054,8 +1598,8 @@ public:
         return S_OK;
     }
 
-    // 7z.dll は最終アーカイブサイズで SetSize を呼ぶ。境界ボリュームを切り詰め、
-    // それ以降の不要ボリュームを削除する。
+    // 7z.dll calls SetSize with final archive size. Truncate boundary volume,
+    // delete unnecessary volumes after it.
     HRESULT STDMETHODCALLTYPE SetSize(UInt64 newSize) override {
         size_t boundaryVol;
         UInt64 boundaryOff;
@@ -1069,7 +1613,7 @@ public:
 
         if (!EnsureVolume(boundaryVol)) return HRESULT_FROM_WIN32(GetLastError());
 
-        // 境界ボリュームを切り詰め
+        // Truncate boundary volume
         LARGE_INTEGER li; li.QuadPart = (LONGLONG)boundaryOff;
         if (!SetFilePointerEx(m_files[boundaryVol], li, nullptr, FILE_BEGIN))
             return HRESULT_FROM_WIN32(GetLastError());
@@ -1077,7 +1621,7 @@ public:
             return HRESULT_FROM_WIN32(GetLastError());
         m_fileSizes[boundaryVol] = boundaryOff;
 
-        // 以降のボリュームは閉じて削除
+        // Close and delete subsequent volumes
         for (size_t i = boundaryVol + 1; i < m_files.size(); ++i) {
             if (m_files[i] != INVALID_HANDLE_VALUE) {
                 CloseHandle(m_files[i]);
@@ -1113,7 +1657,7 @@ private:
         return true;
     }
 
-    std::wstring         m_basePath;          // 拡張子まで含むベース (例 "archive.7z.~tmp")
+    std::wstring         m_basePath;          // Base path including extension (e.g. "archive.7z.~tmp")
     UInt64               m_volSize  = 0;
     std::vector<HANDLE>  m_files;
     std::vector<UInt64>  m_fileSizes;
@@ -1122,7 +1666,7 @@ private:
     LONG                 m_refCount = 1;
 };
 
-// 文字列 ("100m", "1g" 等) をバイト数に変換。空文字列・不正値は 0 を返す。
+// Convert a string ("100m", "1g", etc.) to byte count. Returns 0 for empty or invalid values.
 static UInt64 ParseVolumeSize(const std::wstring& s) {
     if (s.empty()) return 0;
     UInt64 num = 0;
@@ -1195,8 +1739,8 @@ public:
     HRESULT STDMETHODCALLTYPE GetStream(UInt32 index, ISequentialOutStream** outStream,
                                         Int32 askExtractMode) override {
         *outStream = nullptr;
-        // 前回の呼び出しで残ったストリームをリセット（スキップ・ディレクトリで SetOperationResult が
-        // 呼ばれなかった場合でも m_currentOut が残らないよう防御）
+        // Reset any stream left over from the previous call (guards against m_currentOut
+        // remaining set when SetOperationResult was not called due to a skip or directory)
         if (m_currentOut) { m_currentOut->Release(); m_currentOut = nullptr; }
         m_currentIsDir     = false;
         m_currentItemIndex = -1;
@@ -1279,8 +1823,8 @@ private:
 };
 
 // ============================================================
-// CTestCallback — IInArchive::Extract(testMode=1) 用コールバック
-// 出力ストリームは要らない。SetOperationResult で結果を集計する。
+// CTestCallback — callback for IInArchive::Extract(testMode=1).
+// No output stream needed. Aggregates results via SetOperationResult.
 // ============================================================
 class CTestCallback : public IArchiveExtractCallback, public ICryptoGetTextPassword {
 public:
@@ -1321,7 +1865,7 @@ public:
 
     HRESULT STDMETHODCALLTYPE GetStream(UInt32 index, ISequentialOutStream** outStream,
                                         Int32 askExtractMode) override {
-        // testMode では出力ストリーム不要。kTest 以外は無視。
+        // No output stream needed in testMode. Ignore anything other than kTest.
         *outStream = nullptr;
         if (askExtractMode != NArchive::NExtract::NAskMode::kTest) return S_OK;
 
@@ -1358,7 +1902,7 @@ private:
 };
 
 // ============================================================
-// Test — IInArchive::Extract(testMode=1) で全エントリを検証
+// Test — verify all entries via IInArchive::Extract(testMode=1)
 // ============================================================
 
 HRESULT SevenZip::Test(const wchar_t* archivePath,
@@ -1377,7 +1921,7 @@ HRESULT SevenZip::Test(const wchar_t* archivePath,
     HRESULT hr = CreateInArchive(clsid, &archive);
     if (FAILED(hr)) { fileSpec->Release(); return hr; }
 
-    // 分割アーカイブ判定（拡張子が全数字 → Split ハンドラに volume callback を渡す）
+    // Split archive detection (all-digit extension → pass a volume callback to the Split handler)
     bool isSplit = false;
     {
         std::wstring ext = ExtOfPath(archivePath);
@@ -1398,7 +1942,7 @@ HRESULT SevenZip::Test(const wchar_t* archivePath,
         openCb->Release();
     }
 
-    // RAR5 ミスマッチ → RAR4 フォールバック（Extract と同じ流儀）
+    // RAR5 mismatch → fall back to RAR4 (same approach as Extract)
     if ((FAILED(hr) || hr == S_FALSE) && IsEqualGUID(clsid, CLSID_Format_Rar5)) {
         archive->Release(); archive = nullptr;
         hr = CreateInArchive(CLSID_Format_Rar, &archive);
@@ -1449,7 +1993,7 @@ HRESULT SevenZip::Extract(const wchar_t* archivePath,
     HRESULT hr = CreateInArchive(clsid, &archive);
     if (FAILED(hr)) { fileSpec->Release(); return hr; }
 
-    // 分割アーカイブ判定（Test と同じロジック）
+    // Split archive detection (same logic as Test)
     bool isSplit = false;
     {
         std::wstring ext = ExtOfPath(archivePath);
@@ -1769,7 +2313,7 @@ HRESULT SevenZip::Compress(const std::vector<std::wstring>& srcPaths,
                                           reinterpret_cast<void**>(&setProps))) && setProps) {
         std::vector<const wchar_t*> names;
         std::vector<PROPVARIANT>    vals;
-        std::vector<std::wstring>   extraKeyStore; // extra キー文字列の安定ストレージ
+        std::vector<std::wstring>   extraKeyStore; // stable storage for extra key strings
 
         PROPVARIANT pvLevel; PropVariantInit(&pvLevel);
         pvLevel.vt = VT_UI4;
@@ -1792,12 +2336,12 @@ HRESULT SevenZip::Compress(const std::vector<std::wstring>& srcPaths,
                 names.push_back(key);
                 vals.push_back(pv);
             };
-            pushBstr(L"d",  adv->dictSize);    // 辞書サイズ
-            pushBstr(L"fb", adv->wordSize);    // fast bytes (ワードサイズ)
-            pushBstr(L"ms", adv->solidBlock);  // ソリッドブロックサイズ
-            pushBstr(L"mt", adv->threads);     // スレッド数
+            pushBstr(L"d",  adv->dictSize);    // dictionary size
+            pushBstr(L"fb", adv->wordSize);    // fast bytes (word size)
+            pushBstr(L"ms", adv->solidBlock);  // solid block size
+            pushBstr(L"mt", adv->threads);     // thread count
 
-            // 追加パラメーター "key=value" pairs を空白区切りで解析して適用する
+            // Parse and apply additional "key=value" pairs separated by spaces
             if (!adv->extra.empty()) {
                 std::vector<std::pair<std::wstring, std::wstring>> extraPairs;
                 const std::wstring& s = adv->extra;
@@ -1824,8 +2368,8 @@ HRESULT SevenZip::Compress(const std::vector<std::wstring>& srcPaths,
             }
         }
 
-        // 7z ヘッダ暗号化（"Encrypt header" チェックボックス対応）
-        // 7z フォーマットかつパスワードありのときのみ有効。
+        // 7z header encryption ("Encrypt header" checkbox)
+        // Only effective for 7z format with a password set.
         if (encryptHeaders && password && password[0] &&
             format && _wcsicmp(format, L"7z") == 0) {
             PROPVARIANT pvHe; PropVariantInit(&pvHe);
@@ -1843,15 +2387,19 @@ HRESULT SevenZip::Compress(const std::vector<std::wstring>& srcPaths,
     std::vector<SrcEntry> entries;
     EnumeratePaths(srcPaths, entries);
 
-    // 分割ボリューム指定があり、かつ stream wrapping 対象外なら CMultiVolOutStream を使う。
-    // gz/bz2/xz は単一エントリ縛りのフォーマットで分割が複雑になるため対応外。
+    // Use CMultiVolOutStream if a split volume is specified and the format is not stream-wrapped.
+    // gz/bz2/xz are single-entry formats where splitting is complex, so they are not supported.
     UInt64 volBytes = (adv && !isStream) ? ParseVolumeSize(adv->volumeSize) : 0;
 
-    // 出力先を直接開かず一時ファイルに書いて成功時のみリネームする（失敗時のファイル破壊防止）
+    // SFX (.exe) is only supported for 7z format; outPath is assumed to already have .exe extension (set by caller).
+    bool isSfx = (adv && !adv->sfxModulePath.empty() &&
+                  format && _wcsicmp(format, L"7z") == 0);
+
+    // Write to a temp file first and rename on success (prevents corrupting the file on failure)
     std::wstring tempPath = std::wstring(outPath) + L".~tmp";
 
     if (volBytes > 0) {
-        // マルチボリューム書き出し: tempPath をベースに .001 .002 ... を作る
+        // Multi-volume output: generate .001 .002 ... using tempPath as the base
         CMultiVolOutStream* mvOut = new CMultiVolOutStream();
         if (!mvOut->Init(tempPath, volBytes)) {
             hr = HRESULT_FROM_WIN32(GetLastError());
@@ -1868,14 +2416,18 @@ HRESULT SevenZip::Compress(const std::vector<std::wstring>& srcPaths,
         archive->Release();
 
         if (SUCCEEDED(hr)) {
-            // 既存の同名ボリュームがあると MoveFileExW 失敗するので先に削除
+            // Delete any existing volume with the same name before MoveFileExW (it would fail otherwise)
             for (size_t i = 0; i < volCount; ++i) {
                 wchar_t suffix[16];
                 swprintf_s(suffix, L".%03zu", i + 1);
                 std::wstring dst = std::wstring(outPath) + suffix;
                 DeleteFileW(dst.c_str());
             }
-            hr = mvOut->FinalizeRename(tempPath, outPath);
+            if (isSfx) {
+                hr = mvOut->FinalizeWithSfx(tempPath, outPath, adv->sfxModulePath.c_str());
+            } else {
+                hr = mvOut->FinalizeRename(tempPath, outPath);
+            }
             if (FAILED(hr)) mvOut->DeleteAll();
         } else {
             mvOut->DeleteAll();
@@ -1884,7 +2436,7 @@ HRESULT SevenZip::Compress(const std::vector<std::wstring>& srcPaths,
         return hr;
     }
 
-    // 単一ファイル書き出し（従来経路）
+    // Single-file output (traditional path)
     COutFileStream* outFile = new COutFileStream();
     if (!outFile->Create(tempPath.c_str())) {
         hr = HRESULT_FROM_WIN32(GetLastError());
@@ -1901,8 +2453,14 @@ HRESULT SevenZip::Compress(const std::vector<std::wstring>& srcPaths,
     archive->Release();
 
     if (SUCCEEDED(hr)) {
-        if (!MoveFileExW(tempPath.c_str(), outPath, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
-            hr = HRESULT_FROM_WIN32(GetLastError());
+        if (isSfx) {
+            // Concatenate SFX module + .7z data to create outPath
+            hr = ConcatFiles(adv->sfxModulePath.c_str(), tempPath.c_str(), outPath);
+            DeleteFileW(tempPath.c_str());
+        } else {
+            if (!MoveFileExW(tempPath.c_str(), outPath, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+                hr = HRESULT_FROM_WIN32(GetLastError());
+        }
     } else {
         DeleteFileW(tempPath.c_str());
     }
@@ -1911,10 +2469,10 @@ HRESULT SevenZip::Compress(const std::vector<std::wstring>& srcPaths,
 
 // ============================================================
 // CDeleteCallback — IArchiveUpdateCallback
-// 残すエントリだけ列挙する。各 newIdx に対して
-// newData=0 / newProperties=0 / indexInArchive=oldIdx を返すと
-// 7z.dll は元アーカイブから圧縮済みブロブをそのままコピーする
-// （再圧縮なし、パスワード不要）。
+// Enumerate only the entries to keep. For each newIdx,
+// returning newData=0 / newProperties=0 / indexInArchive=oldIdx tells
+// 7z.dll to copy the compressed blob directly from the original archive
+// (no recompression, no password required).
 // ============================================================
 class CDeleteCallback : public IArchiveUpdateCallback, public ICryptoGetTextPassword2 {
 public:
@@ -1965,13 +2523,13 @@ public:
         return S_OK;
     }
 
-    // newProperties=0 で呼ばれないはずだが念のため空を返す
+    // Should not be called with newProperties=0, but return empty just in case
     HRESULT STDMETHODCALLTYPE GetProperty(UInt32, PROPID, PROPVARIANT* value) override {
         PropVariantInit(value);
         return S_OK;
     }
 
-    // newData=0 で呼ばれない（コピーは 7z 内部で完結）
+    // Not called with newData=0 (copy is handled internally by 7z)
     HRESULT STDMETHODCALLTYPE GetStream(UInt32, ISequentialInStream** inStream) override {
         if (inStream) *inStream = nullptr;
         return S_OK;
@@ -2030,7 +2588,7 @@ HRESULT SevenZip::DeleteItems(const wchar_t* archivePath,
     UInt32 totalItems = 0;
     inArc->GetNumberOfItems(&totalItems);
 
-    // 残すインデックス（昇順）を構築。重複削除は std::set で吸収。
+    // Build the sorted list of indices to keep. Duplicates are absorbed by std::set.
     std::vector<UInt32> keep;
     keep.reserve(totalItems);
     {
@@ -2042,7 +2600,7 @@ HRESULT SevenZip::DeleteItems(const wchar_t* archivePath,
             if (!drop[i]) keep.push_back(i);
     }
 
-    // IOutArchive を取得。書き込み未対応フォーマットでは E_NOINTERFACE。
+    // Get IOutArchive. Returns E_NOINTERFACE for write-unsupported formats.
     IOutArchive* outArc = nullptr;
     hr = inArc->QueryInterface(IID_IOutArchive, reinterpret_cast<void**>(&outArc));
     if (FAILED(hr) || !outArc) {
@@ -2050,7 +2608,7 @@ HRESULT SevenZip::DeleteItems(const wchar_t* archivePath,
         return FAILED(hr) ? hr : E_NOINTERFACE;
     }
 
-    // 一時ファイルに書き出して成功時のみリネーム（失敗時の元ファイル破壊防止）
+    // Write to a temp file and rename on success (prevents corrupting the original on failure)
     std::wstring tempPath = std::wstring(archivePath) + L".~tmp";
     COutFileStream* outFile = new COutFileStream();
     if (!outFile->Create(tempPath.c_str())) {
@@ -2068,7 +2626,306 @@ HRESULT SevenZip::DeleteItems(const wchar_t* archivePath,
     cb->Release();
     outFile->Release();
     outArc->Release();
-    // 入力ハンドル解放後でないと MoveFileExW が失敗する
+    // MoveFileExW fails if the input handle is still open; release it first
+    inArc->Release();
+
+    if (SUCCEEDED(hr)) {
+        if (!MoveFileExW(tempPath.c_str(), archivePath,
+                         MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+            hr = HRESULT_FROM_WIN32(GetLastError());
+    } else {
+        DeleteFileW(tempPath.c_str());
+    }
+    return hr;
+}
+
+// ============================================================
+// CAddCallback — IArchiveUpdateCallback (copy existing + add new).
+// Combined version of CDeleteCallback and CUpdateCallback.
+// newIdx < keep.size()  : copy existing entry (newData=0)
+// newIdx >= keep.size() : read new file (newData=1)
+// ============================================================
+class CAddCallback : public IArchiveUpdateCallback, public ICryptoGetTextPassword2 {
+public:
+    CAddCallback(std::vector<UInt32> keepIndices,
+                 std::vector<SrcEntry> newEntries,
+                 const wchar_t* password,
+                 IExtractProgressSink* sink)
+        : m_keep(std::move(keepIndices))
+        , m_new(std::move(newEntries))
+        , m_sink(sink) {
+        if (password) m_password = password;
+    }
+
+    UInt32 Count() const { return (UInt32)(m_keep.size() + m_new.size()); }
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void** ppv) override {
+        if (!ppv) return E_POINTER;
+        if (iid == IID_IUnknown || iid == IID_IArchiveUpdateCallback)
+            *ppv = static_cast<IArchiveUpdateCallback*>(this);
+        else if (iid == IID_ICryptoGetTextPassword2)
+            *ppv = static_cast<ICryptoGetTextPassword2*>(this);
+        else { *ppv = nullptr; return E_NOINTERFACE; }
+        AddRef(); return S_OK;
+    }
+    ULONG STDMETHODCALLTYPE AddRef() override {
+        return (ULONG)InterlockedIncrement(&m_refCount);
+    }
+    ULONG STDMETHODCALLTYPE Release() override {
+        LONG r = InterlockedDecrement(&m_refCount);
+        if (r == 0) delete this;
+        return (ULONG)r;
+    }
+
+    HRESULT STDMETHODCALLTYPE SetTotal(UInt64 total) override {
+        if (m_sink) m_sink->OnSetTotal(total);
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE SetCompleted(const UInt64* done) override {
+        if (m_sink && m_sink->IsCancelled()) return E_ABORT;
+        if (m_sink && done) {
+            const wchar_t* name = m_currentName.empty() ? nullptr : m_currentName.c_str();
+            m_sink->OnProgress(*done, name);
+        }
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE GetUpdateItemInfo(UInt32 newIdx,
+                                                Int32* newData,
+                                                Int32* newProperties,
+                                                UInt32* indexInArchive) override {
+        if (newIdx < (UInt32)m_keep.size()) {
+            if (newData)        *newData        = 0;
+            if (newProperties)  *newProperties  = 0;
+            if (indexInArchive) *indexInArchive = m_keep[newIdx];
+        } else {
+            if (newData)        *newData        = 1;
+            if (newProperties)  *newProperties  = 1;
+            if (indexInArchive) *indexInArchive = (UInt32)-1;
+        }
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE GetProperty(UInt32 index, PROPID propID,
+                                          PROPVARIANT* value) override {
+        PropVariantInit(value);
+        if (index < (UInt32)m_keep.size()) return S_OK; // copy path: should not be called
+        UInt32 newIdx = index - (UInt32)m_keep.size();
+        if (newIdx >= m_new.size()) return E_INVALIDARG;
+        const auto& e = m_new[newIdx];
+        switch (propID) {
+        case kpidPath:
+            value->vt = VT_BSTR;
+            value->bstrVal = SysAllocString(e.archivePath.c_str());
+            return value->bstrVal ? S_OK : E_OUTOFMEMORY;
+        case kpidIsDir:
+            value->vt = VT_BOOL;
+            value->boolVal = e.isDir ? VARIANT_TRUE : VARIANT_FALSE;
+            return S_OK;
+        case kpidSize:
+            value->vt = VT_UI8;
+            value->uhVal.QuadPart = e.size;
+            return S_OK;
+        case kpidMTime:
+            value->vt = VT_FILETIME;
+            value->filetime = e.mtime;
+            return S_OK;
+        case kpidAttrib:
+            value->vt = VT_UI4;
+            value->ulVal = e.isDir ? FILE_ATTRIBUTE_DIRECTORY : FILE_ATTRIBUTE_NORMAL;
+            return S_OK;
+        default:
+            return S_OK;
+        }
+    }
+
+    HRESULT STDMETHODCALLTYPE GetStream(UInt32 index, ISequentialInStream** inStream) override {
+        if (inStream) *inStream = nullptr;
+        if (index < (UInt32)m_keep.size()) return S_OK; // copy path: not called
+        UInt32 newIdx = index - (UInt32)m_keep.size();
+        if (newIdx >= m_new.size()) return E_INVALIDARG;
+        const auto& e = m_new[newIdx];
+        m_currentName = e.archivePath;
+        if (e.isDir) return S_OK;
+        CInFileStream* s = new CInFileStream();
+        if (!s->Open(e.diskPath.c_str())) {
+            s->Release();
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+        *inStream = s;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE SetOperationResult(Int32) override { return S_OK; }
+
+    HRESULT STDMETHODCALLTYPE CryptoGetTextPassword2(Int32* passwordIsDefined,
+                                                     BSTR* password) override {
+        bool hasPw = !m_password.empty();
+        if (passwordIsDefined) *passwordIsDefined = hasPw ? 1 : 0;
+        *password = SysAllocString(m_password.c_str());
+        return *password ? S_OK : E_OUTOFMEMORY;
+    }
+
+private:
+    std::vector<UInt32>    m_keep;
+    std::vector<SrcEntry>  m_new;
+    std::wstring           m_password;
+    IExtractProgressSink*  m_sink;
+    std::wstring           m_currentName;
+    LONG                   m_refCount = 1;
+};
+
+// ============================================================
+// AddToArchive
+// ============================================================
+HRESULT SevenZip::AddToArchive(const wchar_t* archivePath,
+                               const std::vector<std::wstring>& srcPaths,
+                               const wchar_t* archiveFolder,
+                               const wchar_t* password,
+                               int level, const wchar_t* method,
+                               IExtractProgressSink* sink,
+                               const CompressAdvanced* adv) {
+    if (!IsLoaded()) return E_FAIL;
+    if (srcPaths.empty()) return S_OK;
+
+    // 1. Open the existing archive (password required)
+    GUID clsid = FormatToInGuid(archivePath);
+    IInArchive* inArc = nullptr;
+    HRESULT hr = CreateInArchive(clsid, &inArc);
+    if (FAILED(hr) || !inArc) return FAILED(hr) ? hr : E_FAIL;
+
+    CInFileStream* inFile = new CInFileStream();
+    if (!inFile->Open(archivePath)) {
+        DWORD err = GetLastError();
+        inFile->Release();
+        inArc->Release();
+        return HRESULT_FROM_WIN32(err ? err : ERROR_OPEN_FAILED);
+    }
+
+    COpenCallback* openCb = new COpenCallback(password);
+    const UInt64 maxCheck = 1ULL << 23;
+    hr = inArc->Open(inFile, &maxCheck, openCb);
+    openCb->Release();
+    inFile->Release();
+    if (FAILED(hr) || hr == S_FALSE) {
+        inArc->Release();
+        return FAILED(hr) ? hr : E_FAIL;
+    }
+
+    // 2. Get IOutArchive (E_NOINTERFACE for write-unsupported formats)
+    IOutArchive* outArc = nullptr;
+    hr = inArc->QueryInterface(IID_IOutArchive, reinterpret_cast<void**>(&outArc));
+    if (FAILED(hr) || !outArc) {
+        inArc->Release();
+        return FAILED(hr) ? hr : E_NOINTERFACE;
+    }
+
+    // 3. Set compression properties (for new entries; existing entries are copied without recompression)
+    ISetProperties* setProps = nullptr;
+    if (SUCCEEDED(outArc->QueryInterface(IID_ISetProperties,
+                                         reinterpret_cast<void**>(&setProps))) && setProps) {
+        std::vector<const wchar_t*> names;
+        std::vector<PROPVARIANT>    vals;
+        std::vector<std::wstring>   extraKeyStore;
+
+        PROPVARIANT pvLevel; PropVariantInit(&pvLevel);
+        pvLevel.vt = VT_UI4;
+        pvLevel.ulVal = (level >= 0 && level <= 9) ? (ULONG)level : 5;
+        names.push_back(L"x"); vals.push_back(pvLevel);
+
+        if (method && method[0]) {
+            PROPVARIANT pvMethod; PropVariantInit(&pvMethod);
+            pvMethod.vt = VT_BSTR;
+            pvMethod.bstrVal = SysAllocString(method);
+            names.push_back(L"m"); vals.push_back(pvMethod);
+        }
+
+        if (adv) {
+            auto pushBstr = [&](const wchar_t* key, const std::wstring& val) {
+                if (val.empty()) return;
+                PROPVARIANT pv; PropVariantInit(&pv);
+                pv.vt = VT_BSTR;
+                pv.bstrVal = SysAllocString(val.c_str());
+                names.push_back(key);
+                vals.push_back(pv);
+            };
+            pushBstr(L"d",  adv->dictSize);
+            pushBstr(L"fb", adv->wordSize);
+            pushBstr(L"ms", adv->solidBlock);
+            pushBstr(L"mt", adv->threads);
+        }
+
+        setProps->SetProperties(names.data(), vals.data(), (UInt32)names.size());
+        for (auto& v : vals) PropVariantClear(&v);
+        setProps->Release();
+    }
+
+    // 4. Enumerate new entries
+    std::vector<SrcEntry> newEntries;
+    EnumeratePaths(srcPaths, newEntries);
+
+    // 5. Prepend the archiveFolder prefix (use backslash as the separator)
+    auto toBackslash = [](std::wstring s) {
+        for (auto& c : s) if (c == L'/') c = L'\\';
+        // Drop any trailing separator
+        while (!s.empty() && s.back() == L'\\') s.pop_back();
+        return s;
+    };
+    std::wstring folderPrefix;
+    if (archiveFolder && archiveFolder[0]) {
+        folderPrefix = toBackslash(archiveFolder);
+        if (!folderPrefix.empty()) folderPrefix += L'\\';
+    }
+    if (!folderPrefix.empty()) {
+        for (auto& e : newEntries) e.archivePath = folderPrefix + e.archivePath;
+    }
+
+    // 6. Drop conflicting paths from the existing side (new entries take priority — overwrite)
+    std::set<std::wstring> newPathsLower;
+    for (auto& e : newEntries) {
+        std::wstring k = e.archivePath;
+        for (auto& c : k) c = (wchar_t)towlower(c);
+        newPathsLower.insert(std::move(k));
+    }
+
+    UInt32 totalItems = 0;
+    inArc->GetNumberOfItems(&totalItems);
+    std::vector<UInt32> keep;
+    keep.reserve(totalItems);
+    for (UInt32 i = 0; i < totalItems; ++i) {
+        PROPVARIANT prop;
+        PropVariantInit(&prop);
+        std::wstring p;
+        if (SUCCEEDED(inArc->GetProperty(i, kpidPath, &prop)) &&
+            prop.vt == VT_BSTR && prop.bstrVal)
+        {
+            p = prop.bstrVal;
+        }
+        PropVariantClear(&prop);
+        // 7z.dll may use either `/` or `\` depending on format; normalize before comparing
+        for (auto& c : p) { if (c == L'/') c = L'\\'; c = (wchar_t)towlower(c); }
+        while (!p.empty() && p.back() == L'\\') p.pop_back();
+        if (!newPathsLower.count(p)) keep.push_back(i);
+    }
+
+    // 7. Write to a temp file and rename on success
+    std::wstring tempPath = std::wstring(archivePath) + L".~tmp";
+    COutFileStream* outFile = new COutFileStream();
+    if (!outFile->Create(tempPath.c_str())) {
+        hr = HRESULT_FROM_WIN32(GetLastError());
+        outFile->Release();
+        outArc->Release();
+        inArc->Release();
+        return hr;
+    }
+
+    CAddCallback* cb = new CAddCallback(std::move(keep), std::move(newEntries), password, sink);
+    UInt32 totalCount = cb->Count();
+    hr = outArc->UpdateItems(outFile, totalCount, cb);
+
+    cb->Release();
+    outFile->Release();
+    outArc->Release();
     inArc->Release();
 
     if (SUCCEEDED(hr)) {

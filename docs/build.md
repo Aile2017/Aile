@@ -1,18 +1,18 @@
-# ビルド手順
+# Build Instructions
 
-## 前提
+## Prerequisites
 
 - Windows 10/11
-- Visual Studio 2022 以降（MSVC コンパイラ）
+- Visual Studio 2022 or later (MSVC compiler)
 - CMake 3.20+
-- Ninja または NMake (CMake から呼び出される)
+- Ninja or NMake (invoked by CMake)
 
-## 動作環境
+## Runtime Environment
 
-- 7-Zip がインストールされていること（`C:\Program Files\7-Zip\7z.dll` を既定で参照）
-- RAR 関連機能を使う場合は WinRAR / unrar.dll
+- 7-Zip must be installed (`C:\Program Files\7-Zip\7z.dll` referenced by default)
+- For RAR features: WinRAR / unrar.dll
 
-## ビルドコマンド
+## Build Commands
 
 ### Debug
 
@@ -23,7 +23,7 @@ cmake -B build
 cmake --build build
 ```
 
-成果物: `build\AileEx.exe`
+Output: `build\AileEx.exe`
 
 ### Release
 
@@ -33,24 +33,24 @@ cmake -B build_release -DCMAKE_BUILD_TYPE=Release
 cmake --build build_release
 ```
 
-成果物: `build_release\AileEx.exe`
+Output: `build_release\AileEx.exe`
 
-## CMake 主要設定
+## CMake Key Settings
 
 ```cmake
 add_executable(AileEx WIN32 ...)
 target_compile_definitions(AileEx PRIVATE WIN32_LEAN_AND_MEAN UNICODE _UNICODE NOMINMAX _CRT_SECURE_NO_WARNINGS)
 target_link_libraries(AileEx PRIVATE comctl32 shlwapi shell32 ole32 oleaut32 advapi32 comdlg32)
 target_compile_options(AileEx PRIVATE /W3 /utf-8)
-target_link_options(AileEx PRIVATE "/MANIFEST:NO")  # マニフェストは AileEx.rc から埋込
+target_link_options(AileEx PRIVATE "/MANIFEST:NO")  # Manifest embedded from AileEx.rc
 ```
 
-## 実行時の DLL
+## Runtime DLLs
 
-| DLL / EXE | 既定パス | 用途 |
+| DLL / EXE | Default Path | Purpose |
 |---|---|---|
-| `7z.dll` | レジストリ `HKLM\SOFTWARE\7-Zip` の `Path64`/`Path` から自動検出 → なければ `%ProgramFiles%\7-Zip\7z.dll` → AileEx.exe と同じディレクトリ | アーカイブ全般 |
-| `unrar.dll` (`UnRAR64.dll`) | AileEx.exe と同じディレクトリ | RAR 展開（任意） |
-| `WinRAR.exe` / `Rar.exe` | レジストリ `HKLM\SOFTWARE\WinRAR` の `exe32` のディレクトリから `WinRAR.exe`（GUI 優先）→ `Rar.exe`、なければ `%ProgramFiles%\WinRAR\` から同じ順で検索 | RAR 圧縮 |
+| `7z.dll` | Auto-detect from registry `HKLM\SOFTWARE\7-Zip` `Path64`/`Path` → else `%ProgramFiles%\7-Zip\7z.dll` → same dir as AileEx.exe | Archive general |
+| `unrar.dll` (`UnRAR64.dll`) | Same directory as AileEx.exe | RAR extraction (optional) |
+| `WinRAR.exe` / `Rar.exe` | From registry `HKLM\SOFTWARE\WinRAR` `exe32` dir: `WinRAR.exe` (GUI preferred) → `Rar.exe`, else search `%ProgramFiles%\WinRAR\` in same order | RAR compression |
 
-すべて設定ダイアログでパスを上書き可能。`WinRAR.exe` を選んだ場合は GUI モード（独自進捗ウィンドウ）、`Rar.exe` を選んだ場合は stdout 解析でプログレスバーに反映。
+All paths can be overridden in settings dialog. Selecting `WinRAR.exe` uses GUI mode (separate progress window), `Rar.exe` uses stdout parsing to reflect in progress bar.

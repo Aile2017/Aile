@@ -12,10 +12,24 @@ typedef HRESULT (WINAPI *Func_GetMethodProperty)(UINT32 index, PROPID propID, PR
 typedef HRESULT (WINAPI *Func_GetNumberOfFormats)(UINT32* numFormats);
 typedef HRESULT (WINAPI *Func_GetHandlerProperty2)(UINT32 index, PROPID propID, PROPVARIANT* value);
 
-// 圧縮ダイアログ用：書き込み可能なフォーマット情報
+// Format info for the compress dialog: writable formats
 struct WritableFormat {
-    std::wstring label;  // 表示名 e.g. "7-Zip (.7z)"
-    std::wstring ext;    // 拡張子 e.g. "7z"
+    std::wstring label;  // Display name e.g. "7-Zip (.7z)"
+    std::wstring ext;    // Extension e.g. "7z"
+};
+
+// Whole-archive properties (for the properties dialog).
+// Populated by SevenZip::GetArchiveProperties() via IInArchive::GetArchiveProperty.
+struct ArchiveProperties {
+    std::wstring formatName;   // kpidType value ("7z","Rar","Zip" etc.); empty if not available
+    UINT32       fileCount    = 0;     // aggregate: number of regular files
+    UINT32       folderCount  = 0;     // aggregate: number of folders
+    UINT64       totalSize    = 0;     // aggregate: total uncompressed size
+    UINT64       packedTotal  = 0;     // aggregate: total compressed size
+    bool         hasEncrypted = false; // aggregate: true if at least one encrypted entry exists
+    std::vector<std::wstring> methods; // aggregate: set of compression methods used (no duplicates, in order of appearance)
+    // Key=display-string pairs from IInArchive::GetArchivePropertyInfo / GetArchiveProperty.
+    std::vector<std::pair<std::wstring, std::wstring>> rawProps;
 };
 
 // Advanced compression options passed to SevenZip::Compress().
@@ -26,9 +40,14 @@ struct CompressAdvanced {
     std::wstring solidBlock;  // "off","1m","4g" — solid block size (7z only)
     std::wstring threads;     // "1","4","8" — CPU threads (mt)
     std::wstring extra;       // free-form "key=value" pairs (e.g. "mf=bt4 mpass=2")
-    // 分割ボリュームサイズ。"" = 単一ファイル / "10m","100m","1g" 等で指定。
-    // 7z/zip 等のシーカブル出力でのみ有効 (gz/bz2/xz/tar の stream wrapping パスでは無視)。
+    // Split volume size. "" = single file; specify as "10m","100m","1g" etc.
+    // Valid only for seekable output (7z/zip etc.); ignored for stream-wrapped gz/bz2/xz/tar.
     std::wstring volumeSize;
+    // Absolute path to the self-extraction (SFX) module. Empty = no SFX.
+    // When non-empty, valid only for format == "7z". The module file is prepended to
+    // the compressed .7z data to produce a .exe at outPath.
+    // When used with split volumes, the SFX module is prepended only to volume 1 (.001).
+    std::wstring sfxModulePath;
 };
 
 class SevenZip {
@@ -37,14 +56,15 @@ public:
     void Unload();
     bool IsLoaded() const { return m_hDll != nullptr; }
     const std::wstring& GetLoadedName() const { return m_loadedName; }
-    // ロード済み 7z.dll のフルパス。未ロード時は空。
+    // Full path of the loaded 7z.dll. Empty when not loaded.
     std::wstring GetLoadedPath() const;
 
     // Detect archive format by extension and open, filling items.
-    // 分割アーカイブ (.001/.002/...) の場合は内部アーカイブを一時ファイルへ展開して
-    // 再オープンし、中身のエントリを items に返す。effectivePath が non-null なら
-    // 後続の Extract/Test 等で使うべきパス（通常は path、自動アンラップ時は一時パス）を書き戻す。
-    // 一時ファイルの削除は呼出側の責任。
+    // For split archives (.001/.002/...), extracts the inner archive to a temp file,
+    // reopens it, and returns its entries in items. If effectivePath is non-null,
+    // writes back the path to use for subsequent Extract/Test calls
+    // (normally path; the temp path when auto-unwrapped).
+    // Caller is responsible for deleting the temp file.
     HRESULT OpenArchive(const wchar_t* path, std::vector<ArchiveItem>& items,
                         const wchar_t* password = nullptr,
                         std::wstring* effectivePath = nullptr);
@@ -56,15 +76,52 @@ public:
                     const wchar_t* password,
                     IExtractProgressSink* sink);
 
-    // 全エントリの整合性検証（IInArchive::Extract に testMode=1 を渡す）。
-    // 1 件でも検証失敗があれば E_FAIL を返す。
+    // Retrieves the whole-archive comment. Returns empty for formats/archives without one.
+    // Note: the 7z format has no whole-archive comment by spec (per-item kpidComment exists).
+    HRESULT GetArchiveComment(const wchar_t* path,
+                              const wchar_t* password,
+                              std::wstring& out);
+
+    // Overwrites the whole-archive comment in a ZIP file (direct EOCD record patch).
+    // Only .zip format is supported. Passing an empty string removes the comment.
+    // E_INVALIDARG if the comment exceeds 65535 bytes (ZIP spec limit).
+    // Works correctly on ZIP64 archives (>4 GB) since the EOCD is in the same position.
+    HRESULT SetZipArchiveComment(const wchar_t* archivePath,
+                                 const std::wstring& comment);
+
+    // Retrieves whole-archive properties (for the properties dialog).
+    // Fills format-specific metadata from IInArchive::GetArchiveProperty / GetArchivePropertyInfo
+    // and aggregates from entry enumeration (file count, total size, etc.).
+    // Does not auto-unwrap split archives; opens path directly as a single file.
+    HRESULT GetArchiveProperties(const wchar_t* path,
+                                 const wchar_t* password,
+                                 ArchiveProperties& out);
+
+    // Integrity verification for all entries (passes testMode=1 to IInArchive::Extract).
+    // Returns E_FAIL if any entry fails verification.
     HRESULT Test(const wchar_t* archivePath,
                  const wchar_t* password,
                  IExtractProgressSink* sink);
 
-    // 指定インデックスのエントリを削除（残すエントリだけ新アーカイブにコピー）。
-    // 失敗時は元ファイルを変更しない。書き込みをサポートしないフォーマット
-    // (rar/iso/cab 等) では IOutArchive 取得段階で失敗し E_NOTIMPL 等を返す。
+    // Add or update files in an existing archive.
+    // - srcPaths: files/folders on disk to add (folders are expanded recursively)
+    // - archiveFolder: destination folder inside the archive; "" / nullptr = archive root.
+    //   Accepts both '/' and '\' separators (normalized to '\' internally).
+    // - If a new entry's archive path conflicts with an existing entry, the new entry overwrites it.
+    // - level / method are compression settings for new entries only; existing entries are copied without re-compression.
+    // Returns E_NOINTERFACE for formats that do not support writing.
+    HRESULT AddToArchive(const wchar_t* archivePath,
+                         const std::vector<std::wstring>& srcPaths,
+                         const wchar_t* archiveFolder,
+                         const wchar_t* password,
+                         int level, const wchar_t* method,
+                         IExtractProgressSink* sink,
+                         const CompressAdvanced* adv = nullptr);
+
+    // Delete entries at the specified indices (copies surviving entries to a new archive).
+    // The original file is not modified on failure.
+    // Formats that do not support writing (rar/iso/cab etc.) fail at IOutArchive acquisition
+    // and return E_NOTIMPL or similar.
     HRESULT DeleteItems(const wchar_t* archivePath,
                         const std::vector<UINT32>& deleteIndices,
                         const wchar_t* password,
@@ -88,10 +145,10 @@ public:
     // Empty if DLL is not loaded or enumeration is unavailable.
     const std::vector<std::wstring>& GetEncoderNames() const { return m_encoderNames; }
 
-    // ext は拡張子のみ（ドットなし, 例: L"7z"）。大文字小文字不問。
+    // ext: extension only (no dot, e.g. L"7z"). Case-insensitive.
     bool IsArchiveExt(const wchar_t* ext) const;
 
-    // 7z.dll が書き込みをサポートするフォーマット一覧（RAR は含まない）。
+    // Writable formats supported by the loaded 7z.dll (RAR not included).
     const std::vector<WritableFormat>& GetWritableFormats() const { return m_writableFormats; }
 
 private:
@@ -103,8 +160,8 @@ private:
     Func_GetNumberOfFormats      m_pfnGetNumFormats   = nullptr;
     Func_GetHandlerProperty2     m_pfnGetHandlerProp2 = nullptr;
     std::vector<std::wstring>    m_encoderNames;   // lowercased; populated by EnumerateCodecs()
-    std::map<std::wstring, GUID> m_extToClsid;     // 拡張子(小文字) → CLSID
-    std::vector<WritableFormat>  m_writableFormats; // 書き込み可能フォーマット（UI 用）
+    std::map<std::wstring, GUID> m_extToClsid;     // extension (lowercase) → CLSID
+    std::vector<WritableFormat>  m_writableFormats; // writable formats (for UI)
 
     void EnumerateCodecs();
     void EnumerateFormats();

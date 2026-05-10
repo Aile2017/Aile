@@ -29,9 +29,9 @@ private:
     UINT         m_doneMsg;
     UINT64       m_total       = 0;
     volatile bool m_cancelled  = false;
-    // PostMessage を 20Hz 程度に絞るためのスロットル。連続して
-    // WM_APP_PROGRESS を投げ続けるとメッセージキューが溢れ、
-    // キャンセルボタンのクリックが遅延・破棄される (キャンセル不能に見える) ため。
+    // ~50 ms throttle on PostMessage to prevent WM_APP_PROGRESS flooding
+    // at thousands per second, which would overflow the message queue and
+    // delay/drop WM_LBUTTONDOWN on the cancel button (making it appear unresponsive).
     DWORD        m_lastPostTick = 0;
 };
 

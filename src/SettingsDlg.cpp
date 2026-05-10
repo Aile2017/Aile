@@ -58,13 +58,13 @@ void SettingsDlg::OnInit(HWND hwnd) {
     Settings& s = App::Instance().GetSettings();
 
     // RAR extractor combo
-    // unrar.dll がロードされている場合のみ選択肢として追加する
+    // Add unrar.dll as an option only when it is loaded
     HWND hExt = GetDlgItem(hwnd, IDC_RAR_EXTRACTOR);
     bool unrarLoaded = App::Instance().GetUnrar().IsLoaded();
     SendMessageW(hExt, CB_ADDSTRING, 0, (LPARAM)L"7z.dll (7-Zip)");
     if (unrarLoaded)
         SendMessageW(hExt, CB_ADDSTRING, 0, (LPARAM)L"unrar.dll (UnRAR)");
-    // unrar.dll が未ロードなら設定値が "unrar" でも 7z にフォールバック
+    // If unrar.dll is not loaded, fall back to 7z even if the saved setting is "unrar"
     int extSel = (unrarLoaded && s.GetRarExtractor() == L"unrar") ? 1 : 0;
     SendMessageW(hExt, CB_SETCURSEL, extSel, 0);
 
@@ -120,9 +120,9 @@ bool SettingsDlg::OnOK(HWND hwnd) {
     }
     s.SetMkDir(mkDir);
 
-    // パスが空のまま（自動検出）だった場合、表示値が自動検出結果と一致するなら
-    // 空文字列を保存して次回も自動検出が機能するようにする。
-    // ユーザーが手動で値を変更した場合はそのまま保存する。
+    // If the path field was left at the auto-detected value (i.e. the saved setting was empty),
+    // store an empty string so auto-detection continues to work next time.
+    // If the user manually changed the value, save it as-is.
     auto saveAutoPath = [&hwnd, &s](int ctlId, const std::wstring& currentSaved,
                                     const std::wstring& autoDetected,
                                     void (Settings::*setter)(const wchar_t*)) {

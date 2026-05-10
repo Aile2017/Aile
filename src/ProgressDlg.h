@@ -17,11 +17,11 @@ public:
     // Optional: attach sink so Cancel button sets it cancelled.
     void SetSink(ProgressPostSink* sink) { m_sink = sink; }
 
-    // 進捗メッセージループを駆動。WM_APP_DONE で抜けて HRESULT を返す。
-    // onCancel: SetSink 済みの sink がキャンセル状態のとき呼ばれる
-    //           （rar.exe の TerminateProcess 等、外部プロセス用）。
-    //           7z.dll の WorkerThread はコールバック内で E_ABORT を返すため不要。
-    // 終了時に SetDone と Dismiss を内部で呼ぶ。
+    // Drives the progress message loop. Exits on WM_APP_DONE and returns HRESULT.
+    // onCancel: called when the sink (already set via SetSink) enters cancelled state
+    //           (for external processes such as rar.exe TerminateProcess).
+    //           Not needed for 7z.dll WorkerThread, which returns E_ABORT from the callback.
+    // Internally calls SetDone and Dismiss on exit.
     HRESULT RunMessageLoop(std::function<void()> onCancel = {});
 
     HWND Hwnd() const { return m_hwnd; }

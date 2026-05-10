@@ -1,101 +1,86 @@
 #include "AdvancedCompressDlg.h"
+#include "DialogUtils.h"
+#include "I18n.h"
 #include "resource.h"
 #include <commctrl.h>
 
-struct ComboEntry {
-    const wchar_t* label;
-    const wchar_t* val;
-};
-
-// ---- 辞書サイズ ----
+// ---- Dictionary size ----
 static const ComboEntry kDictSizes[] = {
-    {L"\u81ea\u52d5",      L""},
-    {L"64 KB",     L"64k"},
-    {L"128 KB",    L"128k"},
-    {L"256 KB",    L"256k"},
-    {L"512 KB",    L"512k"},
-    {L"1 MB",      L"1m"},
-    {L"2 MB",      L"2m"},
-    {L"4 MB",      L"4m"},
-    {L"8 MB",      L"8m"},
-    {L"16 MB",     L"16m"},
-    {L"32 MB",     L"32m"},
-    {L"64 MB",     L"64m"},
-    {L"128 MB",    L"128m"},
-    {L"256 MB",    L"256m"},
-    {L"512 MB",    L"512m"},
-    {L"1 GB",      L"1g"},
+    {IDS_ADV_AUTO, nullptr, L""},
+    {0, L"64 KB",  L"64k"},
+    {0, L"128 KB", L"128k"},
+    {0, L"256 KB", L"256k"},
+    {0, L"512 KB", L"512k"},
+    {0, L"1 MB",   L"1m"},
+    {0, L"2 MB",   L"2m"},
+    {0, L"4 MB",   L"4m"},
+    {0, L"8 MB",   L"8m"},
+    {0, L"16 MB",  L"16m"},
+    {0, L"32 MB",  L"32m"},
+    {0, L"64 MB",  L"64m"},
+    {0, L"128 MB", L"128m"},
+    {0, L"256 MB", L"256m"},
+    {0, L"512 MB", L"512m"},
+    {0, L"1 GB",   L"1g"},
 };
 
-// ---- \u30ef\u30fc\u30c9\u30b5\u30a4\u30ba (fast bytes) ----
+// ---- Word size (fast bytes) ----
 static const ComboEntry kWordSizes[] = {
-    {L"\u81ea\u52d5",  L""},
-    {L"8",     L"8"},
-    {L"12",    L"12"},
-    {L"16",    L"16"},
-    {L"24",    L"24"},
-    {L"32",    L"32"},
-    {L"48",    L"48"},
-    {L"64",    L"64"},
-    {L"96",    L"96"},
-    {L"128",   L"128"},
-    {L"273",   L"273"},
+    {IDS_ADV_AUTO, nullptr, L""},
+    {0, L"8",     L"8"},
+    {0, L"12",    L"12"},
+    {0, L"16",    L"16"},
+    {0, L"24",    L"24"},
+    {0, L"32",    L"32"},
+    {0, L"48",    L"48"},
+    {0, L"64",    L"64"},
+    {0, L"96",    L"96"},
+    {0, L"128",   L"128"},
+    {0, L"273",   L"273"},
 };
 
-// ---- \u30bd\u30ea\u30c3\u30c9\u30d6\u30ed\u30c3\u30af\u30b5\u30a4\u30ba (7z only) ----
+// ---- Solid block size (7z only) ----
 static const ComboEntry kSolidBlocks[] = {
-    {L"\u65e2\u5b9a",       L""},
-    {L"\u975e\u30bd\u30ea\u30c3\u30c9", L"off"},
-    {L"1 MB",      L"1m"},
-    {L"4 MB",      L"4m"},
-    {L"16 MB",     L"16m"},
-    {L"64 MB",     L"64m"},
-    {L"256 MB",    L"256m"},
-    {L"1 GB",      L"1g"},
-    {L"4 GB",      L"4g"},
-    {L"16 GB",     L"16g"},
-    {L"64 GB",     L"64g"},
+    {IDS_ADV_DEFAULT, nullptr, L""},
+    {IDS_ADV_NOT_SOLID, nullptr, L"off"},
+    {0, L"1 MB",  L"1m"},
+    {0, L"4 MB",  L"4m"},
+    {0, L"16 MB", L"16m"},
+    {0, L"64 MB", L"64m"},
+    {0, L"256 MB", L"256m"},
+    {0, L"1 GB",  L"1g"},
+    {0, L"4 GB",  L"4g"},
+    {0, L"16 GB", L"16g"},
+    {0, L"64 GB", L"64g"},
 };
 
-// ---- \u30b9\u30ec\u30c3\u30c9\u6570 ----
+// ---- Thread count ----
 static const ComboEntry kThreads[] = {
-    {L"\u81ea\u52d5", L""},
-    {L"1",   L"1"},
-    {L"2",   L"2"},
-    {L"3",   L"3"},
-    {L"4",   L"4"},
-    {L"6",   L"6"},
-    {L"8",   L"8"},
-    {L"12",  L"12"},
-    {L"16",  L"16"},
-    {L"24",  L"24"},
-    {L"32",  L"32"},
+    {IDS_ADV_AUTO, nullptr, L""},
+    {0, L"1",   L"1"},
+    {0, L"2",   L"2"},
+    {0, L"3",   L"3"},
+    {0, L"4",   L"4"},
+    {0, L"6",   L"6"},
+    {0, L"8",   L"8"},
+    {0, L"12",  L"12"},
+    {0, L"16",  L"16"},
+    {0, L"24",  L"24"},
+    {0, L"32",  L"32"},
 };
 
-// ---- \u5206\u5272\u30dc\u30ea\u30e5\u30fc\u30e0 ----
+// ---- Split volumes ----
 static const ComboEntry kVolumes[] = {
-    {L"\u306a\u3057",        L""},
-    {L"1 MB",       L"1m"},
-    {L"10 MB",      L"10m"},
-    {L"50 MB",      L"50m"},
-    {L"100 MB",     L"100m"},
-    {L"200 MB",     L"200m"},
-    {L"700 MB (CD)", L"700m"},
-    {L"1 GB",        L"1g"},
-    {L"4480 MB (DVD)", L"4480m"},
+    {IDS_ADV_NONE, nullptr, L""},
+    {0, L"1 MB",       L"1m"},
+    {0, L"10 MB",      L"10m"},
+    {0, L"50 MB",      L"50m"},
+    {0, L"100 MB",     L"100m"},
+    {0, L"200 MB",     L"200m"},
+    {0, L"700 MB (CD)", L"700m"},
+    {0, L"1 GB",        L"1g"},
+    {0, L"4480 MB (DVD)", L"4480m"},
 };
-
-// ---- Helper: ComboBox \u306e\u521d\u671f\u5316\u3068\u9078\u629e ----
-static void FillCombo(HWND hCombo, const ComboEntry* arr, int count,
-                      const std::wstring& curVal) {
-    int sel = 0;
-    for (int i = 0; i < count; i++) {
-        int idx = (int)SendMessageW(hCombo, CB_ADDSTRING, 0, (LPARAM)arr[i].label);
-        SendMessageW(hCombo, CB_SETITEMDATA, idx, (LPARAM)arr[i].val);
-        if (curVal == arr[i].val) sel = i;
-    }
-    SendMessageW(hCombo, CB_SETCURSEL, sel, 0);
-}
 
 // ---- AdvancedCompressDlg ----
 
@@ -118,21 +103,13 @@ bool AdvancedCompressDlg::Show(HWND hwndParent, const wchar_t* format, Params& p
 }
 
 INT_PTR CALLBACK AdvancedCompressDlg::DlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
-    AdvancedCompressDlg* self = nullptr;
-    if (msg == WM_INITDIALOG) {
-        self = reinterpret_cast<AdvancedCompressDlg*>(lp);
-        SetWindowLongPtrW(hwnd, DWLP_USER, (LONG_PTR)self);
-        self->m_hwnd = hwnd;
-    } else {
-        self = reinterpret_cast<AdvancedCompressDlg*>(GetWindowLongPtrW(hwnd, DWLP_USER));
-    }
-    if (!self) return FALSE;
-    return self->HandleMsg(hwnd, msg, wp, lp);
+    return StandardDlgProc<AdvancedCompressDlg>(hwnd, msg, wp, lp);
 }
 
 INT_PTR AdvancedCompressDlg::HandleMsg(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_INITDIALOG:
+        m_hwnd = hwnd;
         OnInit(hwnd);
         return TRUE;
 
@@ -157,7 +134,7 @@ void AdvancedCompressDlg::OnInit(HWND hwnd) {
     FillCombo(GetDlgItem(hwnd, IDC_ADV_WORD),
               kWordSizes, (int)_countof(kWordSizes), m_params.wordSize);
 
-    // \u30bd\u30ea\u30c3\u30c9\u30d6\u30ed\u30c3\u30af (7z \u306e\u307f\u6709\u52b9)
+    // Solid block (valid for 7z only)
     {
         HWND hSolid = GetDlgItem(hwnd, IDC_ADV_SOLID);
         FillCombo(hSolid, kSolidBlocks, (int)_countof(kSolidBlocks), m_params.solidBlock);
@@ -165,25 +142,11 @@ void AdvancedCompressDlg::OnInit(HWND hwnd) {
         EnableWindow(hSolid, is7z ? TRUE : FALSE);
     }
 
-    // \u30b9\u30ec\u30c3\u30c9\u6570: CPU \u8ad6\u7406\u30b3\u30a2\u6570\u3092\u4e0a\u9650\u3068\u3057\u3066\u8ffd\u52a0
-    {
-        HWND hThreads = GetDlgItem(hwnd, IDC_ADV_THREADS);
-        SYSTEM_INFO si = {};
-        GetSystemInfo(&si);
-        int maxCpu = (int)si.dwNumberOfProcessors;
+    // Thread count: add up to the number of logical CPU cores as upper limit
+    FillThreadCombo(GetDlgItem(hwnd, IDC_ADV_THREADS),
+                    kThreads, (int)_countof(kThreads), m_params.threads);
 
-        int sel = 0;
-        for (int i = 0; i < (int)_countof(kThreads); i++) {
-            int n = (i == 0) ? 0 : _wtoi(kThreads[i].val);
-            if (i > 0 && n > maxCpu) break;
-            int idx = (int)SendMessageW(hThreads, CB_ADDSTRING, 0, (LPARAM)kThreads[i].label);
-            SendMessageW(hThreads, CB_SETITEMDATA, idx, (LPARAM)kThreads[i].val);
-            if (m_params.threads == kThreads[i].val) sel = (int)idx;
-        }
-        SendMessageW(hThreads, CB_SETCURSEL, sel, 0);
-    }
-
-    // 分割ボリューム (7z/zip 等で有効。gz/bz2/xz/tar では Compress 内で無視される)
+    // Split volume (valid for 7z/zip etc. Ignored inside Compress for gz/bz2/xz/tar)
     {
         HWND hVol = GetDlgItem(hwnd, IDC_ADV_VOLUME);
         FillCombo(hVol, kVolumes, (int)_countof(kVolumes), m_params.volumeSize);

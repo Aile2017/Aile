@@ -6,9 +6,10 @@ class InfoDlg {
 public:
     void Show(HWND parent, const ArchiveItem& item);
 
-private:
     static INT_PTR CALLBACK DlgProc(HWND, UINT, WPARAM, LPARAM);
     INT_PTR HandleMsg(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+
+private:
 
     void OnInit(HWND hwnd);
 

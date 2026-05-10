@@ -1,156 +1,156 @@
 # AileEx
 
-Windows 向けアーカイブマネージャ GUI アプリケーション。  
-7z.dll をバックエンドとし、Win32 API / C++17 で実装されています。
+A Windows archive manager GUI application.  
+Backed by 7z.dll and implemented with Win32 API / C++17.
 
-## 特徴
+## Features
 
-- **多形式対応**: 7z / ZIP / RAR / TAR / GZip / BZip2 / XZ / CAB / ISO など
-- **閲覧・展開・圧縮・整合性テスト・エントリ削除** をひとつのウィンドウで操作
-- **分割ボリューム圧縮 / 分割アーカイブ読み込み**: 7z / ZIP の `archive.7z.001`/`.002`/... を作成・展開可能。RAR は `rar.exe -v<size>` を起動
-- **メニューバー** (ファイル / 操作 / 表示 / ヘルプ) と **ツールバー**、ListView 上の右クリックコンテキストメニュー
-- **最近使ったアーカイブ** 履歴 (最大 10 件、ファイルメニューに表示)
-- **ドラッグ＆ドロップ** でアーカイブを開く、またはファイルを圧縮
-- **パスワード保護**・圧縮レベル選択に対応（暗号化アーカイブはオープン時にパスワード自動プロンプト）
-- **ListView 列ヘッダクリック**による昇順/降順ソート
-- **スプリッタ**でフォルダツリーとファイル一覧の幅を自由に調整、**ツリー/ツールバーの表示トグル**
-- ウィンドウサイズ・スプリッタ位置・MRU・詳細圧縮オプションを **INI に自動保存**
-- 7-Zip Zstandard DLL が提供する追加コーデック（Brotli / LZ4 / LZ5 / Lizard / FastLZMA2 / Zstandard）を自動認識
-- **DPI 対応** (Per-Monitor V2)
+- **Multi-format support**: 7z / ZIP / RAR / TAR / GZip / BZip2 / XZ / CAB / ISO and more
+- **Browse, extract, compress, integrity test, and delete entries** — all in one window
+- **Split-volume compression / split-archive reading**: create and extract `archive.7z.001`/`.002`/... for 7z/ZIP. RAR launches `rar.exe -v<size>`
+- **Menu bar** (File / Operations / View / Help), **toolbar**, and a right-click context menu on the ListView
+- **Recent archives** history (up to 10 entries, shown in the File menu)
+- **Drag & drop** to open an archive or compress files
+- **Password protection** and compression level selection (encrypted archives auto-prompt for password on open)
+- **Column header click** for ascending/descending sort in the ListView
+- **Splitter** to freely resize the folder tree and file list panes; **toggle visibility** of tree/toolbar
+- Window size, splitter position, MRU, and advanced compression options **auto-saved to INI**
+- Automatically detects additional codecs provided by 7-Zip Zstandard DLL (Brotli / LZ4 / LZ5 / Lizard / FastLZMA2 / Zstandard)
+- **DPI-aware** (Per-Monitor V2)
 
-## 動作環境
+## Requirements
 
-| 項目 | 内容 |
+| Item | Details |
 |---|---|
 | OS | Windows 10 / 11 (x64) |
-| 言語 | C++17 / Win32 API |
-| ビルドシステム | CMake 3.20+ / MSVC 2022+ |
+| Language | C++17 / Win32 API |
+| Build system | CMake 3.20+ / MSVC 2022+ |
 
-### 実行時に必要な DLL / EXE
+### Runtime DLLs / EXEs
 
-| ファイル | 既定パス | 用途 |
+| File | Default path | Purpose |
 |---|---|---|
-| `7z.dll` | レジストリ `HKLM\SOFTWARE\7-Zip` から自動検出 → `%ProgramFiles%\7-Zip\7z.dll` → AileEx.exe と同じディレクトリ | アーカイブ全般 |
-| `unrar.dll` (`UnRAR64.dll`) | AileEx.exe と同じディレクトリ | RAR 展開（任意） |
-| `WinRAR.exe` / `Rar.exe` | レジストリ `HKLM\SOFTWARE\WinRAR` から自動検出 → `%ProgramFiles%\WinRAR\` | RAR 圧縮（任意。WinRAR.exe を優先、なければ Rar.exe）|
+| `7z.dll` | Auto-detected from registry `HKLM\SOFTWARE\7-Zip` → `%ProgramFiles%\7-Zip\7z.dll` → same directory as AileEx.exe | General archive operations |
+| `unrar.dll` (`UnRAR64.dll`) | Same directory as AileEx.exe | RAR extraction (optional) |
+| `WinRAR.exe` / `Rar.exe` | Auto-detected from registry `HKLM\SOFTWARE\WinRAR` → `%ProgramFiles%\WinRAR\` | RAR compression (optional; WinRAR.exe preferred, falls back to Rar.exe) |
 
-## ビルド
+## Build
 
 ```powershell
 # Debug
 cmake -B build
 cmake --build build
-# 成果物: build\AileEx.exe
+# Output: build\AileEx.exe
 
 # Release
 cmake -B build_release -DCMAKE_BUILD_TYPE=Release
 cmake --build build_release
-# 成果物: build_release\AileEx.exe
+# Output: build_release\AileEx.exe
 ```
 
-## 起動モード
+## Launch Modes
 
-| コマンドライン引数 | 動作 |
+| Command-line argument | Behavior |
 |---|---|
-| 引数なし | メインウィンドウを表示（空状態） |
-| アーカイブファイル | ブラウズモード — アーカイブを開いて内容を表示 |
-| 通常ファイル | 圧縮モード — 圧縮ダイアログを表示 |
-| 混在 | 圧縮モード優先 |
+| No arguments | Show main window (empty state) |
+| Archive file | Browse mode — open the archive and display its contents |
+| Regular file | Compress mode — show the compression dialog |
+| Mixed | Compress mode takes priority |
 
-アーカイブと判定する拡張子: `7z`, `zip`, `rar`, `tar`, `gz`, `bz2`, `xz`, `cab`, `iso`, `jar`, `wim`, `lzma`, `lzh`, `arj`
+Extensions recognized as archives: `7z`, `zip`, `rar`, `tar`, `gz`, `bz2`, `xz`, `cab`, `iso`, `jar`, `wim`, `lzma`, `lzh`, `arj`
 
-## 主な機能
+## Main Features
 
-### ブラウズ（閲覧）
+### Browse
 
-- 左ペイン: TreeView でフォルダ階層を表示
-- 右ペイン: ListView でファイル一覧を表示（名前 / サイズ / 圧縮後 / 種類 / 更新日時）
-- **列ヘッダクリック** で昇順 / 降順ソート
-- **スプリッタ** で左右ペインの幅を調整可能（位置は INI に自動保存）
-- ListView で複数選択して選択ファイルのみ展開可能
+- Left pane: TreeView showing folder hierarchy
+- Right pane: ListView showing file list (name / size / compressed size / type / modified date)
+- **Column header click** for ascending / descending sort
+- **Splitter** to resize left and right panes (position auto-saved to INI)
+- Multi-select in ListView to extract only selected files
 
-### 圧縮
+### Compress
 
-- 対応形式: 7z / ZIP / TAR / GZip / BZip2 / XZ / **RAR**
-- RAR は WinRAR (`rar.exe`) をサブプロセスとして起動
-- その他は `7z.dll` の `IOutArchive` を使用
-- 圧縮レベル: 0（無圧縮）〜 9（超圧縮）
-- メソッド選択（7z: LZMA2 / LZMA / PPMd / BZip2 / Deflate / Zstandard / Brotli / LZ4 / LZ5 / Lizard / FastLZMA2、ZIP: Deflate / BZip2 / LZMA / Zstandard / Brotli / LZ4 / Store）
-- ロード済みの 7z.dll が対応しないコーデックは自動的にメニューから除外
-- **詳細オプション**ダイアログで辞書サイズ・ワードサイズ・ソリッドブロック・スレッド数などを設定可能
-- RAR 形式は専用の詳細オプション（圧縮方式 / リカバリレコード / ヘッダ暗号化）を持つ
+- Supported formats: 7z / ZIP / TAR / GZip / BZip2 / XZ / **RAR**
+- RAR launches WinRAR (`rar.exe`) as a subprocess
+- All others use `7z.dll`'s `IOutArchive`
+- Compression level: 0 (store) to 9 (ultra)
+- Method selection (7z: LZMA2 / LZMA / PPMd / BZip2 / Deflate / Zstandard / Brotli / LZ4 / LZ5 / Lizard / FastLZMA2; ZIP: Deflate / BZip2 / LZMA / Zstandard / Brotli / LZ4 / Store)
+- Codecs unsupported by the loaded 7z.dll are automatically removed from the menu
+- **Advanced options** dialog for dictionary size, word size, solid block, thread count, etc.
+- RAR format has its own advanced options (compression method / recovery record / header encryption)
 
-### 展開
+### Extract
 
-- `7z.dll` が認識する全形式に対応
-- RAR バックエンドは設定で `7z.dll` / `unrar.dll` を切り替え可能
-  - **`unrar.dll` バックエンドでは常に全ファイルを展開**（ファイル選択展開は `7z.dll` バックエンドのみ有効）
-- 一方が失敗した場合はもう一方に自動フォールバック
-- **サブフォルダ作成ポリシー** (設定の MkDir): 作成しない / 単一ファイル時のみ / 複数エントリ時（既定）/ 常に作成
+- Supports all formats recognized by `7z.dll`
+- RAR backend can be switched between `7z.dll` and `unrar.dll` in settings
+  - **`unrar.dll` backend always extracts all files** (selective file extraction only works with the `7z.dll` backend)
+- Automatically falls back to the other backend if one fails
+- **Subfolder creation policy** (MkDir setting): never / single file only / multiple entries (default) / always
 
-### テスト
+### Test
 
-- 選択中のアーカイブの整合性を検証（展開ファイルは作成しない）
-- 7z バックエンドは `IInArchive::Extract(testMode=1)`、unrar バックエンドは `RAR_TEST` を使用
+- Verifies integrity of the current archive (no files are created on disk)
+- 7z backend uses `IInArchive::Extract(testMode=1)`; unrar backend uses `RAR_TEST`
 
-### 削除
+### Delete
 
-- ListView で選択したエントリ（フォルダ選択時は配下も含む）をアーカイブから削除
-- 7z 経路は `IOutArchive::UpdateItems` で残すエントリだけを再構築（再エンコードなしで圧縮ブロブを丸コピー）
-- RAR 経路は `rar.exe d -y -r` を起動
-- 書き込み未対応フォーマット (ISO / CAB / JAR 等) は不可
+- Deletes selected entries (including children of selected folders) from the archive
+- 7z path rebuilds archive with only the remaining entries using `IOutArchive::UpdateItems` (compressed blobs copied without re-encoding)
+- RAR path launches `rar.exe d -y -r`
+- Not supported for write-incompatible formats (ISO / CAB / JAR, etc.)
 
-### キーボードショートカット
+### Keyboard Shortcuts
 
-| キー | 動作 |
+| Key | Action |
 |---|---|
-| F5 / Ctrl+E | 展開 |
-| Ctrl+A | ファイル追加（圧縮）|
-| Ctrl+O | アーカイブを開く |
-| Ctrl+T | 整合性テスト |
-| Del | 選択エントリを削除 |
-| Ctrl+F4 | アーカイブを閉じる（アプリは終了しない）|
-| Enter | (ListView 内) フォルダ移動 / 関連付けで開く |
-| Esc | アプリ終了 |
+| F5 / Ctrl+E | Extract |
+| Ctrl+A | Add files (compress) |
+| Ctrl+O | Open archive |
+| Ctrl+T | Integrity test |
+| Del | Delete selected entries |
+| Ctrl+F4 | Close archive (app stays open) |
+| Enter | (In ListView) Navigate into folder / open with associated app |
+| Esc | Exit application |
 
-## 設定
+## Settings
 
-EXE と同じフォルダの `AileEx.ini` に保存されます。設定ダイアログ（ツールバーの設定ボタン）から変更できます。
+Saved to `AileEx.ini` in the same folder as the EXE. Editable via the settings dialog (settings button in toolbar).
 
 ```ini
 [General]
-RarExtractor=7z          ; "7z" または "unrar"
-RarExePath=              ; WinRAR.exe / Rar.exe の絶対パス（空ならレジストリ自動検出）
-DefaultOutputDir=        ; 既定の展開先
-DefaultFormat=7z         ; 既定の圧縮形式
+RarExtractor=7z          ; "7z" or "unrar"
+RarExePath=              ; Absolute path to WinRAR.exe / Rar.exe (empty = auto-detect from registry)
+DefaultOutputDir=        ; Default extraction destination
+DefaultFormat=7z         ; Default compression format
 CompressionLevel=5       ; 0-9
-RarLevel=3               ; RAR 圧縮レベル 0-5
-MkDir=2                  ; 展開時のサブフォルダ作成 0=しない/1=単一/2=複数(既定)/3=常に
-7zDllPath=               ; 7z.dll の絶対パス（空ならレジストリ自動検出）
-UnrarDllPath=            ; unrar.dll の絶対パス（空なら AileEx.exe と同じディレクトリ）
+RarLevel=3               ; RAR compression level 0-5
+MkDir=2                  ; Subfolder creation on extract: 0=never/1=single/2=multiple(default)/3=always
+7zDllPath=               ; Absolute path to 7z.dll (empty = auto-detect from registry)
+UnrarDllPath=            ; Absolute path to unrar.dll (empty = same directory as AileEx.exe)
 
 [Window]
-X=                       ; ウィンドウ位置・サイズ（自動保存）
+X=                       ; Window position and size (auto-saved)
 Y=
 W=900
 H=600
 Maximized=0
-Splitter=220             ; スプリッタ位置
-TreeVisible=1            ; ツリー表示トグル
-ToolbarVisible=1         ; ツールバー表示トグル
+Splitter=220             ; Splitter position
+TreeVisible=1            ; Tree pane visibility toggle
+ToolbarVisible=1         ; Toolbar visibility toggle
 
-[Mru]                    ; 最近使ったアーカイブ（最大 10 件、Path0 が最新）
+[Mru]                    ; Recent archives (up to 10; Path0 is most recent)
 Path0=
 ...
 
-[AdvancedCompress]       ; 詳細圧縮ダイアログの last-used 値
+[AdvancedCompress]       ; Last-used values from the advanced compression dialog
 DictSize=
 WordSize=
 SolidBlock=
 Threads=
 Extra=
 
-[RarAdvanced]            ; RAR 詳細圧縮ダイアログの last-used 値
+[RarAdvanced]            ; Last-used values from the RAR advanced compression dialog
 DictSize=
 Volume=
 Extra=
@@ -159,32 +159,32 @@ Threads=0
 Recovery=0
 ```
 
-## アーキテクチャ概要
+## Architecture Overview
 
 ```
 main()
-  └─ App（シングルトン）─ Settings / SevenZip / UnrarDll
-        ├─ MainWindow（ブラウズ）─ ProgressDlg ─ WorkerThread
-        └─ CompressDlg（圧縮設定）─ RarProcess（rar.exe）
+  └─ App (singleton) ─ Settings / SevenZip / UnrarDll
+        ├─ MainWindow (browse) ─ ProgressDlg ─ WorkerThread
+        └─ CompressDlg (compress settings) ─ RarProcess (rar.exe)
 ```
 
-- 圧縮・展開処理はワーカースレッドで実行
-- `PostMessage(WM_APP_PROGRESS / WM_APP_DONE)` で UI スレッドへ進捗通知
-- キャンセル時は `ProgressPostSink::SetCancelled(true)` または `RarProcess::Cancel()` で中断
+- Compression and extraction run on a worker thread
+- Progress is reported to the UI thread via `PostMessage(WM_APP_PROGRESS / WM_APP_DONE)`
+- Cancellation is handled by `ProgressPostSink::SetCancelled(true)` or `RarProcess::Cancel()`
 
-## 制限事項
+## Limitations
 
-- マルチボリュームアーカイブの分割作成・読み込みは未対応
-- ソリッドアーカイブからの個別ファイル展開は不可（7z.dll の制約）
-- シェル統合（コンテキストメニュー）は未実装
-- 複数アーカイブの同時ブラウズ（タブ等）は未実装
+- Multi-volume archive creation and reading are not yet supported
+- Extracting individual files from solid archives is not possible (7z.dll limitation)
+- Shell integration (context menu) is not implemented
+- Simultaneous browsing of multiple archives (tabs, etc.) is not implemented
 
-## ドキュメント
+## Documentation
 
-- [`docs/specification.md`](docs/specification.md) — 機能仕様
-- [`docs/architecture.md`](docs/architecture.md) — クラス構成・スレッドモデル
-- [`docs/build.md`](docs/build.md) — ビルド手順詳細
-- [`docs/known-issues.md`](docs/known-issues.md) — 既知の落とし穴と回避策
+- [`docs/specification.md`](docs/specification.md) — Functional specification
+- [`docs/architecture.md`](docs/architecture.md) — Class structure and thread model
+- [`docs/build.md`](docs/build.md) — Detailed build instructions
+- [`docs/known-issues.md`](docs/known-issues.md) — Known pitfalls and workarounds
 
 ## Credits
 

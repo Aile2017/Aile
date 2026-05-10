@@ -1,153 +1,159 @@
-# AileEx 仕様書
+# AileEx Specification
 
-7z.dll をバックエンドとする Windows 向けアーカイブマネージャ GUI アプリケーション。
+Archive manager GUI application for Windows using 7z.dll as the backend.
 
-## 概要
+## Overview
 
-| 項目 | 内容 |
+| Item | Details |
 |---|---|
-| プラットフォーム | Windows 10 / 11 (x64) |
-| 言語 | C++17 / Win32 API |
-| ビルドシステム | CMake 3.20+ |
-| 圧縮バックエンド | 7z.dll (LoadLibrary), unrar.dll (LoadLibrary), rar.exe / WinRAR.exe (CreateProcess) |
-| 設定保存 | EXE と同じ場所の INI ファイル (`AileEx.ini`) |
+| Platform | Windows 10 / 11 (x64) |
+| Language | C++17 / Win32 API |
+| Build System | CMake 3.20+ |
+| Compression Backend | 7z.dll (LoadLibrary), unrar.dll (LoadLibrary), rar.exe / WinRAR.exe (CreateProcess) |
+| Settings Storage | INI file in same directory as EXE (`AileEx.ini`) |
 
-## 機能
+## Features
 
-### 起動モード
+### Launch Mode
 
-`AileEx.exe` のコマンドライン引数で動作モードを判定する。
+The operating mode is determined by command-line arguments to `AileEx.exe`.
 
-| 引数 | 動作 |
+| Argument | Behavior |
 |---|---|
-| 引数なし | メインウィンドウを表示（空状態） |
-| アーカイブファイル | ブラウズモード — メインウィンドウでアーカイブを開く |
-| 通常ファイル | 圧縮モード — 圧縮ダイアログを開く |
-| 混在 | 圧縮モード優先 |
+| No arguments | Show main window (empty state) |
+| Archive file | Browse mode — open archive in main window |
+| Regular file | Compress mode — show compression dialog |
+| Mixed | Compress mode takes priority |
 
-判定対象拡張子（アーカイブと判定）: `7z`, `zip`, `rar`, `tar`, `gz`, `bz2`, `xz`, `cab`, `iso`, `jar`, `wim`, `lzma`, `lzh`, `arj` ほか 7z.dll が動的列挙したフォーマット。
+Recognized extensions (treated as archives): `7z`, `zip`, `rar`, `tar`, `gz`, `bz2`, `xz`, `cab`, `iso`, `jar`, `wim`, `lzma`, `lzh`, `arj` and other formats dynamically enumerated by 7z.dll.
 
-### メインウィンドウ
+### Main Window
 
-- **メニューバー** (`IDR_MAIN_MENU`): ファイル / 操作 / 表示 / ヘルプ
-- 左ペイン: TreeView (フォルダ階層)
-- 右ペイン: ListView (ファイル一覧、列: 名前 / サイズ / 圧縮後 / 種類 / 更新日時)
-  - **列ヘッダクリック**で昇順/降順ソート（再クリックで反転）
-- ペイン間に**スプリッタ**あり（マウスでドラッグして幅を調整、INI に位置保存）
-- 上部: ツールバー (展開 / 関連付けで開く / 追加 / 情報 / テスト / 設定) — **表示メニューでトグル可能**
-- 下部: ステータスバー（エントリ数・ロード済 DLL 名・進捗パーセント / カレントファイル）
-- ドラッグ&ドロップ対応:
-  - アーカイブをドロップ → 開く
-  - 通常ファイルをドロップ → 圧縮ダイアログ表示
-- ListView 上で **右クリックコンテキストメニュー**: 選択ファイル展開 / 関連付けで開く / テスト / 情報 / 削除
+- **Menu bar** (`IDR_MAIN_MENU`): File / Edit / View / Help
+- Left pane: TreeView (folder hierarchy)
+- Right pane: ListView (file list, columns: Name / Size / Compressed / Type / Modified)
+  - **Column header click** to sort ascending/descending (click again to reverse)
+- **Splitter** between panes (drag with mouse to adjust width, position saved to INI)
+- Top: Toolbar (Extract / Open / Add / Info / Test / Settings) — **toggleable from View menu**
+- Bottom: Status bar (entry count, loaded DLL name, progress percent / current file)
+- Drag & drop support:
+  - Drop archive → open
+  - Drop regular file → show compression dialog
+- **Right-click context menu** on ListView: Extract selected / Open with association / Test / Info / Delete
 
-#### メニュー構成
+#### Menu Structure
 
-| トップ | 項目 | コマンド ID | 備考 |
+| Menu | Item | Command ID | Notes |
 |---|---|---|---|
-| ファイル(F) | 開く(O)... `Ctrl+O` | `IDM_FILE_OPEN` | `IFileOpenDialog` |
-| | 最近使ったアーカイブ(R) | `IDM_FILE_MRU_BASE..LAST` | 最大 10 件、`&1..&9` ニーモニック |
-| | 閉じる(C) `Ctrl+F4` | `ID_CLOSE` | アーカイブを閉じる（アプリ終了ではない）|
-| | 終了(X) `Esc` | `IDM_FILE_EXIT` | アプリ終了 |
-| 操作(A) | 展開(E)... `F5` | `ID_EXTRACT` | |
-| | 追加(A)... `Ctrl+A` | `ID_ADD` | 圧縮 |
-| | テスト(T) `Ctrl+T` | `ID_TEST` | 整合性検証 |
-| | 関連付けで開く(O) `Enter` | `ID_OPEN_ASSOC` | 一時展開後 `ShellExecute` |
-| | 削除(D) `Del` | `ID_DELETE` | 7z は `IOutArchive`、RAR は `rar d` |
-| | 情報(I) | `ID_INFO` | 選択エントリ詳細 |
-| | 設定(S)... | `ID_SETTINGS_DLG` | |
-| 表示(V) | ツールバー(B) | `IDM_VIEW_TOOLBAR` | チェックトグル |
-| | ツリー表示(T) | `IDM_VIEW_TREE` | チェックトグル |
-| ヘルプ(H) | バージョン情報(A)... | `IDM_HELP_ABOUT` | About ダイアログ |
+| File | Open... `Ctrl+O` | `IDM_FILE_OPEN` | `IFileOpenDialog` |
+| | Recent Archives | `IDM_FILE_MRU_BASE..LAST` | Max 10 items, `&1..&9` mnemonics |
+| | Close `Ctrl+F4` | `ID_CLOSE` | Close archive (not exit app) |
+| | Exit `Esc` | `IDM_FILE_EXIT` | Exit application |
+| Edit | Extract... `F5` | `ID_EXTRACT` | |
+| | Add... `Ctrl+A` | `ID_ADD` | Compress |
+| | Test `Ctrl+T` | `ID_TEST` | Integrity verification |
+| | Open with Association `Enter` | `ID_OPEN_ASSOC` | Extract temp then `ShellExecute` |
+| | Delete `Del` | `ID_DELETE` | 7z uses `IOutArchive`, RAR uses `rar d` |
+| | Info | `ID_INFO` | Selected entry details |
+| | Settings... | `ID_SETTINGS_DLG` | |
+| View | Toolbar | `IDM_VIEW_TOOLBAR` | Toggle checkbox |
+| | Tree View | `IDM_VIEW_TREE` | Toggle checkbox |
+| Help | About... | `IDM_HELP_ABOUT` | About dialog |
 
-`WM_INITMENUPOPUP` でアーカイブの状態 (開いているか / read-only / 選択数) に応じて `EnableMenuItem` / `CheckMenuItem` で動的更新。
+Dynamically updated via `WM_INITMENUPOPUP` based on archive state (open / read-only / selection count) using `EnableMenuItem` / `CheckMenuItem`.
 
-### 圧縮機能
+### Compression Feature
 
-- 対応形式: 7z / ZIP / TAR / GZip / BZip2 / XZ / RAR
-- RAR は WinRAR.exe (GUI) または Rar.exe (console) のサブプロセスを起動
-  - 7z.dll は RAR 書き込みをサポートしない（`FormatToOutGuid("rar")` は対応せず CLSID_Format_7z にフォールバック）。**RAR 圧縮経路は `CompressHelper::RunRarCompressSync()` に集約済み**
-- それ以外は 7z.dll の `IOutArchive` を使用
-- 圧縮レベル: 0 (無圧縮) / 1 / 3 / 5 / 7 / 9 (超圧縮)。RAR は 0..5
-- メソッド選択:
+- Supported formats: 7z / ZIP / TAR / GZip / BZip2 / XZ / RAR
+- RAR spawns WinRAR.exe (GUI) or Rar.exe (console) as subprocess
+  - 7z.dll does not support RAR writing (`FormatToOutGuid("rar")` is unsupported, falls back to CLSID_Format_7z). **RAR compression path is consolidated in `CompressHelper::RunRarCompressSync()`**
+- Other formats use 7z.dll's `IOutArchive`
+- Compression level: 0 (no compression) / 1 / 3 / 5 / 7 / 9 (maximum). RAR: 0..5
+- Method selection:
   - 7z: LZMA2 / LZMA / PPMd / BZip2 / Deflate / Zstandard / Brotli / LZ4 / LZ5 / Lizard / FastLZMA2
   - ZIP: Deflate / BZip2 / LZMA / Zstandard / Brotli / LZ4 / Store
-  - ロード済み 7z.dll が持つエンコーダーのみ表示（`GetNumberOfMethods` / `GetMethodProperty` で動的列挙）
-- **詳細オプション**ダイアログ (`IDD_COMPRESS_ADV`): 辞書サイズ / ワードサイズ / ソリッドブロックサイズ / スレッド数 / **分割ボリューム** / 追加パラメーター
-- **RAR 詳細オプション**ダイアログ (`IDD_RAR_COMPRESS_ADV`): 辞書サイズ / ソリッド / スレッド数 / リカバリレコード / 分割ボリューム / 追加パラメーター
-- **分割ボリューム** (`volumeSize`): 7z / ZIP のみ対応。`archive.7z.001` / `archive.7z.002` ... と分割。RAR は `rar.exe -v<size>` を使用
-- パスワード保護対応（7z はヘッダ暗号化オプションあり）
-- 形式変更時に出力パスの拡張子を自動補正
-- 詳細オプションは last-used 値が INI に永続化される
+  - Only encoders available in loaded 7z.dll are displayed (dynamically enumerated via `GetNumberOfMethods` / `GetMethodProperty`)
+- **Advanced Options** dialog (`IDD_COMPRESS_ADV`): Dictionary size / Word size / Solid block size / Threads / **Split volume** / Extra parameters (→ comprehensive list in [`docs/compress-extra-params.md`](compress-extra-params.md))
+- **RAR Advanced Options** dialog (`IDD_RAR_COMPRESS_ADV`): Dictionary size / Solid / Threads / Recovery record / Split volume / Extra parameters (→ comprehensive list in [`docs/rar-extra-params.md`](rar-extra-params.md))
+- **Split volume** (`volumeSize`): Supported for 7z / ZIP only. Splits as `archive.7z.001` / `archive.7z.002` ... RAR uses `rar.exe -v<size>`
+- Password protection supported (7z has header encryption option)
+- Output file extension auto-corrected when format changes
+- Advanced options last-used values persisted in INI
+- **Self-extracting (SFX)**: 7z / RAR only. Select from dropdown in compression dialog: "GUI version (.exe)", "Console version (.exe)", or "None"
+  - 7z: Prepend `7z.sfx` (GUI) or `7zCon.sfx` (console) from same directory as 7z.dll to compressed .7z data, generate `.exe`
+  - RAR: Pass `rar.exe -sfx<modulePath>`, use `Default.SFX` (GUI) or `WinCon.SFX` (console) from rar.exe / WinRAR.exe directory
+  - Can combine with split volume (SFX module prepended to volume 1, generates `archive.exe.001 / .002 / ...`)
+  - If SFX module not found, show error and abort (do not output `.7z` / `.rar`)
 
-### 展開機能
+### Extract Feature
 
-- 対応形式: 7z.dll が認識する全形式（7z/ZIP/RAR/TAR/GZ/BZ2/XZ/CAB/ISO/...）
-- **分割アーカイブ** (`archive.7z.001` / `.002` / ...): 第1巻 (`.001`) を開けば 7z.dll の Split ハンドラ + `IArchiveOpenVolumeCallback` で連結読込
-  - 自動アンラップ: 結果が「1 ファイル + アーカイブ拡張子」の場合、内部アーカイブを一時ファイルへ展開して再オープンし**中身のエントリを直接表示**する
-  - 自動アンラップされた split アーカイブは **read-only** (削除メニューは無効化)
-- **RAR マルチボリューム** (`archive.partN.rar` / `.r00` `.r01`): 第1巻を開けば unrar.dll / 7z.dll が DLL 内部で連結読込
-- RAR バックエンドの自動切替: 設定で `7z.dll` または `unrar.dll` を選択可能
-- 一方のバックエンドが失敗した場合、もう一方に自動フォールバック
-- ファイル選択展開（ListView で複数選択 → 選択分のみ展開）
-  - **7z.dll バックエンド使用時のみ有効**。選択なしの場合は全ファイルを展開
-  - **unrar.dll バックエンド使用時は選択状態によらず常に全ファイルを展開**
-- 全展開（選択なしで F5/Ctrl+E）
-- **サブフォルダ作成ポリシー** (`MkDir` 設定):
-  - `0` = 作成しない
-  - `1` = 単一ファイルのアーカイブの時のみ
-  - `2` = 複数エントリの時に作成（既定）
-  - `3` = 常に作成
-  - サブフォルダ名はアーカイブ名から複合拡張子（`.tar.gz` など）を除去した値
+- Supported formats: All formats recognized by 7z.dll (7z/ZIP/RAR/TAR/GZ/BZ2/XZ/CAB/ISO/...)
+- **Split archives** (`archive.7z.001` / `.002` / ...): Opening volume 1 (`.001`) uses 7z.dll's Split handler + `IArchiveOpenVolumeCallback` to concatenate volumes
+  - Auto-unwrap: If result is "single file + archive extension", extract inner archive to temp file, reopen, and **display entries from inside directly**
+  - Auto-unwrapped split archives are **read-only** (delete menu disabled)
+- **RAR multi-volume** (`archive.partN.rar` / `.r00` `.r01`): Opening volume 1 concatenates volumes internally via unrar.dll / 7z.dll
+- RAR backend auto-switch: Select `7z.dll` or `unrar.dll` in settings
+- If one backend fails, automatically fallback to the other
+- Selective file extraction (multi-select in ListView → extract only selected)
+  - **Valid only with 7z.dll backend**. If nothing selected, extract all files
+  - **With unrar.dll backend, always extracts all files regardless of selection**
+- Full extraction (F5/Ctrl+E with no selection)
+- **Subfolder creation policy** (`MkDir` setting):
+  - `0` = Do not create
+  - `1` = Only for single-file archives
+  - `2` = Create when multiple entries (default)
+  - `3` = Always create
+  - Subfolder name is archive name with compound extensions (`.tar.gz` etc.) removed
 
-### テスト機能 (`ID_TEST`)
+### Test Feature (`ID_TEST`)
 
-選択中のアーカイブの整合性をその場で検証する。展開ファイルは作成しない。
-- 7z バックエンド: `IInArchive::Extract` に `testMode=1` を渡す
-- unrar バックエンド: `RARProcessFileW` に `RAR_TEST` を渡す
-- 検証中は `ProgressDlg` を表示。キャンセル可能。完了時にメッセージボックスで結果通知
+Verify integrity of the selected archive in place. Does not extract files.
+- 7z backend: Pass `testMode=1` to `IInArchive::Extract`
+- unrar backend: Pass `RAR_TEST` to `RARProcessFileW`
+- Show `ProgressDlg` during verification. Cancellable. Display result in message box on completion
 
-### 削除機能 (`ID_DELETE`)
+### Delete Feature (`ID_DELETE`)
 
-ListView で選択したエントリ（フォルダ選択時は配下も含む）をアーカイブから削除する。
-- 7z バックエンド: `IOutArchive::UpdateItems` で残すエントリだけを `.~tmp` ファイルへ書き、`MoveFileExW(MOVEFILE_REPLACE_EXISTING)` で原ファイルを置換。**残すエントリは `newData=0/newProperties=0/indexInArchive=oldIdx` で渡すため、再エンコードなしで圧縮ブロブを丸コピー**（パスワード不要）
-- RAR バックエンド: `rar.exe d -y -r <archive> <path1> ...`
-- 書き込み未対応フォーマット (ISO / CAB / JAR 等) は `IOutArchive` の `QueryInterface` 段階で失敗 (`E_NOINTERFACE`)
-- ヘッダ暗号化された 7z は `IInArchive::Open` 段階で失敗（パスワード保持していないため）
+Delete entries selected in ListView (including contents when folder selected) from archive.
+- 7z backend: `IOutArchive::UpdateItems` writes only entries to keep to `.~tmp` file, then replace original with `MoveFileExW(MOVEFILE_REPLACE_EXISTING)`. **Entries to keep are passed with `newData=0/newProperties=0/indexInArchive=oldIdx`, so compressed blobs are copied as-is without re-encoding** (no password needed)
+- RAR backend: `rar.exe d -y -r <archive> <path1> ...`
+- Write-unsupported formats (ISO / CAB / JAR etc.) fail at `IOutArchive` `QueryInterface` stage (`E_NOINTERFACE`)
+- Header-encrypted 7z fails at `IInArchive::Open` stage (password not retained)
 
-### 最近使ったアーカイブ (MRU)
+### Recent Archives (MRU)
 
-- 最大 **10 件**
-- 開くたびに先頭へ追加（既存パスは `_wcsicmp` で大文字小文字無視デデュープ）
-- 開けないファイルを履歴から開いた場合、警告 → 履歴から削除
-- INI の `[Mru]` セクションに `Path0..Path9` で保存
-- **ファイル → 最近使ったアーカイブ** サブメニューに動的構築。`&1..&9` ニーモニック付き
+- Maximum **10 items**
+- Added to front each time opened (existing paths deduplicated case-insensitively with `_wcsicmp`)
+- If file in history cannot be opened, warn and remove from history
+- Saved in INI `[Mru]` section as `Path0..Path9`
+- **File → Recent Archives** submenu built dynamically. Includes `&1..&9` mnemonics
 
-### 設定
+### Settings
 
-INI ファイル（`AileEx.exe` と同じ場所、ファイル名は `AileEx.ini`）に保存。
+Saved in INI file (same location as `AileEx.exe`, filename is `AileEx.ini`).
 
 ```ini
 [General]
-RarExtractor=7z              ; "7z" または "unrar"
-RarExePath=                  ; WinRAR.exe / Rar.exe の絶対パス（空ならレジストリ自動検出）
-DefaultOutputDir=            ; 既定の展開先
-DefaultFormat=7z             ; 既定の圧縮形式
+RarExtractor=7z              ; "7z" or "unrar"
+RarExePath=                  ; Absolute path to WinRAR.exe / Rar.exe (auto-detect from registry if empty)
+DefaultOutputDir=            ; Default extraction destination
+DefaultFormat=7z             ; Default compression format
 CompressionLevel=5           ; 0-9
-RarLevel=3                   ; RAR 圧縮レベル 0-5
-MkDir=2                      ; 展開時のサブフォルダ作成 0/1/2/3
-7zDllPath=                   ; 7z.dll の絶対パス（空ならレジストリ自動検出）
-UnrarDllPath=                ; unrar.dll の絶対パス（空なら AileEx.exe と同じディレクトリ）
+RarLevel=3                   ; RAR compression level 0-5
+MkDir=2                      ; Subfolder creation on extract 0/1/2/3
+7zDllPath=                   ; Absolute path to 7z.dll (auto-detect from registry if empty)
+UnrarDllPath=                ; Absolute path to unrar.dll (same directory as AileEx.exe if empty)
+DefaultSfxMode=              ; SFX mode "" / "gui" / "console" — last selected in compress dialog
 
-[AdvancedCompress]            ; 詳細オプションダイアログの last-used 値
+[AdvancedCompress]            ; Last-used values from advanced options dialog
 DictSize=
 WordSize=
 SolidBlock=
 Threads=
 Extra=
-Volume=                       ; 分割ボリュームサイズ "" / "100m" / "1g" 等
+Volume=                       ; Split volume size "" / "100m" / "1g" etc.
 
-[RarAdvanced]                 ; RAR 詳細オプションの last-used 値
+[RarAdvanced]                 ; Last-used values from RAR advanced options
 DictSize=
 Volume=
 Extra=
@@ -156,83 +162,90 @@ Threads=0
 Recovery=0
 
 [Window]
-X=                           ; ウィンドウ位置・サイズ（自動保存）
+X=                           ; Window position and size (auto-saved)
 Y=
 W=900
 H=600
 Maximized=0
-Splitter=220                 ; スプリッタ位置
-TreeVisible=1                ; ツリー表示トグル
-ToolbarVisible=1             ; ツールバー表示トグル
+Splitter=220                 ; Splitter position
+TreeVisible=1                ; Tree view toggle
+ToolbarVisible=1             ; Toolbar toggle
 
-[Mru]                        ; 最近使ったアーカイブ（最大 10 件、Path0 が最新）
+[Mru]                        ; Recent archives (max 10 items, Path0 is newest)
 Path0=
 Path1=
 ...
 Path9=
 ```
 
-設定ダイアログから変更可能。OK で保存後、DLL は自動再読み込み（`App::ReloadDlls`）。
-フォルダ選択は Explorer スタイルのダイアログ（`IFileOpenDialog + FOS_PICKFOLDERS`）を使用。
+Changeable from settings dialog. After saving with OK, DLL auto-reloaded (`App::ReloadDlls`).
+Folder selection uses Explorer-style dialog (`IFileOpenDialog + FOS_PICKFOLDERS`).
 
-### Info ダイアログ (`IDD_INFO`)
+### Info Dialog (`IDD_INFO`)
 
-ListView でファイルを選択して **メニュー → 情報** または右クリック → 情報 を開くと、選択したエントリの詳細情報を表示する（パス、サイズ、圧縮後サイズ、メソッド、更新日時など）。
+Select file in ListView and open **Menu → Info** or right-click → Info to display detailed information about selected entry (path, size, compressed size, method, modified time, etc.).
 
-### About ダイアログ (`IDD_ABOUT`)
+### About Dialog (`IDD_ABOUT`)
 
-**ヘルプ → バージョン情報** で表示。タイトル / バージョン / リンク / クレジットを表示。
+Displayed via **Help → About**. Shows title / version / links / credits.
 
-### パスワード入力ダイアログ (`IDD_PASSWORD`)
+### Password Input Dialog (`IDD_PASSWORD`)
 
-7z 系のヘッダ暗号化アーカイブを開く際、`IInArchive::Open` が失敗した場合に自動表示。入力されたパスワードで再オープンを試行する。
+When opening header-encrypted 7z archive, automatically shown if `IInArchive::Open` fails. Attempts to reopen with entered password.
 
-### キーボードアクセラレータ
+### Keyboard Accelerators
 
-| キー | コマンド ID | 動作 |
+| Key | Command ID | Action |
 |---|---|---|
-| F5 / Ctrl+E | `ID_EXTRACT` | 展開 |
-| Ctrl+A | `ID_ADD` | ファイル追加（圧縮）|
-| Ctrl+O | `IDM_FILE_OPEN` | アーカイブを開く |
-| Ctrl+T | `ID_TEST` | 整合性テスト |
-| Del | `ID_DELETE` | エントリ削除 |
-| Ctrl+F4 | `ID_CLOSE` | アーカイブを閉じる（アプリは終了しない）|
-| Enter | (ListView 内) | フォルダ移動 / `ID_OPEN_ASSOC` |
-| Esc | `IDM_FILE_EXIT` | アプリ終了 |
+| F5 / Ctrl+E | `ID_EXTRACT` | Extract |
+| Ctrl+A | `ID_ADD` | Add file (compress) |
+| Ctrl+O | `IDM_FILE_OPEN` | Open archive |
+| Ctrl+T | `ID_TEST` | Integrity test |
+| Del | `ID_DELETE` | Delete entry |
+| Ctrl+F4 | `ID_CLOSE` | Close archive (not exit app) |
+| Enter | (in ListView) | Navigate folder / `ID_OPEN_ASSOC` |
+| Esc | `IDM_FILE_EXIT` | Exit app |
 
-`Alt+F` などのメニューニーモニックも有効。Tab キーは `IsDialogMessageW` でナビゲーション。
+Menu mnemonics like `Alt+F` also work. Tab key navigated via `IsDialogMessageW`.
 
-### DPI 対応
+### DPI Support
 
-- マニフェストで `dpiAware = PerMonitorV2` を宣言
-- `wWinMain` で `SetProcessDpiAwarenessContext` を動的呼び出し（Windows 8.1 以下では無視）
+- Manifest declares `dpiAware = PerMonitorV2`
+- `wWinMain` dynamically calls `SetProcessDpiAwarenessContext` (ignored on Windows 8.1 and below)
 
-## 進捗ダイアログ
+## Progress Dialog
 
-- モーダル（親ウィンドウ無効化）
-- プログレスバー + 現在ファイル名 + 経過時間 + キャンセルボタン
-- ワーカースレッドからは `PostMessage(WM_APP_PROGRESS, percent, (LPARAM)wcsdup(filename))` で通知
-- 完了時は `PostMessage(WM_APP_DONE, hr, 0)`
-- キャンセル: `ProgressPostSink::SetCancelled(true)` または RAR の場合 `RarProcess::Cancel()`
-- 進捗 PostMessage は約 20Hz にスロットリング（キャンセルメッセージが埋もれないため）
+- Modal (parent window disabled)
+- Progress bar + current filename + elapsed time + cancel button
+- Worker thread notifies via `PostMessage(WM_APP_PROGRESS, percent, (LPARAM)wcsdup(filename))`
+- On completion: `PostMessage(WM_APP_DONE, hr, 0)`
+- Cancel: `ProgressPostSink::SetCancelled(true)` or for RAR: `RarProcess::Cancel()`
+- Progress PostMessage throttled to ~20Hz (prevents cancel messages from being buried)
 
-## 主要 Win32 メッセージ
+## Primary Win32 Messages
 
-| メッセージ | 用途 |
+| Message | Purpose |
 |---|---|
-| `WM_APP_PROGRESS` (`WM_APP+1`) | wParam=パーセント, lParam=ファイル名 (`free()` 必要) |
+| `WM_APP_PROGRESS` (`WM_APP+1`) | wParam=percent, lParam=filename (requires `free()`) |
 | `WM_APP_DONE` (`WM_APP+2`) | wParam=HRESULT |
-| `WM_DROPFILES` | ファイルドロップ受信 |
-| `WM_INITMENUPOPUP` | メニュー表示直前の状態更新 (`HIWORD(lParam) == 0` でシステムメニュー除外) |
+| `WM_DROPFILES` | Receive file drop |
+| `WM_INITMENUPOPUP` | Update state before menu display (exclude system menu with `HIWORD(lParam) == 0`) |
 
-## 制限事項・未実装
+## Limitations and Unimplemented Features
 
-- マルチボリュームアーカイブ:
-  - 7z / ZIP の分割作成・読み込みに対応 (2026-05-08 実装、`CMultiVolOutStream` + `IArchiveOpenVolumeCallback`)
-  - GZ / BZ2 / XZ / TAR は分割未対応 (フォーマット仕様上シーカブル出力でないため)
-- ソリッドアーカイブからの個別展開は不可（7z.dll の制約）
-- シェル統合（コンテキストメニュー）は未実装
-- 複数アーカイブ同時ブラウズ（タブ等）は未実装
-- RAR 削除のキャンセル経路は未実装（`RarProcess::Delete` は `Cancel()` 未対応）
-- ヘッダ暗号化 7z アーカイブの削除はパスワード保持していないため失敗する
-- 手動テストマトリクスは部分実施（RAR 系のみ確認済み）
+Priority and implementation approach for unimplemented features: see [`docs/roadmap.md`](roadmap.md).
+
+- Multi-volume archives:
+  - 7z / ZIP split creation and reading supported (implemented 2026-05-08, uses `CMultiVolOutStream` + `IArchiveOpenVolumeCallback`)
+  - GZ / BZ2 / XZ / TAR do not support splitting (format specifications require non-seekable output)
+- Individual extraction from solid archives not possible (7z.dll limitation)
+- Adding/updating existing archives not implemented (`ID_ADD` is new creation only)
+- Shell integration (context menu) not implemented
+- Archive comment display/editing not implemented
+- Archive search/filter not implemented
+- Multi-archive simultaneous browse (tabs etc.) not implemented
+- Multi-language support (i18n) not implemented (Japanese hardcoded)
+- CLI direct execution (extraction/test without GUI) not implemented
+- RAR delete cancel path not implemented (`RarProcess::Delete` does not support `Cancel()`)
+- Header-encrypted 7z archive deletion fails (password not retained)
+- Manual test matrix partially implemented (RAR formats confirmed only)

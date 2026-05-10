@@ -25,13 +25,18 @@ public:
     int  GetCompressionLevel() const                { return m_compressionLevel; }
     void SetCompressionLevel(int v)                 { m_compressionLevel = v; }
 
-    // 展開時のサブフォルダ作成ポリシー
-    // 0=作成しない / 1=単一ファイル時のみ / 2=複数エントリ時（既定）/ 3=常に作成
+    // Subfolder creation policy on extract:
+    // 0=never / 1=single file only / 2=multiple entries (default) / 3=always
     int  GetMkDir() const                           { return m_mkDir; }
     void SetMkDir(int v)                            { m_mkDir = v; }
 
     int  GetRarLevel() const                        { return m_rarLevel; }
     void SetRarLevel(int v)                         { m_rarLevel = v; }
+
+    // Self-extraction (SFX) mode — remembers the last selection in the compress dialog.
+    // Values: "" (none) / "gui" / "console".
+    const std::wstring& GetDefaultSfxMode() const   { return m_defaultSfxMode; }
+    void SetDefaultSfxMode(const wchar_t* v)        { m_defaultSfxMode = v; }
 
     // Advanced compress options (last-used values)
     const std::wstring& GetAdvDictSize() const      { return m_advDictSize; }
@@ -84,7 +89,7 @@ public:
     const std::wstring& GetUnrarDllPath() const     { return m_unrarDllPath; }
     void SetUnrarDllPath(const wchar_t* v)          { m_unrarDllPath = v; }
 
-    // MRU (最近使ったアーカイブ) — 先頭が最新。重複は大文字小文字無視で除去。
+    // MRU (recently used archives) — head is most recent; duplicates removed case-insensitively.
     const std::vector<std::wstring>& GetMruPaths() const { return m_mruPaths; }
     void AddMru(const std::wstring& path);
     void RemoveMru(const std::wstring& path);
@@ -92,34 +97,35 @@ public:
 private:
     mutable wchar_t m_iniPath[MAX_PATH] = {};
 
-    std::wstring m_rarExtractor    = L"7z";
+    // All members are initialized by Load() before use
+    std::wstring m_rarExtractor;
     std::wstring m_rarExePath;
     std::wstring m_defaultOutputDir;
-    std::wstring m_defaultFormat   = L"7z";
-    int          m_compressionLevel = 5;
-    int          m_rarLevel         = 3;
-    int          m_mkDir            = 2;   // デフォルト: 複数エントリ時にサブフォルダ作成
+    std::wstring m_defaultFormat;
+    int          m_compressionLevel;
+    int          m_rarLevel;
+    int          m_mkDir;
+    std::wstring m_defaultSfxMode;
     std::wstring m_advDictSize;
     std::wstring m_advWordSize;
     std::wstring m_advSolidBlock;
     std::wstring m_advThreads;
     std::wstring m_advExtra;
     std::wstring m_advVolume;
-    // RAR advanced
     std::wstring m_rarAdvDictSize;
-    bool         m_rarAdvSolid    = true;
-    int          m_rarAdvThreads  = 0;
-    int          m_rarAdvRecovery = 0;
+    bool         m_rarAdvSolid;
+    int          m_rarAdvThreads;
+    int          m_rarAdvRecovery;
     std::wstring m_rarAdvVolume;
     std::wstring m_rarAdvExtra;
-    int          m_windowX          = -1;   // -1 = use CW_USEDEFAULT
-    int          m_windowY          = -1;
-    int          m_windowW          = 900;
-    int          m_windowH          = 600;
-    bool         m_windowMaximized  = false;
-    int          m_splitterPos      = 220;
-    bool         m_treeVisible      = true;
-    bool         m_toolbarVisible   = true;
+    int          m_windowX;
+    int          m_windowY;
+    int          m_windowW;
+    int          m_windowH;
+    bool         m_windowMaximized;
+    int          m_splitterPos;
+    bool         m_treeVisible;
+    bool         m_toolbarVisible;
     std::wstring m_7zDllPath;
     std::wstring m_unrarDllPath;
     std::vector<std::wstring> m_mruPaths;

@@ -108,7 +108,7 @@ public:
     void Unload();
     bool IsLoaded() const { return m_hDll != nullptr; }
     const std::wstring& GetLoadedName() const { return m_loadedName; }
-    // ロード済み unrar.dll のフルパス。未ロード時は空。
+    // Full path of the loaded unrar.dll. Empty when not loaded.
     std::wstring GetLoadedPath() const;
 
     // Auto-detect UnRAR64.dll from known install paths.
@@ -121,18 +121,23 @@ public:
                         const wchar_t* password,
                         IExtractProgressSink* sink);
 
-    // 指定パスセットのエントリのみ展開する（パスはフォワードスラッシュ区切り）。
-    // targetPaths が空の場合は全展開（ExtractArchive と同等）。
+    // Extract only the entries whose paths are in targetPaths (forward-slash separated).
+    // An empty targetPaths extracts all entries (equivalent to ExtractArchive).
     bool ExtractArchiveSelected(const wchar_t* path, const wchar_t* destDir,
                                 const std::set<std::wstring>& targetPaths,
                                 const wchar_t* password,
                                 IExtractProgressSink* sink);
 
-    // 全エントリの整合性検証（RARProcessFileW に RAR_TEST を渡す）。
-    // 成功時 true、失敗・キャンセル時 false。
+    // Integrity verification for all entries (passes RAR_TEST to RARProcessFileW).
+    // Returns true on success; false on failure or cancellation.
     bool TestArchive(const wchar_t* path,
                      const wchar_t* password,
                      IExtractProgressSink* sink);
+
+    // Retrieves the whole-archive comment from the RAR main header.
+    // Converts the CmtBuf string written by RAROpenArchiveDataEx from UTF-8 to wide.
+    // Returns false (out is empty) if no comment is present or could not be read.
+    bool GetArchiveComment(const wchar_t* path, std::wstring& out);
 
 private:
     HMODULE              m_hDll      = nullptr;

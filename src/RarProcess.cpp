@@ -1,4 +1,5 @@
 #include "RarProcess.h"
+#include "I18n.h"
 #include "resource.h"
 #include <shlwapi.h>
 #include <string>
@@ -111,8 +112,8 @@ bool RarProcess::Compress(const std::vector<std::wstring>& srcPaths,
 
     if (rarExe.empty()) {
         MessageBoxW(hwndNotify,
-                    L"WinRAR.exe / Rar.exe が見つかりません。\n設定でパスを確認してください。",
-                    L"AileEx", MB_ICONERROR);
+                    I18n::Tr(IDS_ERR_RAR_NOT_FOUND).c_str(),
+                    I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
         return false;
     }
 
@@ -120,14 +121,17 @@ bool RarProcess::Compress(const std::vector<std::wstring>& srcPaths,
     wchar_t mChar = (method && method[0] >= L'0' && method[0] <= L'5') ? method[0] : L'3';
     wchar_t mBuf[2] = {mChar, L'\0'};
 
-    std::wstring cmd = L"\"" + rarExe + L"\" a -ep1 -r -m" + mBuf;
+    // Don't use -r. rar.exe's -r searches current working dir recursively for matching patterns,
+    // which doesn't align with explicit path arguments. Directory contents are recursively
+    // archived by rar by default without -r.
+    std::wstring cmd = L"\"" + rarExe + L"\" a -ep1 -m" + mBuf;
 
-    // パスワード: -hp (ヘッダ含む暗号化) または -p (データのみ)
-    // パスワードはコマンドライン直結なので Windows 標準エスケープで引用符包み。
-    // "-hp\"My Pass\"" → CommandLineToArgvW が "-hpMy Pass" 1 トークンとして解釈。
+    // Password: -hp (encrypt headers) or -p (data only)
+    // Password goes directly on command line, so use Windows standard escaping with quotes.
+    // "-hp\"My Pass\"" → CommandLineToArgvW interprets as "-hpMy Pass" single token.
     if (password && password[0]) {
         std::wstring pw(password);
-        // Windows コマンドライン用エスケープ: バックスラッシュは " 直前でのみ 2 倍化
+        // Windows command-line escape: backslash doubled only before "
         auto quotePw = [](const std::wstring& s) -> std::wstring {
             std::wstring r = L"\"";
             int bs = 0;
@@ -147,21 +151,24 @@ bool RarProcess::Compress(const std::vector<std::wstring>& srcPaths,
     }
 
     if (adv) {
-        // 辞書サイズ
+        // Dictionary size
         if (!adv->dictSize.empty())
             cmd += L" -md" + adv->dictSize;
-        // ソリッドアーカイブ
+        // Solid archive
         cmd += adv->solid ? L" -s" : L" -ds";
-        // スレッド数
+        // Thread count
         if (adv->threads > 0)
             cmd += L" -mt" + std::to_wstring(adv->threads);
-        // リカバリレコード
+        // Recovery record
         if (adv->recoveryPct > 0)
             cmd += L" -rr" + std::to_wstring(adv->recoveryPct) + L"p";
-        // 分割ボリューム (コンソール版のみ有効)
+        // Split volumes (both rar.exe and WinRAR.exe accept -v<size>)
         if (!adv->splitVolume.empty())
             cmd += L" -v" + adv->splitVolume;
-        // 追加パラメーター
+        // Self-extracting (SFX) module
+        if (!adv->sfxModule.empty())
+            cmd += L" -sfx" + adv->sfxModule;
+        // Extra parameters
         if (!adv->extra.empty())
             cmd += L" " + adv->extra;
     }
@@ -169,6 +176,16 @@ bool RarProcess::Compress(const std::vector<std::wstring>& srcPaths,
     cmd += std::wstring(L" \"") + outPath + L"\"";
     for (auto& f : srcPaths) cmd += std::wstring(L" \"") + f + L"\"";
 
+    return LaunchRarCommand(cmd, rarExe, hwndNotify, progressMsg, doneMsg);
+}
+
+// Common rar.exe launch for Compress/Add. GUI mode (WinRAR) waits for exit only;
+// console mode (rar.exe) parses progress from stdout.
+bool RarProcess::LaunchRarCommand(const std::wstring& cmd,
+                                  const std::wstring& rarExe,
+                                  HWND hwndNotify,
+                                  UINT progressMsg,
+                                  UINT doneMsg) {
     std::vector<wchar_t> cmdBuf(cmd.begin(), cmd.end());
     cmdBuf.push_back(L'\0');
 
@@ -185,57 +202,125 @@ bool RarProcess::Compress(const std::vector<std::wstring>& srcPaths,
         m_hProcess = pi.hProcess;
         CloseHandle(pi.hThread);
         auto* ctx = new WaiterCtx{m_hProcess, hwndNotify, doneMsg, &m_cancelFlag};
-        // Duplicate handle so waiter thread can close it independently
         DuplicateHandle(GetCurrentProcess(), m_hProcess,
                         GetCurrentProcess(), &ctx->hProcess,
                         0, FALSE, DUPLICATE_SAME_ACCESS);
         m_hReader = CreateThread(nullptr, 0, WinrarWaiterThread, ctx, 0, nullptr);
-    } else {
-        // Console mode (rar.exe): read stdout for progress
-        HANDLE hRead = nullptr, hWrite = nullptr;
-        SECURITY_ATTRIBUTES sa = { sizeof(sa), nullptr, TRUE };
-        if (!CreatePipe(&hRead, &hWrite, &sa, 0)) return false;
-        SetHandleInformation(hRead, HANDLE_FLAG_INHERIT, 0);
-
-        // PROC_THREAD_ATTRIBUTE_HANDLE_LIST で継承ハンドルを hWrite だけに絞る
-        SIZE_T attrListSize = 0;
-        InitializeProcThreadAttributeList(nullptr, 1, 0, &attrListSize);
-        LPPROC_THREAD_ATTRIBUTE_LIST pAttrList =
-            reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(
-                HeapAlloc(GetProcessHeap(), 0, attrListSize));
-        if (!pAttrList) { CloseHandle(hRead); CloseHandle(hWrite); return false; }
-        InitializeProcThreadAttributeList(pAttrList, 1, 0, &attrListSize);
-        HANDLE inheritHandles[1] = { hWrite };
-        UpdateProcThreadAttribute(pAttrList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
-                                  inheritHandles, sizeof(inheritHandles), nullptr, nullptr);
-
-        STARTUPINFOEXW siex  = {};
-        siex.StartupInfo.cb         = sizeof(siex);
-        siex.StartupInfo.dwFlags    = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
-        siex.StartupInfo.wShowWindow = SW_HIDE;
-        siex.StartupInfo.hStdOutput  = hWrite;
-        siex.StartupInfo.hStdError   = hWrite;
-        siex.lpAttributeList         = pAttrList;
-
-        BOOL ok = CreateProcessW(nullptr, cmdBuf.data(), nullptr, nullptr,
-                                 TRUE, CREATE_NO_WINDOW | EXTENDED_STARTUPINFO_PRESENT,
-                                 nullptr, nullptr,
-                                 reinterpret_cast<LPSTARTUPINFOW>(&siex), &pi);
-        CloseHandle(hWrite);
-        DeleteProcThreadAttributeList(pAttrList);
-        HeapFree(GetProcessHeap(), 0, pAttrList);
-        if (!ok) { CloseHandle(hRead); return false; }
-        m_hProcess = pi.hProcess;
-        CloseHandle(pi.hThread);
-        // ReaderCtx にプロセスハンドルを複製して渡す（ExitCode 取得用）
-        HANDLE hProcForReader = INVALID_HANDLE_VALUE;
-        DuplicateHandle(GetCurrentProcess(), m_hProcess,
-                        GetCurrentProcess(), &hProcForReader,
-                        0, FALSE, DUPLICATE_SAME_ACCESS);
-        auto* ctx = new ReaderCtx{hRead, hProcForReader, hwndNotify, progressMsg, doneMsg, &m_cancelFlag};
-        m_hReader = CreateThread(nullptr, 0, StdoutReaderThread, ctx, 0, nullptr);
+        return true;
     }
+
+    // Console mode (rar.exe): read stdout for progress
+    HANDLE hRead = nullptr, hWrite = nullptr;
+    SECURITY_ATTRIBUTES sa = { sizeof(sa), nullptr, TRUE };
+    if (!CreatePipe(&hRead, &hWrite, &sa, 0)) return false;
+    SetHandleInformation(hRead, HANDLE_FLAG_INHERIT, 0);
+
+    // Restrict inherited handles to hWrite only via PROC_THREAD_ATTRIBUTE_HANDLE_LIST
+    SIZE_T attrListSize = 0;
+    InitializeProcThreadAttributeList(nullptr, 1, 0, &attrListSize);
+    LPPROC_THREAD_ATTRIBUTE_LIST pAttrList =
+        reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(
+            HeapAlloc(GetProcessHeap(), 0, attrListSize));
+    if (!pAttrList) { CloseHandle(hRead); CloseHandle(hWrite); return false; }
+    InitializeProcThreadAttributeList(pAttrList, 1, 0, &attrListSize);
+    HANDLE inheritHandles[1] = { hWrite };
+    UpdateProcThreadAttribute(pAttrList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
+                              inheritHandles, sizeof(inheritHandles), nullptr, nullptr);
+
+    STARTUPINFOEXW siex  = {};
+    siex.StartupInfo.cb         = sizeof(siex);
+    siex.StartupInfo.dwFlags    = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+    siex.StartupInfo.wShowWindow = SW_HIDE;
+    siex.StartupInfo.hStdOutput  = hWrite;
+    siex.StartupInfo.hStdError   = hWrite;
+    siex.lpAttributeList         = pAttrList;
+
+    BOOL ok = CreateProcessW(nullptr, cmdBuf.data(), nullptr, nullptr,
+                             TRUE, CREATE_NO_WINDOW | EXTENDED_STARTUPINFO_PRESENT,
+                             nullptr, nullptr,
+                             reinterpret_cast<LPSTARTUPINFOW>(&siex), &pi);
+    CloseHandle(hWrite);
+    DeleteProcThreadAttributeList(pAttrList);
+    HeapFree(GetProcessHeap(), 0, pAttrList);
+    if (!ok) { CloseHandle(hRead); return false; }
+    m_hProcess = pi.hProcess;
+    CloseHandle(pi.hThread);
+    HANDLE hProcForReader = INVALID_HANDLE_VALUE;
+    DuplicateHandle(GetCurrentProcess(), m_hProcess,
+                    GetCurrentProcess(), &hProcForReader,
+                    0, FALSE, DUPLICATE_SAME_ACCESS);
+    auto* ctx = new ReaderCtx{hRead, hProcForReader, hwndNotify, progressMsg, doneMsg, &m_cancelFlag};
+    m_hReader = CreateThread(nullptr, 0, StdoutReaderThread, ctx, 0, nullptr);
     return true;
+}
+
+// Add files to existing archive (rar.exe `a` command)
+bool RarProcess::Add(const wchar_t* archivePath,
+                     const std::vector<std::wstring>& srcPaths,
+                     const wchar_t* archiveFolder,
+                     const wchar_t* method,
+                     const wchar_t* rarExePathOverride,
+                     const wchar_t* password,
+                     bool encryptHeaders,
+                     HWND hwndNotify,
+                     UINT progressMsg, UINT doneMsg) {
+    std::wstring rarExe;
+    if (rarExePathOverride && rarExePathOverride[0])
+        rarExe = rarExePathOverride;
+    else
+        rarExe = FindRarExe();
+
+    if (rarExe.empty()) {
+        MessageBoxW(hwndNotify,
+                    I18n::Tr(IDS_ERR_RAR_NOT_FOUND).c_str(),
+                    I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
+        return false;
+    }
+
+    // method: "0".."5" → -m0..-m5 / else "3" (Normal)
+    wchar_t mChar = (method && method[0] >= L'0' && method[0] <= L'5') ? method[0] : L'3';
+    wchar_t mBuf[2] = {mChar, L'\0'};
+
+    // -ep1: strip drive and full path from input paths.
+    // Don't use -r (rar.exe's -r searches entire current working dir for matching patterns,
+    // misaligned with explicit path arguments). Directory contents are recursively
+    // archived by rar by default without -r.
+    std::wstring cmd = L"\"" + rarExe + L"\" a -ep1 -m" + mBuf;
+
+    if (password && password[0]) {
+        std::wstring pw(password);
+        // Same Windows command-line escaping as Compress
+        auto quotePw = [](const std::wstring& s) -> std::wstring {
+            std::wstring r = L"\"";
+            int bs = 0;
+            for (wchar_t c : s) {
+                if (c == L'\\') { ++bs; }
+                else if (c == L'"') { r.append(bs * 2 + 1, L'\\'); r += L'"'; bs = 0; }
+                else { r.append(bs, L'\\'); r += c; bs = 0; }
+            }
+            r.append(bs * 2, L'\\');
+            r += L'"';
+            return r;
+        };
+        if (encryptHeaders)
+            cmd += L" -hp" + quotePw(pw);
+        else
+            cmd += L" -p" + quotePw(pw);
+    }
+
+    // -ap<folder>: specify destination folder in archive (`/` normalized to `\`)
+    if (archiveFolder && archiveFolder[0]) {
+        std::wstring folder = archiveFolder;
+        for (auto& c : folder) if (c == L'/') c = L'\\';
+        while (!folder.empty() && folder.back() == L'\\') folder.pop_back();
+        if (!folder.empty())
+            cmd += L" -ap\"" + folder + L"\"";
+    }
+
+    cmd += std::wstring(L" \"") + archivePath + L"\"";
+    for (auto& f : srcPaths) cmd += std::wstring(L" \"") + f + L"\"";
+
+    return LaunchRarCommand(cmd, rarExe, hwndNotify, progressMsg, doneMsg);
 }
 
 void RarProcess::Cancel() {
@@ -298,8 +383,8 @@ DWORD WINAPI RarProcess::StdoutReaderThread(LPVOID param) {
 
     CloseHandle(ctx->hPipe);
 
-    // rar.exe の終了を待ち ExitCode を HRESULT に変換して通知
-    // （パイプ EOF は子プロセス終了後に来るが、念のため待機）
+    // Wait for rar.exe to exit, convert ExitCode to HRESULT, and notify
+    // (pipe EOF arrives after the child exits, but wait anyway to be safe)
     HRESULT hr = S_OK;
     if (ctx->hProcess != INVALID_HANDLE_VALUE) {
         WaitForSingleObject(ctx->hProcess, INFINITE);
@@ -314,8 +399,111 @@ DWORD WINAPI RarProcess::StdoutReaderThread(LPVOID param) {
 }
 
 // ---- Delete (rar d) ----
-// `d` コマンドは進捗出力がほぼ無いため stdout 解析は省略し、終了待ち専用。
-// `-y` で確認プロンプトをスキップ、`-r` でフォルダ配下を再帰削除。
+// Set archive-wide comment via `rar.exe c -z<tempfile> archive`.
+// Comment written to temp file in OEM code page (rar.exe's default comment encoding).
+// Avoid -sc<charset>c flag (version-dependent, low compatibility).
+// Pass empty comment file to delete existing comment.
+bool RarProcess::SetComment(const wchar_t* archivePath,
+                            const std::wstring& comment,
+                            const wchar_t* rarExePathOverride,
+                            HWND hwndNotify,
+                            UINT doneMsg) {
+    std::wstring rarExe;
+    if (rarExePathOverride && rarExePathOverride[0])
+        rarExe = rarExePathOverride;
+    else
+        rarExe = FindRarExe();
+
+    if (rarExe.empty()) {
+        MessageBoxW(hwndNotify,
+                    I18n::Tr(IDS_ERR_RAR_NOT_FOUND).c_str(),
+                    I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
+        return false;
+    }
+
+    // Write comment to temp file in UTF-8 (no BOM)
+    wchar_t tempDir[MAX_PATH];
+    GetTempPathW(MAX_PATH, tempDir);
+    wchar_t tempFile[MAX_PATH];
+    swprintf_s(tempFile, L"%saileex_cmt_%llu.txt", tempDir,
+               (unsigned long long)GetTickCount64());
+
+    HANDLE hCmt = CreateFileW(tempFile, GENERIC_WRITE, 0, nullptr,
+                              CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (hCmt == INVALID_HANDLE_VALUE) return false;
+    if (!comment.empty()) {
+        int len = WideCharToMultiByte(CP_OEMCP, 0,
+                                       comment.c_str(), (int)comment.size(),
+                                       nullptr, 0, nullptr, nullptr);
+        if (len > 0) {
+            std::vector<char> oem(len);
+            WideCharToMultiByte(CP_OEMCP, 0,
+                                comment.c_str(), (int)comment.size(),
+                                oem.data(), len, nullptr, nullptr);
+            DWORD written = 0;
+            WriteFile(hCmt, oem.data(), (DWORD)oem.size(), &written, nullptr);
+        }
+    }
+    CloseHandle(hCmt);
+
+    // rar.exe c -z<file> archive (charset specification omitted, defer to rar.exe's default OEM interpretation)
+    std::wstring cmd = L"\"" + rarExe + L"\" c -z\"" + tempFile + L"\" \"" +
+                       archivePath + L"\"";
+
+    std::vector<wchar_t> cmdBuf(cmd.begin(), cmd.end());
+    cmdBuf.push_back(L'\0');
+
+    m_cancelFlag = false;
+    PROCESS_INFORMATION pi = {};
+    STARTUPINFOW si = {};
+    si.cb          = sizeof(si);
+    si.dwFlags     = STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
+    DWORD flags = IsWinRarGui(rarExe) ? 0u : (DWORD)CREATE_NO_WINDOW;
+
+    BOOL ok = CreateProcessW(nullptr, cmdBuf.data(), nullptr, nullptr,
+                             FALSE, flags, nullptr, nullptr, &si, &pi);
+    if (!ok) {
+        DeleteFileW(tempFile);
+        return false;
+    }
+    m_hProcess = pi.hProcess;
+    CloseHandle(pi.hThread);
+
+    // Exit-monitoring thread: clean temp comment file and post doneMsg when done.
+    struct CtxWithTemp {
+        HANDLE       hProcess;
+        HWND         hwnd;
+        UINT         doneMsg;
+        volatile bool* pCancel;
+        wchar_t      tempPath[MAX_PATH];
+    };
+    auto* ctx = new CtxWithTemp{};
+    DuplicateHandle(GetCurrentProcess(), m_hProcess,
+                    GetCurrentProcess(), &ctx->hProcess,
+                    0, FALSE, DUPLICATE_SAME_ACCESS);
+    ctx->hwnd      = hwndNotify;
+    ctx->doneMsg   = doneMsg;
+    ctx->pCancel   = &m_cancelFlag;
+    wcscpy_s(ctx->tempPath, tempFile);
+
+    m_hReader = CreateThread(nullptr, 0, [](LPVOID p) -> DWORD {
+        auto* c = static_cast<CtxWithTemp*>(p);
+        WaitForSingleObject(c->hProcess, INFINITE);
+        DWORD exitCode = 0;
+        GetExitCodeProcess(c->hProcess, &exitCode);
+        CloseHandle(c->hProcess);
+        DeleteFileW(c->tempPath);
+        HRESULT hr = (exitCode == 0) ? S_OK : E_FAIL;
+        PostMessageW(c->hwnd, c->doneMsg, (WPARAM)hr, 0);
+        delete c;
+        return 0;
+    }, ctx, 0, nullptr);
+    return true;
+}
+
+// `d` command has minimal progress output, so skip stdout parsing and wait-for-exit only.
+// `-y` skips confirmation prompts; `-r` recursively deletes folder contents.
 bool RarProcess::Delete(const wchar_t* archivePath,
                          const std::vector<std::wstring>& itemPaths,
                          const wchar_t* rarExePathOverride,
@@ -329,8 +517,8 @@ bool RarProcess::Delete(const wchar_t* archivePath,
 
     if (rarExe.empty()) {
         MessageBoxW(hwndNotify,
-                    L"WinRAR.exe / Rar.exe が見つかりません。\n設定でパスを確認してください。",
-                    L"AileEx", MB_ICONERROR);
+                    I18n::Tr(IDS_ERR_RAR_NOT_FOUND).c_str(),
+                    I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
         return false;
     }
 

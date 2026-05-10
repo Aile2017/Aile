@@ -272,7 +272,7 @@ LRESULT CALLBACK MainWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
 }
 
 bool MainWindow::PreTranslateMessage(const MSG& msg) {
-    // ListView フォーカス中に Enter → フォルダナビゲート or 展開
+    // Enter on a focused ListView item → folder navigation or extraction
     if (msg.message == WM_KEYDOWN && msg.wParam == VK_RETURN) {
         HWND hFocus = GetFocus();
         if (hFocus == m_hListView || IsChild(m_hListView, hFocus)) {
@@ -306,7 +306,7 @@ LRESULT MainWindow::HandleMsg(UINT msg, WPARAM wp, LPARAM lp) {
             OnContextMenu((HWND)wp, GET_X_LPARAM(lp), GET_Y_LPARAM(lp));
         return 0;
     case WM_INITMENUPOPUP:
-        // HIWORD(lp) != 0 はシステムメニュー (タイトルバー右クリック等) のため対象外
+        // HIWORD(lp) != 0 means system menu (title bar right-click etc.) — skip
         if (HIWORD(lp) == 0)
             OnInitMenuPopup((HMENU)wp);
         break;
@@ -402,12 +402,12 @@ LRESULT MainWindow::HandleMsg(UINT msg, WPARAM wp, LPARAM lp) {
         break;
 
     case WM_APP_PROGRESS:
-        // fallback: 内側ループが WM_APP_PROGRESS/DONE を吸収するため通常は到達しない
+        // fallback: normally unreachable because the inner loop absorbs WM_APP_PROGRESS/DONE
         OnProgress((int)wp, (wchar_t*)lp);
         return 0;
 
     case WM_APP_DONE:
-        // fallback: 内側ループが WM_APP_PROGRESS/DONE を吸収するため通常は到達しない
+        // fallback: normally unreachable because the inner loop absorbs WM_APP_PROGRESS/DONE
         OnDone((HRESULT)wp);
         return 0;
 
@@ -428,7 +428,7 @@ LRESULT MainWindow::HandleMsg(UINT msg, WPARAM wp, LPARAM lp) {
             s.SetToolbarVisible(m_toolbarVisible);
             s.Save();
         }
-        // Delete session temp dir tree (files opened via [閲覧])
+        // Delete session temp dir tree (files opened via browse mode)
         if (!m_tempViewDir.empty()) {
             SHFILEOPSTRUCTW fop = {};
             std::wstring dir = m_tempViewDir;
@@ -438,7 +438,7 @@ LRESULT MainWindow::HandleMsg(UINT msg, WPARAM wp, LPARAM lp) {
             fop.fFlags = FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
             SHFileOperationW(&fop);
         }
-        // split 自動アンラップで作成した一時ファイルがあれば掃除
+        // split auto-unwrap: clean up any temporary file created
         if (!m_effectiveArchivePath.empty() &&
             _wcsicmp(m_effectiveArchivePath.c_str(), m_archivePath.c_str()) != 0) {
             DeleteFileW(m_effectiveArchivePath.c_str());
@@ -556,7 +556,7 @@ void MainWindow::CreateControls(HWND hwnd) {
         WS_CHILD | WS_VISIBLE | SBARS_SIZEGRIP,
         0, 0, 0, 0, hwnd, nullptr, hInst, nullptr);
 
-    // TreeView (left pane). 設定で非表示なら WS_VISIBLE を付与しない。
+    // TreeView (left pane). WS_VISIBLE is not added if hidden in settings.
     DWORD treeStyle = WS_CHILD | WS_TABSTOP | TVS_HASLINES | TVS_LINESATROOT |
                       TVS_HASBUTTONS | TVS_SHOWSELALWAYS;
     if (m_treeVisible) treeStyle |= WS_VISIBLE;
@@ -1209,7 +1209,7 @@ static std::wstring GetFileVersionString(const wchar_t* path) {
     return {};
 }
 
-// パスから leaf 名のみを抜き出す (バックスラッシュ区切り)
+// Extract the leaf name from a path (backslash-separated)
 static std::wstring LeafName(const std::wstring& path) {
     auto pos = path.find_last_of(L"\\/");
     return (pos == std::wstring::npos) ? path : path.substr(pos + 1);
@@ -1369,9 +1369,9 @@ void MainWindow::OnToggleToolbar() {
     ResizePanes(rc.right, rc.bottom);
 }
 
-// メニュー表示直前に有効/無効状態を更新する。WM_INITMENUPOPUP は popup 単位で
-// 発火するため、対象 ID がこの popup に含まれない場合 EnableMenuItem は -1 を返
-// すだけで副作用なし。全コマンドを毎回呼んで問題ない。
+// Update enabled/disabled state just before the menu is shown. WM_INITMENUPOPUP fires per popup,
+// so EnableMenuItem returns -1 without side effects when an ID is not in this popup.
+// Safe to call for all commands every time.
 void MainWindow::OnInitMenuPopup(HMENU hMenu) {
     bool hasArchive = !m_archivePath.empty();
     bool readOnly   = m_openedWithUnrar || m_isReadOnly;
@@ -1399,7 +1399,7 @@ void MainWindow::OnInitMenuPopup(HMENU hMenu) {
 
 void MainWindow::CloseArchive() {
     if (m_archivePath.empty()) return;
-    // split 自動アンラップで作成した一時ファイルを掃除
+    // Clean up any temporary file created by split auto-unwrap
     if (!m_effectiveArchivePath.empty() &&
         _wcsicmp(m_effectiveArchivePath.c_str(), m_archivePath.c_str()) != 0) {
         DeleteFileW(m_effectiveArchivePath.c_str());
@@ -1454,8 +1454,7 @@ void MainWindow::OnAddFiles() {
     }
 }
 
-// 現在開いているアーカイブにファイルを追加する。
-// ファイルピッカーでファイル群を選んで AddFilesToCurrentArchive に流す。
+// Open a file picker and add the selected files to the current archive.
 void MainWindow::OnAddFilesToCurrentArchive() {
     if (m_archivePath.empty() || m_isReadOnly) return;
 
@@ -1465,18 +1464,18 @@ void MainWindow::OnAddFilesToCurrentArchive() {
     AddFilesToCurrentArchive(std::move(files));
 }
 
-// アーカイブへの追加ワーカー駆動。RAR は rar.exe `a`、それ以外は 7z.dll の AddToArchive。
+// Worker-driven file addition to the archive. RAR uses rar.exe `a`; everything else uses 7z.dll AddToArchive.
 void MainWindow::AddFilesToCurrentArchive(std::vector<std::wstring> srcPaths) {
     if (m_archivePath.empty() || m_isReadOnly || srcPaths.empty()) return;
 
     App& app = App::Instance();
 
-    // 操作実体（split 自動アンラップ後の一時ファイル）は read-only 扱いなので
-    // ここでは m_archivePath をそのまま使う（m_isReadOnly で既に弾いている）。
+    // The operative path (after split auto-unwrap temp file) is read-only,
+    // so use m_archivePath directly here (already guarded by m_isReadOnly).
     const std::wstring archivePath = m_archivePath;
-    const std::wstring archiveFolder = SelectedFolderPath();  // "" なら root 直下
+    const std::wstring archiveFolder = SelectedFolderPath();  // "" means archive root
 
-    // RAR 判定: 拡張子が .rar、または unrar.dll で開いている
+    // RAR detection: extension is .rar, or the archive was opened via unrar.dll
     bool isRar = m_openedWithUnrar;
     if (!isRar) {
         const wchar_t* dot = wcsrchr(archivePath.c_str(), L'.');
@@ -1493,7 +1492,7 @@ void MainWindow::AddFilesToCurrentArchive(std::vector<std::wstring> srcPaths) {
     HRESULT hrDone = S_OK;
 
     if (isRar) {
-        // RAR: rar.exe `a` で追加。SFX/分割は付与しない（既存アーカイブ向け）。
+        // RAR: add via rar.exe `a`. No SFX/split (targeting an existing archive).
         const auto& s = app.GetSettings();
         wchar_t levelBuf[2] = { (wchar_t)(L'0' + (s.GetRarLevel() & 7)), L'\0' };
         if (s.GetRarLevel() < 0 || s.GetRarLevel() > 5) levelBuf[0] = L'3';
@@ -1512,7 +1511,7 @@ void MainWindow::AddFilesToCurrentArchive(std::vector<std::wstring> srcPaths) {
         }
         hrDone = progDlg.RunMessageLoop([&]{ rar.Cancel(); });
     } else {
-        // 7z/zip/tar 等: SevenZip::AddToArchive
+        // 7z/zip/tar etc.: SevenZip::AddToArchive
         if (!app.Get7z().IsLoaded()) {
             progDlg.Dismiss();
             delete sink; m_pSink = nullptr;
@@ -1522,7 +1521,7 @@ void MainWindow::AddFilesToCurrentArchive(std::vector<std::wstring> srcPaths) {
         auto& sz = app.Get7z();
 
         int  level  = app.GetSettings().GetCompressionLevel();
-        // method は形式デフォルトに任せる（空文字列 → 7z.dll 既定）
+        // Let the format decide the method (empty string → 7z.dll default)
         m_worker.Start([&sz, archivePath, srcPaths, archiveFolder, level, sink]() -> HRESULT {
             return sz.AddToArchive(archivePath.c_str(), srcPaths,
                                    archiveFolder.empty() ? nullptr : archiveFolder.c_str(),
@@ -1541,7 +1540,7 @@ void MainWindow::AddFilesToCurrentArchive(std::vector<std::wstring> srcPaths) {
     }
     if (hrDone == E_ABORT) return;
 
-    // 成功 → アーカイブを再読込し、追加先フォルダを再選択
+    // Success → reload the archive and reselect the target folder
     OpenArchive(archivePath.c_str());
     if (!archiveFolder.empty()) SelectTreeFolder(archiveFolder);
 }
@@ -1564,7 +1563,7 @@ void MainWindow::OnInfo() {
 void MainWindow::OnArchiveProperties() {
     if (m_archivePath.empty()) return;
 
-    // 操作実体（split 自動アンラップ後の一時ファイル）があればそちらを 7z.dll に渡す。
+    // Pass the operative path (temp file after split auto-unwrap) to 7z.dll if present.
     const std::wstring& target = m_effectiveArchivePath.empty()
                                  ? m_archivePath
                                  : m_effectiveArchivePath;
@@ -1572,8 +1571,8 @@ void MainWindow::OnArchiveProperties() {
     ArchiveProperties props;
     bool haveProps = false;
 
-    // unrar.dll で開いたものは 7z.dll では読めない可能性が高い (rar 未対応 dll など)。
-    // それでも一応試して、失敗なら items からのフォールバック表示にする。
+    // Archives opened via unrar.dll are unlikely to be readable by 7z.dll (e.g. dll without RAR support).
+    // Try anyway; if it fails, fall back to displaying info from items.
     auto& sz7 = App::Instance().Get7z();
     if (sz7.IsLoaded()) {
         HRESULT hr = sz7.GetArchiveProperties(target.c_str(), nullptr, props);
@@ -1603,8 +1602,8 @@ void MainWindow::OnArchiveComment() {
         app.Get7z().GetArchiveComment(target.c_str(), nullptr, comment);
     }
 
-    // 編集可否判定: split 自動アンラップ後の一時ファイルは read-only。
-    // ZIP は 7z.dll 不要で直接書換え。RAR は rar.exe 必須。それ以外（7z/tar/iso 等）は編集不可。
+    // Editability check: temp files from split auto-unwrap are read-only.
+    // ZIP can be edited directly without 7z.dll. RAR requires rar.exe. Others (7z/tar/iso etc.) are not editable.
     const wchar_t* dot = wcsrchr(m_archivePath.c_str(), L'.');
     std::wstring ext = dot ? std::wstring(dot + 1) : L"";
     for (auto& c : ext) c = (wchar_t)towlower(c);
@@ -1622,7 +1621,7 @@ void MainWindow::OnArchiveComment() {
     CommentDlg dlg;
     if (!dlg.Show(m_hwnd, leaf, comment, readOnly, edited)) return;
 
-    // 保存処理
+    // Save processing
     HRESULT hrSave = E_FAIL;
     if (isZip) {
         if (app.Get7z().IsLoaded()) {
@@ -1632,7 +1631,7 @@ void MainWindow::OnArchiveComment() {
             return;
         }
     } else if (isRar) {
-        // RAR: rar.exe c -z で適用。完了は WM_APP_DONE で待つ。
+        // RAR: apply via rar.exe c -z. Wait for completion via WM_APP_DONE.
         ProgressDlg progDlg;
         progDlg.Show(m_hwnd, I18n::Tr(IDS_PROGRESS_SAVING_COMMENT).c_str());
         auto* sink = new ProgressPostSink(m_hwnd, WM_APP_PROGRESS, WM_APP_DONE);
@@ -1659,20 +1658,20 @@ void MainWindow::OnArchiveComment() {
     }
     if (hrSave == E_ABORT) return;
 
-    // 成功 → アーカイブを再 Open（ツリー選択は OpenArchive 内で root にリセットされるが、
-    //         コメント編集はフォルダ位置に依存しないので問題なし）
+    // Success → reopen the archive (OpenArchive resets tree selection to root,
+    //           but comment editing is folder-position-independent so that is fine)
     OpenArchive(m_archivePath.c_str());
 }
 
 void MainWindow::OnDelete() {
     if (m_archivePath.empty() || m_openedWithUnrar || m_isReadOnly) return;
 
-    // ListView 選択を実エントリ集合に解決する。
-    //  - 実エントリ (lParam < m_items.size())：そのインデックスを採用
-    //    フォルダなら配下の全エントリも追加（"path/" プレフィクスマッチ）
-    //  - 仮想フォルダ (lParam >= m_items.size())：m_folderPaths から配下を解決
+    // Resolve the ListView selection to a real entry set.
+    //  - Real entry (lParam < m_items.size()): use that index.
+    //    If a folder, also add all entries below it ("path/" prefix match).
+    //  - Virtual folder (lParam >= m_items.size()): resolve children from m_folderPaths.
     std::set<UINT32> indexSet;
-    std::set<std::wstring> folderPaths;  // RAR 経路で使う表示パス
+    std::set<std::wstring> folderPaths;  // display paths used in the RAR path
     int item = -1;
     while ((item = ListView_GetNextItem(m_hListView, item, LVNI_SELECTED)) != -1) {
         LVITEMW lvi = {};
@@ -1706,7 +1705,7 @@ void MainWindow::OnDelete() {
     }
     if (indexSet.empty() && folderPaths.empty()) return;
 
-    // 確認 — 元の ListView 選択数を提示（フォルダ展開後の数より直感的）
+    // Confirm — show the original ListView selection count (more intuitive than the expanded count)
     int origCount = ListView_GetSelectedCount(m_hListView);
     std::wstring msg = I18n::TrFmt(IDS_FMT_DELETE_CONFIRM, origCount);
     if (MessageBoxW(m_hwnd, msg.c_str(), I18n::Tr(IDS_TITLE_DELETE_CONFIRM).c_str(),
@@ -1728,7 +1727,7 @@ void MainWindow::OnDelete() {
     auto archivePath = m_effectiveArchivePath;
 
     if (isRar) {
-        // RAR: rar.exe d -y -r でフォルダ含めて削除
+        // RAR: delete including folders via rar.exe d -y -r
         std::vector<std::wstring> rarPaths;
         rarPaths.reserve(folderPaths.size());
         for (const auto& p : folderPaths) {
@@ -1746,7 +1745,7 @@ void MainWindow::OnDelete() {
             return;
         }
         hrDone = progDlg.RunMessageLoop();
-        // proc のデストラクタが reader/process ハンドルを待機・解放
+        // proc destructor waits for reader/process handles and releases them
     } else {
         if (!app.Get7z().IsLoaded()) {
             progDlg.Dismiss();
@@ -1772,7 +1771,7 @@ void MainWindow::OnDelete() {
     }
     if (hrDone == E_ABORT) return;
 
-    // 成功 → アーカイブを再読込
+    // Success → reload the archive
     OpenArchive(archivePath.c_str());
 }
 
@@ -1800,7 +1799,7 @@ void MainWindow::OnCompress(CompressDlg::Params& params) {
                                     App::Instance().GetSettings().GetRarExePath().c_str(),
                                     progDlg, sink);
         if (hrDone == E_FAIL) {
-            // 起動失敗時は progDlg を内部で Dismiss 済み
+            // progDlg was already dismissed internally on launch failure
             delete sink; m_pSink = nullptr;
             return;
         }
@@ -1813,7 +1812,7 @@ void MainWindow::OnCompress(CompressDlg::Params& params) {
         }
         auto& sz = App::Instance().Get7z();
 
-        // 7z SFX モジュールの解決（指定があれば 7z.dll と同じフォルダを検索）
+        // Resolve the 7z SFX module (search in the same folder as 7z.dll if specified)
         std::wstring sfxModulePath;
         if (!params.sfxMode.empty()) {
             sfxModulePath = Resolve7zSfxModulePath(
@@ -2005,7 +2004,7 @@ void MainWindow::PopulateList(const std::wstring& folderPath) {
     // Collect items belonging to this folder, split into dirs and files
     struct Row { const ArchiveItem* it; };
     std::vector<Row> dirs, files;
-    std::set<std::wstring> explicitDirPaths;  // m_items に実在するフォルダパス
+    std::set<std::wstring> explicitDirPaths;  // folder paths actually present in m_items
     for (auto& it : m_items) {
         std::wstring itemDir;
         auto pos = it.path.rfind(L'/');
@@ -2026,19 +2025,19 @@ void MainWindow::PopulateList(const std::wstring& folderPath) {
     auto cmp = [sc, asc](const Row& a, const Row& b) -> bool {
         int result = 0;
         switch (sc) {
-        case 1: // サイズ
+        case 1: // Size
             result = (a.it->size < b.it->size) ? -1 : (a.it->size > b.it->size) ? 1 : 0;
             break;
-        case 2: // 圧縮後
+        case 2: // Compressed
             result = (a.it->packedSize < b.it->packedSize) ? -1 : (a.it->packedSize > b.it->packedSize) ? 1 : 0;
             break;
-        case 3: // 種類
+        case 3: // Type
             result = _wcsicmp(a.it->method.c_str(), b.it->method.c_str());
             break;
-        case 4: // 更新日時
+        case 4: // Modified
             result = CompareFileTime(&a.it->mtime, &b.it->mtime);
             break;
-        default: // 名前
+        default: // Name
             result = _wcsicmp(a.it->name.c_str(), b.it->name.c_str());
         }
         return asc ? (result < 0) : (result > 0);
@@ -2051,26 +2050,26 @@ void MainWindow::PopulateList(const std::wstring& folderPath) {
     rows.insert(rows.end(), dirs.begin(),  dirs.end());
     rows.insert(rows.end(), files.begin(), files.end());
 
-    // unrar.dll 等でフォルダエントリが省略されているアーカイブ向け:
-    // m_folderPaths から folderPath の直下フォルダを探し、m_items に実エントリが
-    // ないものは仮想フォルダ行として先頭（実フォルダ行の前）に追加する。
-    // lParam = m_items.size() + m_folderPaths インデックス で識別。
+    // For archives where folder entries are omitted (e.g. unrar.dll):
+    // search m_folderPaths for immediate child folders of folderPath; add any that have no
+    // real entry in m_items as virtual folder rows prepended before real folder rows.
+    // Identified by lParam = m_items.size() + m_folderPaths index.
     struct VirtualDirRow { std::wstring name; int fpIdx; };
     std::vector<VirtualDirRow> virtualDirs;
     for (int i = 1; i < (int)m_folderPaths.size(); ++i) {
         const std::wstring& fp = m_folderPaths[i];
-        // fp が folderPath の直接の子か確認
+        // Check whether fp is a direct child of folderPath
         std::wstring parentPath;
         auto slash = fp.rfind(L'/');
         if (slash != std::wstring::npos) parentPath = fp.substr(0, slash);
         if (parentPath != folderPath) continue;
-        // 実エントリが既にある場合はスキップ
+        // Skip if a real entry already exists
         if (explicitDirPaths.count(fp)) continue;
         std::wstring leafName = (slash != std::wstring::npos) ? fp.substr(slash + 1) : fp;
         if (!leafName.empty())
             virtualDirs.push_back({std::move(leafName), i});
     }
-    // 名前順ソート（ソートカラムに依らず名前昇順固定で十分; 実フォルダ群とまとめて先頭に置く）
+    // Sort by name (fixed ascending regardless of sort column; placed together at the top with real folders)
     std::sort(virtualDirs.begin(), virtualDirs.end(),
         [](const VirtualDirRow& a, const VirtualDirRow& b) {
             return _wcsicmp(a.name.c_str(), b.name.c_str()) < 0;
@@ -2080,7 +2079,7 @@ void MainWindow::PopulateList(const std::wstring& folderPath) {
         m_iconIndexFolder = GetIconIndex(L"folder", true);
     int icoFolder = m_iconIndexFolder;
 
-    // 仮想フォルダを先に挿入
+    // Insert virtual folders first
     for (auto& vd : virtualDirs) {
         int row = ListView_GetItemCount(m_hListView);
 
@@ -2088,7 +2087,7 @@ void MainWindow::PopulateList(const std::wstring& folderPath) {
         lvi.mask     = LVIF_TEXT | LVIF_PARAM | LVIF_IMAGE;
         lvi.iItem    = row;
         lvi.iSubItem = 0;
-        // m_items 範囲外のオフセットで仮想フォルダと識別
+        // Identify as virtual folder via an offset outside the m_items range
         lvi.lParam   = (LPARAM)((UINT32)m_items.size() + (UINT32)vd.fpIdx);
         lvi.iImage   = icoFolder;
         lvi.pszText  = const_cast<wchar_t*>(vd.name.c_str());
@@ -2141,7 +2140,7 @@ void MainWindow::PopulateList(const std::wstring& folderPath) {
         }
     }
 
-    // アイテムが存在し、かつ何も選択されていない場合は先頭にフォーカスカーソルを置く（選択はしない）
+    // If items exist but nothing is selected, place the focus cursor on the first item (no selection)
     if (ListView_GetItemCount(m_hListView) > 0 &&
         ListView_GetNextItem(m_hListView, -1, LVNI_SELECTED) < 0) {
         ListView_SetItemState(m_hListView, 0, LVIS_FOCUSED, LVIS_FOCUSED);
@@ -2235,8 +2234,8 @@ bool MainWindow::Ensure7zLoaded(bool useUnrar) {
     return true;
 }
 
-// パスワード入力ダイアログを表示し、入力された文字列を返す。
-// キャンセルされた場合は空文字列を返す。
+// Show a password input dialog and return the entered string.
+// Returns an empty string if cancelled.
 std::wstring MainWindow::PromptPassword() {
     struct PwDlg {
         std::wstring result;

@@ -1,6 +1,6 @@
-﻿# AileEx アーキテクチャ
+﻿# AileEx Architecture
 
-## ディレクトリ構成
+## Directory Structure
 
 ```
 AileEx/
@@ -12,39 +12,39 @@ AileEx/
 │   ├── build.md
 │   └── known-issues.md
 ├── src/
-│   ├── main.cpp                   — wWinMain、引数解析、モード振り分け
-│   ├── App.h/.cpp                 — シングルトン、DLL ロード管理、メッセージループ
-│   ├── MainWindow.h/.cpp          — ブラウズウィンドウ（メニュー + ツールバー + TreeView + ListView + ステータスバー）
-│   ├── CompressDlg.h/.cpp         — 圧縮設定ダイアログ
-│   ├── AdvancedCompressDlg.h/.cpp — 7z/ZIP 詳細圧縮オプション (dict/word/solid/threads/extra)
-│   ├── RarAdvancedDlg.h/.cpp      — RAR 詳細圧縮オプション (recovery/volume 等)
-│   ├── CompressHelper.h/.cpp      — RAR 圧縮の単一エントリポイント (`RunRarCompressSync`)
-│   ├── ProgressDlg.h/.cpp         — モーダル進捗ダイアログ
-│   ├── SettingsDlg.h/.cpp         — 設定ダイアログ
-│   ├── InfoDlg.h/.cpp             — エントリ詳細表示ダイアログ
-│   ├── Settings.h/.cpp            — INI 読み書き、MRU 管理
-│   ├── SevenZip.h/.cpp            — 7z.dll ラッパー (IIn/IOutArchive + DeleteItems + コールバック + Find7zDll)
-│   ├── UnrarDll.h/.cpp            — unrar.dll C API ラッパー
-│   ├── RarProcess.h/.cpp          — WinRAR.exe (GUI) / Rar.exe (console) サブプロセス (Compress / Delete)
-│   ├── ArchiveItem.h              — アーカイブエントリ POD 構造体
-│   ├── WorkerThread.h/.cpp        — ワーカースレッド + IExtractProgressSink + ProgressPostSink
-│   └── resource.h                 — リソース ID, WM_APP_* 定数
+│   ├── main.cpp                   — wWinMain, argument parsing, mode routing
+│   ├── App.h/.cpp                 — Singleton, DLL load management, message loop
+│   ├── MainWindow.h/.cpp          — Browse window (menu + toolbar + TreeView + ListView + status bar)
+│   ├── CompressDlg.h/.cpp         — Compression settings dialog
+│   ├── AdvancedCompressDlg.h/.cpp — 7z/ZIP advanced compression options (dict/word/solid/threads/extra)
+│   ├── RarAdvancedDlg.h/.cpp      — RAR advanced compression options (recovery/volume etc.)
+│   ├── CompressHelper.h/.cpp      — Single entry point for RAR compression (`RunRarCompressSync`)
+│   ├── ProgressDlg.h/.cpp         — Modal progress dialog
+│   ├── SettingsDlg.h/.cpp         — Settings dialog
+│   ├── InfoDlg.h/.cpp             — Entry details display dialog
+│   ├── Settings.h/.cpp            — INI read/write, MRU management
+│   ├── SevenZip.h/.cpp            — 7z.dll wrapper (IIn/IOutArchive + DeleteItems + callbacks + Find7zDll)
+│   ├── UnrarDll.h/.cpp            — unrar.dll C API wrapper
+│   ├── RarProcess.h/.cpp          — WinRAR.exe (GUI) / Rar.exe (console) subprocess (Compress / Delete)
+│   ├── ArchiveItem.h              — Archive entry POD struct
+│   ├── WorkerThread.h/.cpp        — Worker thread + IExtractProgressSink + ProgressPostSink
+│   └── resource.h                 — Resource IDs, WM_APP_* constants
 ├── res/
-│   ├── AileEx.rc            — ダイアログテンプレート, アクセラレータ, マニフェスト埋込
-│   ├── AileEx.ico           — アプリケーションアイコン
+│   ├── AileEx.rc            — Dialog templates, accelerators, embedded manifest
+│   ├── AileEx.ico           — Application icon
 │   └── manifest.xml         — Common Controls v6, dpiAware = PerMonitorV2
 └── sdk/
-    └── 7zip/                — 7-Zip SDK 自前最小ヘッダ
-        ├── compat.h         — UInt32/Int64 等の型エイリアス
-        ├── IDecl.h          — IID GUID 定義 + 補助マクロ
+    └── 7zip/                — Minimal 7-Zip SDK headers
+        ├── compat.h         — Type aliases like UInt32/Int64
+        ├── IDecl.h          — IID GUID definitions + helper macros
         ├── IProgress.h
         ├── IStream.h
-        ├── IPassword.h      — ICryptoGetTextPassword[2] (手書き)
+        ├── IPassword.h      — ICryptoGetTextPassword[2] (hand-written)
         ├── PropID.h
-        └── Archive/IArchive.h — フォーマット CLSID + IInArchive/IOutArchive
+        └── Archive/IArchive.h — Format CLSIDs + IInArchive/IOutArchive
 ```
 
-## クラス関係図
+## Class Diagram
 
 ```
                     ┌─────────────┐
@@ -52,22 +52,22 @@ AileEx/
                     └──────┬──────┘
                            │
                   ┌────────▼─────────┐
-                  │      App         │←─ Settings (INI 読み書き、MRU)
-                  │ (シングルトン)    │←─ SevenZip (7z.dll ラッパー)
-                  │                  │←─ UnrarDll (unrar.dll ラッパー)
+                  │      App         │←─ Settings (INI read/write, MRU)
+                  │ (Singleton)      │←─ SevenZip (7z.dll wrapper)
+                  │                  │←─ UnrarDll (unrar.dll wrapper)
                   └────────┬─────────┘
                            │
               ┌────────────┴────────────┐
               ▼                         ▼
        ┌─────────────┐          ┌──────────────┐    ┌──────────────────────┐
        │ MainWindow   │─────────▶│ CompressDlg  │───▶│ AdvancedCompressDlg  │
-       │ (Browse)     │          │ (圧縮設定)    │    │ RarAdvancedDlg       │
-       │ + メニュー    │          └──────┬───────┘    └──────────────────────┘
-       │ + ツールバー  │                  │
+       │ (Browse)     │          │ (Compress)   │    │ RarAdvancedDlg       │
+       │ + Menu       │          └──────┬───────┘    └──────────────────────┘
+       │ + Toolbar    │                  │
        │ + TreeView   │                  ▼
        │ + ListView   │           ┌──────────────────┐
        │ + Status     │           │ CompressHelper   │
-       └──────┬──────┘            │ (RAR 圧縮集約)    │
+       └──────┬──────┘            │ (RAR consolidate)│
               │                    └────────┬─────────┘
        ┌──────┼──────┬──────────┬────────┐  │
        ▼      ▼      ▼          ▼        ▼  ▼
@@ -87,26 +87,26 @@ AileEx/
   PostMessage WM_APP_PROGRESS / WM_APP_DONE
 ```
 
-## ダイアログ一覧
+## Dialog List
 
-| リソース ID | クラス / 用途 |
+| Resource ID | Class / Purpose |
 |---|---|
-| `IDD_COMPRESS` | `CompressDlg` — 圧縮設定 |
-| `IDD_COMPRESS_ADV` | `AdvancedCompressDlg` — 7z/ZIP 詳細圧縮オプション |
-| `IDD_RAR_COMPRESS_ADV` | `RarAdvancedDlg` — RAR 詳細圧縮オプション |
-| `IDD_PROGRESS` | `ProgressDlg` — モーダル進捗 |
-| `IDD_SETTINGS` | `SettingsDlg` — 設定 |
-| `IDD_INFO` | `InfoDlg` — エントリ詳細 |
-| `IDD_PASSWORD` | パスワード入力（暗号化アーカイブのオープン時に自動表示）|
-| `IDD_ABOUT` | バージョン情報 |
-| `IDR_MAIN_MENU` | メインウィンドウのメニューバー |
+| `IDD_COMPRESS` | `CompressDlg` — Compression settings |
+| `IDD_COMPRESS_ADV` | `AdvancedCompressDlg` — 7z/ZIP advanced compression options |
+| `IDD_RAR_COMPRESS_ADV` | `RarAdvancedDlg` — RAR advanced compression options |
+| `IDD_PROGRESS` | `ProgressDlg` — Modal progress |
+| `IDD_SETTINGS` | `SettingsDlg` — Settings |
+| `IDD_INFO` | `InfoDlg` — Entry details |
+| `IDD_PASSWORD` | Password input (auto-shown when opening encrypted archive) |
+| `IDD_ABOUT` | About dialog |
+| `IDR_MAIN_MENU` | Main window menu bar |
 
-## スレッドモデル
+## Thread Model
 
 ```
 UI Thread                    Worker Thread
 ─────────────────            ────────────────────────────────────
-WorkerThread::Start(task) ──→ task() 実行
+WorkerThread::Start(task) ──→ Execute task()
                                IArchiveExtractCallback::SetCompleted()
                                  PostMessageW(hwnd, WM_APP_PROGRESS, pct, (LPARAM)filename_copy)
 UI wakes on WM_APP_PROGRESS ←─────────────────────────────────
@@ -116,40 +116,40 @@ User clicks Cancel:
 PostMessageW(hwnd, WM_APP_DONE, hr, 0) ──→
 ```
 
-- ワーカー側でアーカイブ操作（`SevenZip::Extract` / `Compress`、`UnrarDll::ExtractArchive`）を実行
-- `IArchiveExtractCallback::SetCompleted` 等のコールバックから `PostMessage` で UI へ進捗通知
-- `WM_APP_PROGRESS` の `lParam` は `_wcsdup` した `wchar_t*` → UI 側で `free()`
-- キャンセル: UI スレッドが `sink->SetCancelled(true)` をセット、ワーカー側コールバックが `E_ABORT` を返して中断
-- `RarProcess` のキャンセルは `TerminateProcess` で rar.exe を強制終了
+- Worker executes archive operations (`SevenZip::Extract` / `Compress`, `UnrarDll::ExtractArchive`)
+- Callbacks like `IArchiveExtractCallback::SetCompleted` notify UI via `PostMessage` with progress
+- `WM_APP_PROGRESS` `lParam` is `_wcsdup`'d `wchar_t*` → UI side must `free()`
+- Cancel: UI thread sets `sink->SetCancelled(true)`, worker callback returns `E_ABORT` to abort
+- `RarProcess` cancel forcibly terminates rar.exe with `TerminateProcess`
 
-## 形式振り分け
+## Format Routing
 
 `MainWindow::OpenArchive(path)`:
 
 ```
-.rar ファイル?
-  ├─ Yes → RarExtractor 設定が "unrar" かつ unrar.dll ロード済?
-  │   ├─ Yes → unrar.ListArchive() を試行
-  │   │   └─ 失敗 → 7z.OpenArchive() にフォールバック
-  │   └─ No  → 7z.OpenArchive() を試行
-  │       └─ 失敗 → unrar.ListArchive() にフォールバック (ロード済の場合)
-  └─ No  → 7z.OpenArchive() のみ
+Is .rar file?
+  ├─ Yes → RarExtractor setting is "unrar" and unrar.dll loaded?
+  │   ├─ Yes → Try unrar.ListArchive()
+  │   │   └─ Fail → Fallback to 7z.OpenArchive()
+  │   └─ No  → Try 7z.OpenArchive()
+  │       └─ Fail → Fallback to unrar.ListArchive() (if loaded)
+  └─ No  → Try 7z.OpenArchive() only
 ```
 
 `SevenZip::OpenArchive(path)`:
-- 拡張子から CLSID を判定 → `CreateInArchive` でハンドラ取得
-- `archive->Open()` で開く
-- `.rar` で `S_FALSE` の場合は RAR4 (CLSID byte `0x03`) にフォールバック
+- Determine CLSID from extension → get handler with `CreateInArchive`
+- Open via `archive->Open()`
+- If `.rar` returns `S_FALSE`, fallback to RAR4 (CLSID byte `0x03`)
 
-`MainWindow::OpenArchive` の続き:
-- 全バックエンドが失敗した場合、暗号化ヘッダの可能性があるため `PromptPassword()` でパスワードダイアログを表示し、入力されたパスワードで `SevenZip::OpenArchive` を再試行
-- 成功したらアーカイブパスを正規化 (`GetFullPathNameW`) して `Settings::AddMru` に登録、`RebuildMruMenu()` でメニュー再構築
+Continuation of `MainWindow::OpenArchive`:
+- If all backends fail, possibility of encrypted header, so show password dialog with `PromptPassword()` and retry `SevenZip::OpenArchive` with entered password
+- On success, normalize archive path (`GetFullPathNameW`), register in `Settings::AddMru`, rebuild menu with `RebuildMruMenu()`
 
-## 設定ダイアログ
+## Settings Dialog
 
-`Settings::Save()` 後に `App::ReloadDlls()` を呼び、新しい DLL パスでロードし直す。
+After `Settings::Save()`, call `App::ReloadDlls()` to reload with new DLL paths.
 
-## メッセージ定数
+## Message Constants
 
 `resource.h`:
 
@@ -158,16 +158,16 @@ PostMessageW(hwnd, WM_APP_DONE, hr, 0) ──→
 #define WM_APP_DONE     (WM_APP + 2)  // wParam=HRESULT
 ```
 
-## 主要 Windows API
+## Primary Windows APIs
 
-| API | 用途 |
+| API | Purpose |
 |---|---|
-| `CreateProcessW` | RAR 圧縮（rar.exe 起動） |
-| `CreatePipe` | rar.exe の stdout キャプチャ |
-| `LoadLibraryW` / `GetProcAddress` | 7z.dll / unrar.dll 動的ロード |
-| `RegOpenKeyExW` | WinRAR インストールパスのレジストリ検索 |
-| `WritePrivateProfileStringW` | INI 設定保存 |
-| `DragAcceptFiles` / `DragQueryFileW` | D&D 対応 |
-| `CreateAcceleratorTable` | キーボードショートカット |
-| `SetProcessDpiAwarenessContext` | DPI 対応（PerMonitorV2） |
-| `IFileOpenDialog` (Shell) | フォルダ選択ダイアログ（展開先・設定ダイアログ） |
+| `CreateProcessW` | RAR compression (launch rar.exe) |
+| `CreatePipe` | Capture rar.exe stdout |
+| `LoadLibraryW` / `GetProcAddress` | Dynamic load 7z.dll / unrar.dll |
+| `RegOpenKeyExW` | Registry search for WinRAR install path |
+| `WritePrivateProfileStringW` | Save INI settings |
+| `DragAcceptFiles` / `DragQueryFileW` | Drag & drop support |
+| `CreateAcceleratorTable` | Keyboard shortcuts |
+| `SetProcessDpiAwarenessContext` | DPI support (PerMonitorV2) |
+| `IFileOpenDialog` (Shell) | Folder selection dialog (extract destination, settings dialog) |

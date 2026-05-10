@@ -1,4 +1,6 @@
 #include "UnrarDll.h"
+#include "I18n.h"
+#include "resource.h"
 #include <shlwapi.h>
 
 // Auto-detect UnRAR64.dll / UnRAR.dll from known install paths.
@@ -96,7 +98,7 @@ bool UnrarDll::ExtractArchiveSelected(const wchar_t* path, const wchar_t* destDi
     while ((res = m_pfnRead(hArc, &hdr)) == ERAR_SUCCESS) {
         if (sink && sink->IsCancelled()) { m_pfnClose(hArc); return false; }
 
-        // パスを正規化してターゲットセットと照合
+        // Normalize path and match against the target set
         std::wstring normalPath = hdr.FileNameW;
         for (auto& c : normalPath) if (c == L'\\') c = L'/';
         while (!normalPath.empty() && normalPath.back() == L'/') normalPath.pop_back();
@@ -156,7 +158,7 @@ bool UnrarDll::ListArchive(const wchar_t* path, std::vector<ArchiveItem>& items,
         }
         // Host OS
         static const wchar_t* kOSNames[] = { L"MS-DOS", L"OS/2", L"Windows", L"Unix", L"Mac OS", L"BeOS" };
-        it.hostOS = (hdr.HostOS < 6) ? kOSNames[hdr.HostOS] : L"不明";
+        it.hostOS = (hdr.HostOS < 6) ? kOSNames[hdr.HostOS] : I18n::Tr(IDS_HOST_OS_UNKNOWN);
         // Compression method
         switch (hdr.Method) {
         case 0x30: it.method = L"Storing"; break;
@@ -165,7 +167,7 @@ bool UnrarDll::ListArchive(const wchar_t* path, std::vector<ArchiveItem>& items,
         case 0x33: it.method = L"Normal";  break;
         case 0x34: it.method = L"Good";    break;
         case 0x35: it.method = L"Best";    break;
-        default:   it.method = L"―";      break;
+        default:   it.method = I18n::Tr(IDS_DASH); break;
         }
         it.index      = (UINT32)items.size();
         items.push_back(std::move(it));
@@ -176,6 +178,46 @@ bool UnrarDll::ListArchive(const wchar_t* path, std::vector<ArchiveItem>& items,
     return (res == ERAR_END_ARCHIVE);
 }
 
+bool UnrarDll::GetArchiveComment(const wchar_t* path, std::wstring& out) {
+    out.clear();
+    if (!IsLoaded()) return false;
+
+    // RAR comment max length is ~65535 bytes per spec; allocate a generous buffer.
+    std::vector<char> buf(64 * 1024 + 1, 0);
+
+    RAROpenArchiveDataEx od = {};
+    od.ArcNameW    = const_cast<wchar_t*>(path);
+    od.OpenMode    = RAR_OM_LIST;
+    od.CmtBuf      = buf.data();
+    od.CmtBufSize  = (UINT)(buf.size() - 1);
+    HANDLE hArc = m_pfnOpen(&od);
+    if (!hArc) return false;
+    m_pfnClose(hArc);
+
+    if (od.OpenResult != ERAR_SUCCESS) return false;
+    // CmtState: 1 = comment present; CmtSize is the actual length.
+    if (od.CmtState != 1 || od.CmtSize == 0) return false;
+
+    // CmtBuf encoding depends on the archive version:
+    //   RAR5: UTF-8
+    //   RAR4: OEM/ANSI code page at creation time (e.g. CP_932 on Japanese systems)
+    // Try UTF-8 first with MB_ERR_INVALID_CHARS; fall back to CP_ACP on failure.
+    auto tryDecode = [&](UINT codePage, DWORD flags) -> bool {
+        int wlen = MultiByteToWideChar(codePage, flags,
+                                       buf.data(), (int)od.CmtSize, nullptr, 0);
+        if (wlen <= 0) return false;
+        out.resize(wlen);
+        MultiByteToWideChar(codePage, flags,
+                            buf.data(), (int)od.CmtSize, out.data(), wlen);
+        return true;
+    };
+    if (!tryDecode(CP_UTF8, MB_ERR_INVALID_CHARS)) {
+        out.clear();
+        tryDecode(CP_ACP, 0);
+    }
+    return !out.empty();
+}
+
 bool UnrarDll::TestArchive(const wchar_t* path,
                             const wchar_t* password,
                             IExtractProgressSink* sink) {
@@ -183,7 +225,7 @@ bool UnrarDll::TestArchive(const wchar_t* path,
 
     RAROpenArchiveDataEx od = {};
     od.ArcNameW  = const_cast<wchar_t*>(path);
-    od.OpenMode  = RAR_OM_EXTRACT;  // RAR_TEST にも EXTRACT モードでオープンする
+    od.OpenMode  = RAR_OM_EXTRACT;  // RAR_TEST also requires EXTRACT open mode
     HANDLE hArc  = m_pfnOpen(&od);
     if (!hArc || od.OpenResult != ERAR_SUCCESS) return false;
 

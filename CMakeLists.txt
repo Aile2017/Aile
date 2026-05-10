@@ -4,7 +4,7 @@ project(AileEx LANGUAGES CXX RC)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# 静的 CRT リンク：単一 EXE 配布（msvcp140.dll / vcruntime140.dll に依存しない）
+# Static CRT linking: single EXE distribution (no dependency on msvcp140.dll / vcruntime140.dll)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 add_executable(AileEx WIN32
@@ -13,12 +13,16 @@ add_executable(AileEx WIN32
     src/MainWindow.cpp
     src/CompressDlg.cpp
     src/CompressHelper.cpp
+    src/CliMode.cpp
     src/AdvancedCompressDlg.cpp
     src/RarAdvancedDlg.cpp
     src/InfoDlg.cpp
+    src/PropertiesDlg.cpp
+    src/CommentDlg.cpp
     src/ProgressDlg.cpp
     src/SettingsDlg.cpp
     src/Settings.cpp
+    src/I18n.cpp
     src/SevenZip.cpp
     src/UnrarDll.cpp
     src/RarProcess.cpp
@@ -52,13 +56,19 @@ target_link_libraries(AileEx PRIVATE
 
 if(MSVC)
     target_compile_options(AileEx PRIVATE /W3 /utf-8)
+
+    # Note: CMake 3.15+ with Ninja+MSVC automatically adds /showIncludes.
+    # To prevent verbose include file output, run without --verbose flag:
+    #   cmake --build build_release       (no output)
+    #   cmake --build build_release -v    (shows include paths)
+
     # Disable auto-manifest; the manifest is embedded via AileEx.rc (1 RT_MANIFEST)
     target_link_options(AileEx PRIVATE "/MANIFEST:NO")
 
-    # Release ビルド向け最適化:
-    #   /GR-      RTTI 無効化（dynamic_cast / typeid 未使用なのでサイズ削減）
-    #   /guard:cf Control Flow Guard（ROP 攻撃緩和）
-    #   /Zi       PDB 生成（クラッシュ解析のため Release でも残す）
+    # Release build optimizations:
+    #   /GR-      Disable RTTI (dynamic_cast/typeid unused, reduces binary size)
+    #   /guard:cf Control Flow Guard (mitigates ROP attacks)
+    #   /Zi       Generate PDB (retained in Release for crash analysis)
     target_compile_options(AileEx PRIVATE
         $<$<CONFIG:Release>:/GR->
         $<$<CONFIG:Release>:/guard:cf>
@@ -72,7 +82,7 @@ if(MSVC)
     )
 endif()
 
-# LTO（リンク時最適化）— Release のみ。翻訳単位をまたぐインライン化が効く。
+# Link-Time Optimization (LTO) — Release only. Enables cross-translation-unit inlining.
 include(CheckIPOSupported)
 check_ipo_supported(RESULT IPO_OK OUTPUT IPO_ERR)
 if(IPO_OK)

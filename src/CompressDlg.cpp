@@ -49,7 +49,7 @@ void CompressDlg::Params::SaveToSettings(Settings& s) const {
 
 struct MethodEntry { const wchar_t* label; const wchar_t* id; };
 
-// 静的フォールバック（7z.dll が読み込めなかった場合）
+// Static fallback (used when 7z.dll cannot be loaded)
 static const WritableFormat kFallbackFormats[] = {
     {L"7-Zip (.7z)",  L"7z"},
     {L"ZIP (.zip)",   L"zip"},
@@ -59,14 +59,14 @@ static const WritableFormat kFallbackFormats[] = {
     {L"XZ (.xz)",     L"xz"},
 };
 
-// label は表示用ベース名。default 印は populate 時に IDS_DEFAULT_SUFFIX を付与。
+// label is the display base name. The default entry gets IDS_DEFAULT_SUFFIX appended at populate time.
 static const MethodEntry kMethods7z[] = {
     {L"LZMA2",         L"lzma2"},   // default
     {L"LZMA",          L"lzma"},
     {L"PPMd",          L"ppmd"},
     {L"BZip2",         L"bzip2"},
     {L"Deflate",       L"deflate"},
-    // 7-Zip Zstandard 拡張コーデック（DLL が対応している場合のみ表示される）
+    // 7-Zip Zstandard extended codecs (shown only when the DLL supports them)
     {L"Zstandard",     L"zstd"},
     {L"Brotli",        L"brotli"},
     {L"LZ4",           L"lz4"},
@@ -78,7 +78,7 @@ static const MethodEntry kMethodsZip[] = {
     {L"Deflate",        L"deflate"},  // default
     {L"BZip2",          L"bzip2"},
     {L"LZMA",           L"lzma"},
-    // 7-Zip Zstandard 拡張
+    // 7-Zip Zstandard extension
     {L"Zstandard",      L"zstd"},
     {L"Brotli",         L"brotli"},
     {L"LZ4",            L"lz4"},
@@ -100,7 +100,7 @@ bool CompressDlg::Show(HWND hwndParent, Params& params,
     m_params       = params;
     m_encoderNames = encoderNames;
 
-    // フォーマットリストを構築：7z.dll 提供リスト → フォールバック → 末尾に RAR を追加
+    // Build format list: prefer list from 7z.dll → fallback → append RAR at end
     m_writableFormats.clear();
     if (writableFormats && !writableFormats->empty()) {
         m_writableFormats = *writableFormats;
@@ -108,7 +108,7 @@ bool CompressDlg::Show(HWND hwndParent, Params& params,
         for (const auto& f : kFallbackFormats)
             m_writableFormats.push_back(f);
     }
-    // RAR は rar.exe 経由のため常に末尾に追加
+    // RAR is handled via rar.exe, so always append at the end
     m_writableFormats.push_back({L"RAR (.rar)", L"rar"});
     INT_PTR result = DialogBoxParamW(
         GetModuleHandleW(nullptr),
@@ -158,7 +158,7 @@ INT_PTR CompressDlg::HandleMsg(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     return FALSE;
 }
 
-// SFX 選択肢のラベルは表示時にローカライズ。データ id は静的領域。
+// SFX choice labels are localized at display time; data id pointers live in static storage.
 struct SfxEntry { UINT labelId; const wchar_t* id; };
 static const SfxEntry kSfxModes[] = {
     {IDS_SFX_NONE,    L""},
@@ -171,7 +171,7 @@ void CompressDlg::OnInit(HWND hwnd) {
     HWND hFmt = GetDlgItem(hwnd, IDC_FORMAT);
     for (const auto& f : m_writableFormats) {
         int idx = (int)SendMessageW(hFmt, CB_ADDSTRING, 0, (LPARAM)f.label.c_str());
-        // f.ext.c_str() は m_writableFormats が不変な間は安定したポインタ
+        // f.ext.c_str() is a stable pointer as long as m_writableFormats doesn't change
         SendMessageW(hFmt, CB_SETITEMDATA, idx, (LPARAM)f.ext.c_str());
         if (m_params.format == f.ext) SendMessageW(hFmt, CB_SETCURSEL, idx, 0);
     }
@@ -271,10 +271,10 @@ void CompressDlg::OnFormatChange(HWND hwnd) {
     bool isZip = (fmtId && wcscmp(fmtId, L"zip") == 0);
     bool isRar = (fmtId && wcscmp(fmtId, L"rar") == 0);
 
-    // SFX は 7z / RAR のみ対応。それ以外は強制的に "なし" に戻す。
+    // SFX is supported only for 7z / RAR; reset to "none" for other formats.
     bool sfxAvailable = (is7z || isRar);
     EnableWindow(hSfx, sfxAvailable);
-    if (!sfxAvailable) SendMessageW(hSfx, CB_SETCURSEL, 0, 0);  // index 0 = "なし"
+    if (!sfxAvailable) SendMessageW(hSfx, CB_SETCURSEL, 0, 0);  // index 0 = "none"
 
     // Update output path extension to match the selected format.
     // For gz/bz2/xz, use .tar.X when multiple inputs or a directory are selected
@@ -303,7 +303,7 @@ void CompressDlg::OnFormatChange(HWND hwnd) {
         EnableWindow(hLevel, TRUE);
         EnableWindow(hMethod, FALSE);
         EnableWindow(GetDlgItem(hwnd, IDC_PASSWORD), TRUE);
-        EnableWindow(GetDlgItem(hwnd, IDC_ENCRYPT_HDR), TRUE);  // RAR は -hp でヘッダ暗号化可能
+        EnableWindow(GetDlgItem(hwnd, IDC_ENCRYPT_HDR), TRUE);  // RAR supports header encryption via -hp
         return;
     }
 
@@ -327,25 +327,25 @@ void CompressDlg::OnFormatChange(HWND hwnd) {
     const MethodEntry* methods = is7z ? kMethods7z : kMethodsZip;
     int count = is7z ? (int)_countof(kMethods7z) : (int)_countof(kMethodsZip);
 
-    // encoderNames が非空の場合、DLLがサポートするエンコーダーのみ表示する。
-    // 空または null のときはフィルタなし（全コーデックを表示）。
+    // When encoderNames is non-empty, show only encoders supported by the DLL.
+    // Empty or null means no filter (show all codecs).
     auto supportsEncoder = [&](const wchar_t* id) -> bool {
         if (!m_encoderNames || m_encoderNames->empty()) return true;
         std::wstring lower = id;
         for (auto& c : lower) c = (wchar_t)towlower((wchar_t)c);
         for (const auto& name : *m_encoderNames) {
             if (name == lower) return true;
-            // ZIPの "store" はDLL内では "copy" として登録されている
+            // ZIP's "store" is registered as "copy" inside the DLL
             if (lower == L"store" && name == L"copy") return true;
-            // 保険: "zstd" ↔ "zstandard"（DLLのバリアントによって表記が異なる可能性）
+            // Safety: "zstd" ↔ "zstandard" (variant spelling may differ across DLL versions)
             if ((lower == L"zstd" || lower == L"zstandard") &&
                 (name == L"zstd" || name == L"zstandard")) return true;
         }
         return false;
     };
 
-    // 既定メソッドだけは "(既定)" / "(default)" suffix を付与する。
-    // 7z は LZMA2、ZIP は Deflate を既定とみなす。
+    // Append "(default)" suffix only to the default method.
+    // LZMA2 is the default for 7z; Deflate is the default for ZIP.
     const wchar_t* defaultId = is7z ? L"lzma2" : L"deflate";
     std::wstring defaultSuffix = I18n::Tr(IDS_DEFAULT_SUFFIX);
     for (int i = 0; i < count; ++i) {
@@ -369,7 +369,7 @@ void CompressDlg::OnBrowseOutput(HWND hwnd) {
 }
 
 void CompressDlg::OnAdvanced(HWND hwnd) {
-    // 現在の形式を取得
+    // Get the currently selected format
     std::wstring fmt = m_params.format;
     HWND hFmt = GetDlgItem(hwnd, IDC_FORMAT);
     int fsel = (int)SendMessageW(hFmt, CB_GETCURSEL, 0, 0);
@@ -379,7 +379,7 @@ void CompressDlg::OnAdvanced(HWND hwnd) {
     }
 
     if (fmt == L"rar") {
-        // RAR 専用詳細設定
+        // RAR-specific advanced settings
         RarAdvancedDlg::Params rp;
         rp.dictSize    = m_params.rarDictSize;
         rp.solid       = m_params.rarSolid;
@@ -398,7 +398,7 @@ void CompressDlg::OnAdvanced(HWND hwnd) {
             m_params.rarExtra       = rp.extra;
         }
     } else {
-        // 7z/zip 等の詳細設定
+        // Advanced settings for 7z/zip/etc.
         AdvancedCompressDlg::Params advParams;
         advParams.dictSize   = m_params.dictSize;
         advParams.wordSize   = m_params.wordSize;
@@ -465,7 +465,7 @@ bool CompressDlg::OnOK(HWND hwnd) {
 
     m_params.encryptHeaders = (IsDlgButtonChecked(hwnd, IDC_ENCRYPT_HDR) == BST_CHECKED);
 
-    // Read SFX mode (7z / RAR 以外では強制的に "" になる)
+    // Read SFX mode (forced to "" for formats other than 7z / RAR)
     HWND hSfx = GetDlgItem(hwnd, IDC_SFX_MODE);
     int  ssel = (int)SendMessageW(hSfx, CB_GETCURSEL, 0, 0);
     if (ssel != CB_ERR) {

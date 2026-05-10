@@ -1,19 +1,32 @@
 #pragma once
 #include <windows.h>
+#include <string>
 #include "CompressDlg.h"
 #include "ProgressDlg.h"
 
 class ProgressPostSink;
 
-// RAR (rar.exe / WinRAR.exe) を起動して圧縮し、ProgressDlg のメッセージループを
-// 駆動して完了を待つ。known-issues.md「RAR 圧縮ルーティングは 2 経路」を
-// 1 経路に集約するための共通エントリ。
+// Returns the absolute path to the 7z SFX module (7z.sfx / 7zCon.sfx).
+// Searches the same directory as 7z.dll. mode is "gui" or "console".
+// Returns empty string if not found.
+std::wstring Resolve7zSfxModulePath(const wchar_t* sevenZipDllPath,
+                                    const wchar_t* mode);
+
+// Returns the absolute path to the RAR SFX module (Default.SFX / WinCon.SFX).
+// Searches the same directory as rar.exe / WinRAR.exe. mode is "gui" or "console".
+// Returns empty string if not found.
+std::wstring ResolveRarSfxModulePath(const wchar_t* rarExePath,
+                                     const wchar_t* mode);
+
+// Launches RAR (rar.exe / WinRAR.exe) for compression and drives the ProgressDlg
+// message loop until completion. This is the single shared entry point that unifies
+// the two RAR compression paths described in known-issues.md.
 //
-// 戻り値:
-//   起動失敗時は E_FAIL（progDlg は内部で Dismiss 済み）。
-//   起動成功時は ProgressDlg::RunMessageLoop の戻り値（S_OK / E_ABORT / 失敗 HRESULT）。
+// Return value:
+//   E_FAIL on launch failure (progDlg already Dismissed internally).
+//   Otherwise the return value of ProgressDlg::RunMessageLoop (S_OK / E_ABORT / failure HRESULT).
 //
-// sink の所有権は呼出側。完了後に呼出側で delete すること。
+// sink ownership remains with the caller; caller must delete after completion.
 HRESULT RunRarCompressSync(HWND parent,
                            const CompressDlg::Params& p,
                            const wchar_t* rarExePath,

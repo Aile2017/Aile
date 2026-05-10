@@ -1,148 +1,156 @@
-﻿# AileEx — Claude 向けガイド
+# AileEx — Claude Development Guide
 
-このファイルは将来の Claude セッションが本プロジェクトで作業する際の道標。
+This file serves as a guide for future Claude sessions working on this project.
 
-## プロジェクト概要
+## Project Overview
 
-7z.dll をバックエンドとする Windows 向けアーカイブマネージャ GUI。C++17 + Win32 API。
-詳細は `docs/specification.md` を参照。
+A Windows archive manager GUI with 7z.dll as the backend. C++17 + Win32 API.
+For details, see `docs/specification.md`.
 
-## 環境
+## Environment
 
 - **OS**: Windows 11 (x64)
-- **シェル**: PowerShell（Bash も可。POSIX スクリプトは Bash 推奨）
-- **コンパイラ**: MSVC (Visual Studio 18/2026 Community)
-- **コンパイラへの PATH**:
+- **Shell**: PowerShell (Bash also available; POSIX scripts prefer Bash)
+- **Compiler**: MSVC (Visual Studio 18/2026 Community)
+- **Compiler PATH**:
   ```powershell
   $env:PATH = "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.44.35207\bin\Hostx64\x64;" + $env:PATH
   ```
-- **ビルドコマンド**: `cmake --build build` (Debug) / `cmake --build build_release` (Release)
+- **Build commands**: `cmake --build build` (Debug) / `cmake --build build_release` (Release)
 
-## まず読むべきドキュメント
+## Essential Documentation to Read First
 
-| ファイル | 内容 |
+| File | Content |
 |---|---|
-| `docs/specification.md` | 機能仕様（起動モード、UI、設定、対応形式） |
-| `docs/architecture.md` | モジュール構成、クラス関係、スレッドモデル |
-| `docs/build.md` | ビルド手順、必要な実行時 DLL |
-| `docs/known-issues.md` | **重要** — 過去に踏んだ罠の記録。実装前に目を通すこと |
+| `docs/specification.md` | Functional specification (startup modes, UI, settings, supported formats) |
+| `docs/architecture.md` | Module structure, class relationships, thread model |
+| `docs/build.md` | Build instructions, required runtime DLLs |
+| `docs/known-issues.md` | **IMPORTANT** — Record of past pitfalls. Read before implementing. |
+| `docs/compress-extra-params.md` | List of `key=value` parameters for advanced compression settings (7z.dll `ISetProperties` coverage) |
+| `docs/rar-extra-params.md` | List of rar.exe switches for advanced RAR settings |
+| `docs/roadmap.md` | Roadmap of unimplemented features (priority/hints/effort estimates) |
 
-## コード規約
+## Code Conventions
 
-- **コメント**: 日本語可。WHY を書く。WHAT は書かない（コードで分かる）
-- **既存スタイルに従う**: クラス内部の `m_` プレフィクス、`STDMETHODCALLTYPE` の使用、`HRESULT` の返し方
-- **新ファイル**: `CMakeLists.txt` の `add_executable` リストに追加すること（CMake は glob しない）
-- **ヘッダ**: `#pragma once` を使う
+- **Comments**: English (was Japanese; now translated). Write WHY, not WHAT (code explains itself).
+- **Follow existing style**: `m_` prefix for class members, use `STDMETHODCALLTYPE`, return `HRESULT` appropriately
+- **New files**: Add to `CMakeLists.txt` `add_executable` list (CMake does not glob)
+- **Headers**: Use `#pragma once`
 
-## 必ず守るべき設計上の罠
+## Critical Design Patterns
 
-`docs/known-issues.md` から特に重要なものを抜粋。詳細はそちらを読むこと。
+Excerpted from `docs/known-issues.md`; see that file for details.
 
-1. **7-Zip フォーマット CLSID**: SDK ヘッダの定数値を信用しない。新フォーマット追加時は実行時に `GetNumberOfFormats` で列挙して検証。Rar5 は **`0xCC`** であり `0x04` (= Arj) ではない。
-2. **`IInArchive::Open` は format mismatch で `S_FALSE` を返す**。`FAILED(hr) || hr == S_FALSE` の両方をチェック。
-3. **`COutFileStream` は `IOutStream` (シーカブル) が必要**。`SetSize` 後はファイルポインタを元に戻す。
-4. **unrar.dll の `RARHeaderDataEx` は `#pragma pack` を使わない**。デフォルトアラインメントで定義。
-5. **unrar.dll が返すパスはバックスラッシュ区切り**。`SevenZip` 流のフォワードスラッシュに正規化する。
-6. **RAR 圧縮は `CompressHelper::RunRarCompressSync()` に集約済み**（`App::RunCompressMode` と `MainWindow::OnCompress` の両方から呼ぶ）。新たな圧縮起動経路を追加する際は必ずこのヘルパー経由にすること。
+1. **7-Zip format CLSID**: Don't trust SDK header constants. When adding new formats, validate at runtime using `GetNumberOfFormats`. Rar5 is **`0xCC`**, not `0x04` (which is Arj).
+2. **`IInArchive::Open` returns `S_FALSE` on format mismatch**. Check both `FAILED(hr) || hr == S_FALSE`.
+3. **`COutFileStream` requires `IOutStream` (seekable)**. After `SetSize`, rewind file pointer.
+4. **unrar.dll `RARHeaderDataEx` does not use `#pragma pack`**. Define with default alignment.
+5. **unrar.dll paths use backslashes**. Normalize to forward-slash style like `SevenZip`.
+6. **RAR compression centralized in `CompressHelper::RunRarCompressSync()`** (called from both `App::RunCompressMode` and `MainWindow::OnCompress`). Any new compression entry point must use this helper.
+7. **Self-extraction (SFX)**: 7z concatenates `7z.sfx` / `7zCon.sfx` (from 7z.dll directory) to the front of compressed .7z. RAR passes `rar.exe -sfx<modulePath>` and uses `Default.SFX` / `WinCon.SFX` from rar.exe directory. For split volumes, prepend module to **first volume only** (`CMultiVolOutStream::FinalizeWithSfx`). If SFX module not found, **error and abort** (no fallback to plain .7z).
 
-## ワーカースレッドの定石
+## Worker Thread Pattern
 
 ```
 UI Thread                   Worker Thread
 ─────────────               ─────────────
 WorkerThread::Start(task)
-  → 内部で CreateThread     task() を実行
+  → CreateThread            task() executes
                             sink->OnProgress(...)
                               → PostMessage(WM_APP_PROGRESS, pct, _wcsdup(file))
-WM_APP_PROGRESS 受信
+WM_APP_PROGRESS received
   → ProgressDlg.SetProgress
-  → free((wchar_t*)lParam)  ← 必ず free する！
-                            task() 戻る
+  → free((wchar_t*)lParam)  ← MUST free!
+                            task() returns
                               → PostMessage(WM_APP_DONE, hr, 0)
-WM_APP_DONE 受信
+WM_APP_DONE received
   → ProgressDlg.Dismiss
 worker.Wait()
 delete sink
 ```
 
-- `WM_APP_PROGRESS` の `lParam` は `_wcsdup` した `wchar_t*`。受信側で `free()` 必須
-- キャンセル: `sink->SetCancelled(true)` をセット → コールバックが `E_ABORT` を返して中断
-- RAR (rar.exe) のキャンセルは `RarProcess::Cancel()` が `TerminateProcess`
+- `WM_APP_PROGRESS` `lParam` is `_wcsdup`'d `wchar_t*`. Receiver must `free()`.
+- Cancellation: set `sink->SetCancelled(true)` → callback returns `E_ABORT` to abort
+- RAR (rar.exe) cancellation: `RarProcess::Cancel()` calls `TerminateProcess`
 
-## 設定の追加方法
+## Adding New Settings
 
-新しい設定項目を追加するときの手順:
+When adding a new setting:
 
-1. `Settings.h` に `m_xxx`、`GetXxx()`、`SetXxx()` を追加
-2. `Settings.cpp` の `Load()` / `Save()` に `ReadStr` / `WriteStr` を追加
-3. `SettingsDlg` のリソース (`AileEx.rc`) に控除コントロールを追加、`resource.h` に ID を追加
-4. `SettingsDlg.cpp` の `OnInit` (読込) と `OnOK` (保存) に対応を追加
-5. 必要なら `App::ReloadDlls` で再読込トリガーを処理
+1. Add `m_xxx`, `GetXxx()`, `SetXxx()` to `Settings.h`
+2. Add `ReadStr` / `WriteStr` calls to `Settings.cpp` `Load()` / `Save()`
+3. Add control to `SettingsDlg` resource in `AileEx.rc`, add ID to `resource.h`
+4. Add handling to `SettingsDlg.cpp` `OnInit` (load) and `OnOK` (save)
+5. If needed, handle reload trigger in `App::ReloadDlls`
 
-## 新フォーマット追加方法
+## Adding New Archive Format
 
-`FormatToInGuid` は 7z.dll ロード時に `m_extToClsid` マップ（動的列挙）を参照するため、
-**読み取り（展開・ブラウズ）は 7z.dll が対応していれば自動的に機能する**。
-手動対応が必要なのは以下の場合のみ。
+`FormatToInGuid` references `m_extToClsid` map (dynamic enumeration) when 7z.dll loads, so
+**read operations (extract/browse) work automatically if 7z.dll supports the format**.
+Manual changes needed only in these cases:
 
-1. `main.cpp` の `kArchiveExts[]` に拡張子追加（ブラウズモード判定用）
-2. **圧縮（書き込み）対応が必要な場合のみ**: `SevenZip.cpp` の `FormatToOutGuid` 静的フォールバックに追加、`CompressDlg.cpp` の `kFormats[]` にエントリ追加
-3. **動的列挙が使えない場合（稀）のみ**: `sdk/7zip/Archive/IArchive.h` に `Z7_FMT_GUID(CLSID_Format_XXX, 0xYY);` を追加し、`FormatToInGuid` の静的フォールバックに分岐を追加
+1. Add extension to `kArchiveExts[]` in `main.cpp` (for browse mode detection)
+2. **If compression (write) support needed**: Add to static fallback in `SevenZip.cpp` `FormatToOutGuid`, add entry to `kFormats[]` in `CompressDlg.cpp`
+3. **If dynamic enumeration unavailable (rare)**: Add `Z7_FMT_GUID(CLSID_Format_XXX, 0xYY);` to `sdk/7zip/Archive/IArchive.h`, add branch to `FormatToInGuid` static fallback
 
-CLSID 確認方法: 過去のコミットに `EnumerateFormats` 関数があるので git 履歴から復活させる（see `docs/known-issues.md` 項目 1）。
+To find CLSID: `EnumerateFormats` function exists in git history; recover it and use `GetNumberOfFormats` to validate on-device CLSID (see `docs/known-issues.md` item 1).
 
-## 診断・デバッグ手法
+## Diagnostic and Debugging Techniques
 
-ファイルが開けない／フォーマット問題が起きたとき:
+When files won't open / format issues occur:
 
-1. **マジックバイト確認**:
+1. **Check magic bytes**:
    ```powershell
    $bytes = [System.IO.File]::ReadAllBytes("path") | Select-Object -First 16
    ($bytes | ForEach-Object { $_.ToString("X2") }) -join " "
    ```
-2. **7z.exe で確認**: 同じファイルが `7z.exe l file.rar` で開けるか
-3. **CLSID 検証**: 過去のコミットに `EnumerateFormats` 関数があるので、それを一時的に復活させて `GetNumberOfFormats` で実機の CLSID を確認
-4. **Stream 動作ログ**: `CInFileStream::Read`/`Seek` に `OutputDebugStringW` または `%TEMP%\aileex_debug.log` への書き込みを追加
+2. **Verify with 7z.exe**: Does the same file open with `7z.exe l file.rar`?
+3. **Validate CLSID**: `EnumerateFormats` function in git history; recover and use `GetNumberOfFormats` to confirm on-device CLSID
+4. **Log stream operations**: Add `OutputDebugStringW` or file logging to `%TEMP%\aileex_debug.log` in `CInFileStream::Read`/`Seek`
 
-過去の診断ログ実装は git 履歴の中盤にある。
+Diagnostic logging implementations exist in git history.
 
-## コーデック列挙（7-Zip Zstandard 対応）
+## Codec Enumeration (7-Zip Zstandard Support)
 
-7z.dll のロード後、SevenZip::EnumerateCodecs() を呼び出してエンコーダー名一覧を取得する（GetNumberOfMethods / GetMethodProperty 使用）。
-CompressDlg はこのリストを参照し、DLL がサポートしないコーデックをメソッドコンボから除外する（supportsEncoder lambda）。
+After 7z.dll loads, call `SevenZip::EnumerateCodecs()` to get encoder name list (using `GetNumberOfMethods` / `GetMethodProperty`).
+CompressDlg references this list, excluding codecs unsupported by DLL from method combo (via `supportsEncoder` lambda).
 
 - PropID: kName=1, kEncoderIsAssigned=8
-- エイリアス: store ↔ copy（ZIP の Store）、zstd ↔ zstandard
-- 7-Zip Zstandard が報告する追加コーデック: BROTLI, LZ4, LIZARD, LZ5, ZSTD, FLZMA2
+- Aliases: store ↔ copy (ZIP Store), zstd ↔ zstandard
+- 7-Zip Zstandard reports additional codecs: BROTLI, LZ4, LIZARD, LZ5, ZSTD, FLZMA2
 
-## フォルダ選択ダイアログ
+## Folder Selection Dialog
 
-展開先・設定ダイアログの出力先選択は IFileOpenDialog + FOS_PICKFOLDERS + FOS_FORCEFILESYSTEM を使う（SHBrowseForFolder は廃止）。
-必要ヘッダ: <shobjidl_core.h>。現在値は SHCreateItemFromParsingName → SetFolder() で初期フォルダとして表示。
+Extract destination and settings dialogs use `IFileOpenDialog + FOS_PICKFOLDERS + FOS_FORCEFILESYSTEM` (replaces deprecated `SHBrowseForFolder`).
+Required header: `<shobjidl_core.h>`. Show current folder using `SHCreateItemFromParsingName` → `SetFolder()`.
 
 ## GitHub Actions
 
-.github/workflows/package-release.yml に workflow_dispatch トリガーのリリースワークフローを追加。
-- ilammy/msvc-dev-cmd で MSVC x64 環境構築 → CMake Release ビルド
-- AileEx.exe + README.md を ZIP に梱包し softprops/action-gh-release でリリース作成
-- タグ形式: AileEx_{version}_{yyyyMMdd}
+Added workflow_dispatch trigger release workflow to `.github/workflows/package-release.yml`.
+- Use ilammy/msvc-dev-cmd to set up MSVC x64 environment → CMake Release build
+- Package AileEx.exe + README.md into ZIP, create release with softprops/action-gh-release
+- Tag format: AileEx_{version}_{yyyyMMdd}
 
-## 残タスク
+## Remaining Tasks
 
-- [ ] 手動テストマトリクス: 各形式の閲覧・圧縮・展開・キャンセル・ドロップ
-- [ ] エラーハンドリング一括レビュー
-- [ ] マルチボリューム対応（未着手・今後の拡張案）
-- [ ] シェル統合（コンテキストメニュー、未着手）
+See [`docs/roadmap.md`](docs/roadmap.md) for feature priority and implementation hints.
 
-## ユーザの作業スタイル
+Recent small items left to address:
 
-- 日本語でやり取り
-- 問題が解決した時点で「ありがとう」と返事をくれる
-- 機能追加より、まず根本原因の特定を優先する（過去の CLSID バグ調査がいい例）
-- 中断中にコードを直接編集することがある（戻ったら現状確認すること）
+- [ ] Manual test matrix: browse/compress/extract/cancel/drag-drop for each format
+- [ ] Bulk error handling review
+- [ ] `RarProcess::Delete` cancellation path (extend `Cancel()` for use in Delete)
+- [ ] Password retention when deleting header-encrypted 7z archives
 
-## ビルドが壊れたら
+## User Work Style
 
-1. `cmake --build build 2>&1 | Select-Object -Last 30` でエラー全文を確認
-2. CMake のキャッシュが古い可能性があるなら `cmake -B build` で再生成
-3. SDK ヘッダの問題なら `sdk/7zip/` のヘッダを確認
+- Conducts discussions in Japanese
+- Replies with thanks when issues are resolved
+- Prioritizes root cause identification over feature additions (past CLSID bug investigation is a good example)
+- May edit code directly during breaks (confirm current state when returning)
+
+## Build Troubleshooting
+
+1. Check full error output: `cmake --build build 2>&1 | Select-Object -Last 30`
+2. If CMake cache might be stale, regenerate: `cmake -B build`
+3. For SDK header issues, check headers in `sdk/7zip/`

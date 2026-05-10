@@ -3,23 +3,40 @@
 #include <vector>
 #include <string>
 #include "App.h"
+#include "CliMode.h"
+#include "I18n.h"
+#include "resource.h"
 
 int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
+    // Call first; resource language selection affects subsequent DialogBox / LoadMenu / LoadString.
+    I18n::Init();
+
     // Belt-and-suspenders alongside manifest: enables PerMonitorV2 on older loaders
     typedef BOOL (WINAPI* FnSetDpiCtx)(DPI_AWARENESS_CONTEXT);
     if (auto fn = (FnSetDpiCtx)GetProcAddress(GetModuleHandleW(L"user32"), "SetProcessDpiAwarenessContext"))
         fn(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
-    // SevenZip のロードを先に行い、拡張子判定に使えるようにする
+    // Load SevenZip first so the extension-detection table is available
     App& app = App::Instance();
     if (!app.Init(hInst)) {
-        MessageBoxW(nullptr, L"初期化に失敗しました。", L"AileEx", MB_ICONERROR);
+        MessageBoxW(nullptr, I18n::Tr(IDS_ERR_INIT_FAILED).c_str(), L"AileEx", MB_ICONERROR);
         return 1;
     }
 
     // Parse command-line arguments
     int argc = 0;
     wchar_t** argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+
+    int result;
+
+    // If the first non-flag argument is x/e/t/l, enter CLI no-UI mode;
+    // otherwise fall through to the normal GUI path.
+    if (CliMode::IsCliCommand(argc, argv)) {
+        result = CliMode::Run(argc, argv);
+        if (argv) LocalFree(argv);
+        app.Shutdown();
+        return result;
+    }
 
     std::vector<std::wstring> archiveFiles, regularFiles;
     auto& sz7 = app.Get7z();
@@ -33,7 +50,6 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
     }
     if (argv) LocalFree(argv);
 
-    int result;
     if (!archiveFiles.empty()) {
         result = app.RunBrowseMode(archiveFiles, nCmdShow);
     } else if (!regularFiles.empty()) {

@@ -15,8 +15,8 @@ public:
     bool Create(HINSTANCE hInst, int nCmdShow);
     void OpenArchive(const wchar_t* path);
     HWND Hwnd() const { return m_hwnd; }
-    // メッセージループで TranslateAccelerator / IsDialogMessage より先に呼ぶ。
-    // 消費した場合 true を返す。
+    // Call before TranslateAccelerator / IsDialogMessage in the message loop.
+    // Returns true if the message was consumed.
     bool PreTranslateMessage(const MSG& msg);
 
     static const wchar_t* ClassName() { return L"AileEx_MainWnd"; }
@@ -42,7 +42,7 @@ private:
     void OnOpenAssoc();
     void OnAddFiles();
     void OnAddFilesToCurrentArchive();
-    // ファイル群を現在開いているアーカイブへ追加するワーカー駆動。`srcPaths` が空ならファイルピッカーを出す。
+    // Worker-driven file addition to the currently open archive. Shows a file picker if `srcPaths` is empty.
     void AddFilesToCurrentArchive(std::vector<std::wstring> srcPaths);
     void OnInfo();
     void OnArchiveProperties();
@@ -55,7 +55,7 @@ private:
     void OnInitMenuPopup(HMENU hMenu);
     void OnMruOpen(int idx);
     void RebuildMruMenu();
-    void CloseArchive();  // 開いているアーカイブを閉じてビューを空にする (アプリ終了ではない)
+    void CloseArchive();  // Close the open archive and clear the view (does not quit the app)
     void OnCompress(CompressDlg::Params& params);
     void OnProgress(int pct, wchar_t* filename);  // takes ownership of filename
     void OnDone(HRESULT hr);
@@ -67,7 +67,7 @@ private:
     void PopulateTree();
     void PopulateList(const std::wstring& folderPath);
     std::wstring SelectedFolderPath() const;
-    // m_folderPaths から `folderPath` を探してツリーで選択する。見つからなければ何もしない。
+    // Search `m_folderPaths` for `folderPath` and select it in the tree. Does nothing if not found.
     void SelectTreeFolder(const std::wstring& folderPath);
     void ShowError(const wchar_t* msg, HRESULT hr = 0);
     // Returns false and shows error if 7z is required but not loaded.
@@ -82,24 +82,24 @@ private:
     HWND        m_hStatus      = nullptr;
     HIMAGELIST  m_hSysImageList = nullptr;
 
-    std::wstring             m_archivePath;          // 表示用の元パス (例: xx.001)
-    std::wstring             m_effectiveArchivePath; // 操作実体のパス (split 自動アンラップ時のみ m_archivePath と異なる)
+    std::wstring             m_archivePath;          // Display path (e.g. xx.001)
+    std::wstring             m_effectiveArchivePath; // Operative path (differs from m_archivePath only when a split archive is auto-unwrapped)
     bool                     m_openedWithUnrar = false;
-    bool                     m_isReadOnly      = false;  // split 自動アンラップ等で書込操作を禁止
+    bool                     m_isReadOnly      = false;  // Write operations disabled (e.g. split auto-unwrap)
     std::vector<ArchiveItem> m_items;
     std::vector<std::wstring> m_folderPaths;  // sorted; index matches TreeView lParam
     std::wstring             m_currentFolderPath; // currently displayed folder in ListView
     WorkerThread             m_worker;
     ProgressPostSink*        m_pSink = nullptr;
     std::wstring             m_tempViewDir;   // session temp dir; deleted on exit
-    int                      m_sortCol = 0;   // 0=名前, 1=サイズ, 2=圧縮後, 3=種類, 4=更新日時
+    int                      m_sortCol = 0;   // 0=Name, 1=Size, 2=Compressed, 3=Type, 4=Modified
     bool                     m_sortAsc = true;
     int                      m_treeWidth = 220;      // current splitter position
     bool                     m_draggingSplitter = false;
-    bool                     m_treeVisible = true;   // 表示メニューでトグル可能
-    bool                     m_toolbarVisible = true; // 表示メニューでトグル可能
+    bool                     m_treeVisible = true;   // Toggled from the View menu
+    bool                     m_toolbarVisible = true; // Toggled from the View menu
     int                      m_iconIndexFolder = -1; // cached folder icon index
-    HMENU                    m_hMruMenu = nullptr;   // 最近使ったアーカイブのサブメニュー
+    HMENU                    m_hMruMenu = nullptr;   // Submenu for recently used archives
 
     static constexpr int kSplitterW = 5;
     static constexpr int kTreeMinW  = 80;

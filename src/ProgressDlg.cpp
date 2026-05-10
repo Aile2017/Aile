@@ -1,4 +1,5 @@
 #include "ProgressDlg.h"
+#include "I18n.h"
 #include "resource.h"
 #include <commctrl.h>
 
@@ -23,9 +24,8 @@ void ProgressDlg::Show(HWND hwndParent, const wchar_t* title) {
     if (hwndParent) EnableWindow(hwndParent, FALSE);
     ShowWindow(m_hwnd, SW_SHOW);
     UpdateWindow(m_hwnd);
-    // 親が EnableWindow(FALSE) になった直後はフォーカス・アクティブ状態が
-    // 不定になりがち。明示的にダイアログをアクティブにし、キャンセルボタンに
-    // フォーカスを置くことで初手のクリック・Esc に確実に反応させる。
+    // Immediately after EnableWindow(FALSE) on the parent, focus/active state can be indeterminate.
+    // Explicitly activate the dialog and focus the Cancel button to reliably handle the first click or Esc.
     SetForegroundWindow(m_hwnd);
     SetActiveWindow(m_hwnd);
     if (m_hwndCancel) SetFocus(m_hwndCancel);
@@ -47,8 +47,8 @@ void ProgressDlg::SetProgress(int pct, const wchar_t* filename) {
 void ProgressDlg::SetDone(HRESULT hr) {
     if (!m_hwnd) return;
     SendMessageW(m_hwndPB, PBM_SETPOS, 100, 0);
-    const wchar_t* msg = SUCCEEDED(hr) ? L"完了" : (hr == E_ABORT ? L"キャンセルされました" : L"エラーが発生しました");
-    if (m_hwndLabel) SetWindowTextW(m_hwndLabel, msg);
+    UINT id = SUCCEEDED(hr) ? IDS_DONE : (hr == E_ABORT ? IDS_CANCELLED : IDS_ERROR_OCCURRED);
+    if (m_hwndLabel) SetWindowTextW(m_hwndLabel, I18n::Tr(id).c_str());
 }
 
 void ProgressDlg::Dismiss() {
@@ -102,12 +102,12 @@ INT_PTR ProgressDlg::HandleMsg(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return TRUE;
 
     case WM_COMMAND:
-        // IDCANCEL は Esc 押下で IsDialogMessageW が合成する (ダイアログのデフォルト)。
-        // IDC_CANCEL はキャンセルボタンクリック時。両方ともキャンセル扱いにする。
+        // IDCANCEL is synthesized by IsDialogMessageW on Esc (dialog default).
+        // IDC_CANCEL fires on Cancel button click. Both are treated as cancel.
         if (LOWORD(wp) == IDC_CANCEL || LOWORD(wp) == IDCANCEL) {
             if (m_sink) m_sink->SetCancelled(true);
             if (m_hwndCancel) EnableWindow(m_hwndCancel, FALSE);
-            if (m_hwndLabel) SetWindowTextW(m_hwndLabel, L"キャンセル中...");
+            if (m_hwndLabel) SetWindowTextW(m_hwndLabel, I18n::Tr(IDS_CANCELLING).c_str());
         }
         return TRUE;
 

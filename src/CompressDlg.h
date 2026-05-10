@@ -23,7 +23,7 @@ public:
         std::wstring solidBlock;  // "" = default; "off","1m" (7z only)
         std::wstring threads;     // "" = auto; "4","8"
         std::wstring extra;       // free-form "key=value" pairs
-        std::wstring volumeSize;  // "" = no split; "100m","1g" 等 (7z/zip のみ)
+        std::wstring volumeSize;  // "" = no split; "100m","1g" etc. (7z/zip only)
         // RAR-specific advanced options
         std::wstring rarDictSize;    // "" = auto; "128k","1m","4g"
         bool         rarSolid       = true;
@@ -31,9 +31,12 @@ public:
         int          rarRecoveryPct = 0;
         std::wstring rarSplitVolume;
         std::wstring rarExtra;
+        // Self-extraction (SFX) mode — "" = none / "gui" / "console"
+        // Valid for 7z and rar only. Non-empty values force the output extension to .exe.
+        std::wstring sfxMode;
 
-        // outputPath / inputFiles / password / encryptHeaders は対象外
-        // （ユーザ操作毎に変わる値で、永続化対象ではない）
+        // outputPath / inputFiles / password / encryptHeaders are excluded
+        // (these change per user action and are not persisted)
         void LoadFromSettings(const Settings& s);
         void SaveToSettings(Settings& s) const;
     };
@@ -46,18 +49,23 @@ public:
               const std::vector<std::wstring>* encoderNames = nullptr,
               const std::vector<WritableFormat>* writableFormats = nullptr);
 
-private:
     static INT_PTR CALLBACK DlgProc(HWND, UINT, WPARAM, LPARAM);
     INT_PTR HandleMsg(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 
+private:
+
     void OnInit(HWND hwnd);
     void OnFormatChange(HWND hwnd);
+    void OnSfxChange(HWND hwnd);
     void OnBrowseOutput(HWND hwnd);
     void OnAdvanced(HWND hwnd);
     bool OnOK(HWND hwnd);
 
+    // Recompute the output filename extension based on format and SFX selection.
+    void UpdateOutputExt(HWND hwnd, const wchar_t* fmtId, const wchar_t* sfxMode);
+
     HWND   m_hwnd = nullptr;
     Params m_params;
     const std::vector<std::wstring>* m_encoderNames = nullptr;  // not owned
-    std::vector<WritableFormat>      m_writableFormats;          // owned copy（ポインタ安定性のため）
+    std::vector<WritableFormat>      m_writableFormats;          // owned copy (for pointer stability)
 };

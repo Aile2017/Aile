@@ -1,39 +1,14 @@
 #include "InfoDlg.h"
+#include "DialogUtils.h"
+#include "I18n.h"
 #include "resource.h"
 #include <commctrl.h>
 #include <string>
 
-// ---- Formatting helpers ----
-
-static std::wstring FormatFileTime(const FILETIME& ft) {
-    if (ft.dwLowDateTime == 0 && ft.dwHighDateTime == 0)
-        return L"―";
-    FILETIME local = {};
-    FileTimeToLocalFileTime(&ft, &local);
-    SYSTEMTIME st = {};
-    FileTimeToSystemTime(&local, &st);
-    wchar_t buf[32];
-    swprintf_s(buf, L"%04d/%02d/%02d %02d:%02d:%02d",
-               st.wYear, st.wMonth, st.wDay,
-               st.wHour, st.wMinute, st.wSecond);
-    return buf;
-}
-
-static std::wstring FormatSize(UINT64 size) {
-    wchar_t buf[128];
-    if (size >= 1ULL << 30)
-        swprintf_s(buf, L"%llu バイト (%.2f GB)", (unsigned long long)size, (double)size / (1ULL << 30));
-    else if (size >= 1ULL << 20)
-        swprintf_s(buf, L"%llu バイト (%.2f MB)", (unsigned long long)size, (double)size / (1ULL << 20));
-    else if (size >= 1ULL << 10)
-        swprintf_s(buf, L"%llu バイト (%.2f KB)", (unsigned long long)size, (double)size / (1ULL << 10));
-    else
-        swprintf_s(buf, L"%llu バイト", (unsigned long long)size);
-    return buf;
-}
+// ---- Formatting helper (unique to this dialog) ----
 
 static std::wstring FormatAttrib(UINT32 attrib) {
-    if (attrib == 0) return L"―";
+    if (attrib == 0) return I18n::Tr(IDS_DASH);
     std::wstring s;
     if (attrib & FILE_ATTRIBUTE_DIRECTORY)  s += L"D";
     if (attrib & FILE_ATTRIBUTE_ARCHIVE)    s += L"A";
@@ -47,16 +22,6 @@ static std::wstring FormatAttrib(UINT32 attrib) {
     return s.empty() ? std::wstring(hex + 1) : s + hex;
 }
 
-static void AddRow(HWND hList, int row, const wchar_t* key, const wchar_t* value) {
-    LVITEMW lvi = {};
-    lvi.mask     = LVIF_TEXT;
-    lvi.iItem    = row;
-    lvi.iSubItem = 0;
-    lvi.pszText  = const_cast<wchar_t*>(key);
-    ListView_InsertItem(hList, &lvi);
-    ListView_SetItemText(hList, row, 1, const_cast<wchar_t*>(value));
-}
-
 // ---- Dialog ----
 
 void InfoDlg::Show(HWND parent, const ArchiveItem& item) {
@@ -67,15 +32,7 @@ void InfoDlg::Show(HWND parent, const ArchiveItem& item) {
 }
 
 INT_PTR CALLBACK InfoDlg::DlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
-    InfoDlg* self = nullptr;
-    if (msg == WM_INITDIALOG) {
-        self = reinterpret_cast<InfoDlg*>(lp);
-        SetWindowLongPtrW(hwnd, DWLP_USER, (LONG_PTR)self);
-    } else {
-        self = reinterpret_cast<InfoDlg*>(GetWindowLongPtrW(hwnd, DWLP_USER));
-    }
-    if (self) return self->HandleMsg(hwnd, msg, wp, lp);
-    return FALSE;
+    return StandardDlgProc<InfoDlg>(hwnd, msg, wp, lp);
 }
 
 INT_PTR InfoDlg::HandleMsg(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
@@ -97,87 +54,91 @@ void InfoDlg::OnInit(HWND hwnd) {
     const ArchiveItem& it = *m_item;
 
     // Update title to show filename
-    std::wstring title = L"ファイル情報 - " + it.name;
-    SetWindowTextW(hwnd, title.c_str());
+    SetWindowTextW(hwnd, I18n::TrFmt(IDS_FMT_INFO_TITLE, it.name.c_str()).c_str());
 
     HWND hList = GetDlgItem(hwnd, IDC_INFO_LIST);
 
     // Columns
+    std::wstring colItem  = I18n::Tr(IDS_COL_LABEL);
+    std::wstring colValue = I18n::Tr(IDS_COL_VALUE);
     LVCOLUMNW lvc = {};
     lvc.mask    = LVCF_TEXT | LVCF_WIDTH | LVCF_FMT;
     lvc.fmt     = LVCFMT_LEFT;
     lvc.cx      = 130;
-    lvc.pszText = const_cast<wchar_t*>(L"項目");
+    lvc.pszText = colItem.data();
     ListView_InsertColumn(hList, 0, &lvc);
     lvc.cx      = 190;
-    lvc.pszText = const_cast<wchar_t*>(L"値");
+    lvc.pszText = colValue.data();
     ListView_InsertColumn(hList, 1, &lvc);
 
     ListView_SetExtendedListViewStyle(hList, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
 
     int row = 0;
+    const std::wstring dash = I18n::Tr(IDS_DASH);
 
     // Basic identity
-    AddRow(hList, row++, L"ファイル名",         it.name.c_str());
-    AddRow(hList, row++, L"アーカイブ内パス",    it.path.c_str());
+    AddRow(hList, row, I18n::Tr(IDS_INFO_FILE_NAME).c_str(),     it.name.c_str());
+    AddRow(hList, row, I18n::Tr(IDS_INFO_ARCHIVE_PATH).c_str(),  it.path.c_str());
 
     // Type
     std::wstring typeStr;
     if (it.isDir) {
-        typeStr = L"フォルダ";
+        typeStr = I18n::Tr(IDS_TYPE_FOLDER);
     } else {
         auto dot = it.name.rfind(L'.');
-        typeStr = (dot != std::wstring::npos && dot + 1 < it.name.size())
-                  ? it.name.substr(dot + 1) + L" ファイル"
-                  : L"ファイル";
+        if (dot != std::wstring::npos && dot + 1 < it.name.size())
+            typeStr = I18n::TrFmt(IDS_FMT_TYPE_FILE_EXT, it.name.substr(dot + 1).c_str());
+        else
+            typeStr = I18n::Tr(IDS_TYPE_FILE);
     }
-    AddRow(hList, row++, L"種類", typeStr.c_str());
+    AddRow(hList, row, I18n::Tr(IDS_INFO_KIND).c_str(), typeStr.c_str());
 
     // Sizes
-    AddRow(hList, row++, L"元のサイズ",
-           it.isDir ? L"―" : FormatSize(it.size).c_str());
-    AddRow(hList, row++, L"圧縮後サイズ",
-           (it.isDir || it.packedSize == 0) ? L"―" : FormatSize(it.packedSize).c_str());
+    AddRow(hList, row, I18n::Tr(IDS_INFO_ORIG_SIZE).c_str(),
+           it.isDir ? dash.c_str() : FormatSize(it.size).c_str());
+    AddRow(hList, row, I18n::Tr(IDS_INFO_PACKED_SIZE).c_str(),
+           (it.isDir || it.packedSize == 0) ? dash.c_str() : FormatSize(it.packedSize).c_str());
 
     // Ratio
-    std::wstring ratio = L"―";
+    std::wstring ratio = dash;
     if (!it.isDir && it.size > 0) {
         wchar_t buf[32];
         double r = 100.0 - (double)it.packedSize / (double)it.size * 100.0;
         swprintf_s(buf, L"%.1f%%", r);
         ratio = buf;
     }
-    AddRow(hList, row++, L"圧縮率", ratio.c_str());
+    AddRow(hList, row, I18n::Tr(IDS_INFO_RATIO).c_str(), ratio.c_str());
 
     // Method
-    AddRow(hList, row++, L"圧縮メソッド",
-           it.method.empty() ? L"―" : it.method.c_str());
+    AddRow(hList, row, I18n::Tr(IDS_INFO_METHOD).c_str(),
+           it.method.empty() ? dash.c_str() : it.method.c_str());
 
     // CRC
     if (it.hasCrc) {
         wchar_t crcBuf[16];
         swprintf_s(crcBuf, L"%08X", it.crc);
-        AddRow(hList, row++, L"CRC-32", crcBuf);
+        AddRow(hList, row, I18n::Tr(IDS_INFO_CRC32).c_str(), crcBuf);
     } else {
-        AddRow(hList, row++, L"CRC-32", L"―");
+        AddRow(hList, row, I18n::Tr(IDS_INFO_CRC32).c_str(), dash.c_str());
     }
 
     // Encryption
-    AddRow(hList, row++, L"暗号化", it.encrypted ? L"あり" : L"なし");
+    AddRow(hList, row, I18n::Tr(IDS_INFO_ENCRYPTED).c_str(),
+           I18n::Tr(it.encrypted ? IDS_YES : IDS_NO).c_str());
 
     // File attributes
-    AddRow(hList, row++, L"ファイル属性", FormatAttrib(it.attrib).c_str());
+    AddRow(hList, row, I18n::Tr(IDS_INFO_FILE_ATTRS).c_str(), FormatAttrib(it.attrib).c_str());
 
     // Host OS
-    AddRow(hList, row++, L"ホスト OS",
-           it.hostOS.empty() ? L"―" : it.hostOS.c_str());
+    AddRow(hList, row, I18n::Tr(IDS_INFO_HOST_OS).c_str(),
+           it.hostOS.empty() ? dash.c_str() : it.hostOS.c_str());
 
     // Timestamps
-    AddRow(hList, row++, L"更新日時",           FormatFileTime(it.mtime).c_str());
-    AddRow(hList, row++, L"作成日時",           FormatFileTime(it.ctime).c_str());
-    AddRow(hList, row++, L"最終アクセス日時",   FormatFileTime(it.atime).c_str());
+    AddRow(hList, row, I18n::Tr(IDS_INFO_MTIME).c_str(), FormatFileTime(it.mtime).c_str());
+    AddRow(hList, row, I18n::Tr(IDS_INFO_CTIME).c_str(), FormatFileTime(it.ctime).c_str());
+    AddRow(hList, row, I18n::Tr(IDS_INFO_ATIME).c_str(), FormatFileTime(it.atime).c_str());
 
     // Comment
-    AddRow(hList, row++, L"コメント",
-           it.comment.empty() ? L"―" : it.comment.c_str());
+    AddRow(hList, row, I18n::Tr(IDS_INFO_COMMENT).c_str(),
+           it.comment.empty() ? dash.c_str() : it.comment.c_str());
 }

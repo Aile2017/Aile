@@ -14,9 +14,9 @@ void ProgressPostSink::OnSetTotal(UINT64 total) {
 
 void ProgressPostSink::OnProgress(UINT64 done, const wchar_t* currentFile) {
     if (!m_hwnd) return;
-    // ~50ms スロットル。これがないと数千件/秒の WM_APP_PROGRESS で
-    // メッセージキューが溢れ、キャンセルボタンへの WM_LBUTTONDOWN が
-    // 何秒も遅延 (= 反応しないように見える) する。
+    // ~50 ms throttle. Without this, thousands of WM_APP_PROGRESS messages per second
+    // overflow the message queue, causing WM_LBUTTONDOWN on the cancel button to be
+    // delayed for seconds (= appears unresponsive).
     DWORD now = GetTickCount();
     if (now - m_lastPostTick < 50) return;
     m_lastPostTick = now;

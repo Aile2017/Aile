@@ -15,6 +15,7 @@ void Settings::Load() {
     m_defaultFormat    = ReadStr(L"General", L"DefaultFormat",    L"7z");
     m_7zDllPath        = ReadStr(L"General", L"7zDllPath",        L"");
     m_unrarDllPath     = ReadStr(L"General", L"UnrarDllPath",     L"");
+    m_defaultSfxMode   = ReadStr(L"General", L"DefaultSfxMode",   L"");
 
     wchar_t buf[16] = {};
     GetPrivateProfileStringW(L"General", L"CompressionLevel", L"5", buf, 16, m_iniPath);
@@ -58,7 +59,7 @@ void Settings::Load() {
     if (m_windowH < 300) m_windowH = 300;
     if (m_splitterPos < 80) m_splitterPos = 80;
 
-    // MRU — Path0 が最新。空エントリに当たった時点で打ち切り。
+    // MRU — Path0 is the most recent. Stop as soon as an empty entry is encountered.
     m_mruPaths.clear();
     for (size_t i = 0; i < kMaxMru; ++i) {
         wchar_t key[16];
@@ -70,7 +71,7 @@ void Settings::Load() {
 }
 
 void Settings::Save() const {
-    // Load() 未呼び出しで Save() が呼ばれた場合に空パスへの書き込みを防ぐ
+    // Guard against writing to an empty path if Save() is called before Load()
     if (!m_iniPath[0]) BuildIniPath();
     WriteStr(L"General", L"RarExtractor",     m_rarExtractor.c_str());
     WriteStr(L"General", L"RarExePath",       m_rarExePath.c_str());
@@ -78,6 +79,7 @@ void Settings::Save() const {
     WriteStr(L"General", L"DefaultFormat",    m_defaultFormat.c_str());
     WriteStr(L"General", L"7zDllPath",        m_7zDllPath.c_str());
     WriteStr(L"General", L"UnrarDllPath",     m_unrarDllPath.c_str());
+    WriteStr(L"General", L"DefaultSfxMode",   m_defaultSfxMode.c_str());
 
     wchar_t buf[16] = {};
     _itow_s(m_compressionLevel, buf, 10);
@@ -115,7 +117,7 @@ void Settings::Save() const {
     WriteStr(L"Window", L"TreeVisible", m_treeVisible ? L"1" : L"0");
     WriteStr(L"Window", L"ToolbarVisible", m_toolbarVisible ? L"1" : L"0");
 
-    // MRU — 不要キーは ini から削除するため WritePrivateProfileStringW に nullptr を渡す。
+    // MRU — pass nullptr to WritePrivateProfileStringW to delete obsolete keys from the ini.
     for (size_t i = 0; i < kMaxMru; ++i) {
         wchar_t key[16];
         swprintf_s(key, L"Path%zu", i);

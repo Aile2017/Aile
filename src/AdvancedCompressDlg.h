@@ -2,8 +2,8 @@
 #include <windows.h>
 #include <string>
 
-// 詳細圧縮設定ダイアログ。
-// 辞書サイズ・ワードサイズ・ソリッドブロック・スレッド数・追加パラメーターを編集する。
+// Advanced compression settings dialog.
+// Edits dictionary size, word size, solid block, thread count, and additional parameters.
 class AdvancedCompressDlg {
 public:
     struct Params {
@@ -12,15 +12,16 @@ public:
         std::wstring solidBlock;  // "" = default; "off","1m","4g" (7z only)
         std::wstring threads;     // "" = auto; "1","4","8"
         std::wstring extra;       // free-form "key=value" pairs
-        std::wstring volumeSize;  // "" = no split; "10m","100m","1g" 等で分割サイズ
+        std::wstring volumeSize;  // "" = no split; "10m","100m","1g" etc. for split size
     };
 
-    // format: 現在選択中の圧縮形式 ("7z","zip" など)
+    // format: currently selected compression format ("7z","zip" etc.)
     bool Show(HWND hwndParent, const wchar_t* format, Params& params);
 
-private:
     static INT_PTR CALLBACK DlgProc(HWND, UINT, WPARAM, LPARAM);
     INT_PTR HandleMsg(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+
+private:
 
     void OnInit(HWND hwnd);
     bool OnOK(HWND hwnd);
