@@ -43,11 +43,12 @@ Recognized extensions (treated as archives): `7z`, `zip`, `rar`, `tar`, `gz`, `b
   - **Column header click** to sort ascending/descending (click again to reverse)
 - **Splitter** between panes (drag with mouse to adjust width, position saved to INI)
 - Top: Toolbar (Extract / Open / Add / Info / Test / Settings) — **toggleable from View menu**
+  - **Extract** button is context-aware (`ID_EXTRACT_SMART`): extracts selected entries if any are selected, otherwise extracts all
 - Bottom: Status bar (entry count, loaded DLL name, progress percent / current file)
 - Drag & drop support:
   - Drop archive → open
   - Drop regular file → show compression dialog
-- **Right-click context menu** on ListView: Extract selected / Open with association / Test / Info / Delete
+- **Right-click context menu** on ListView: Extract / Extract selected / Open with association / Test / Info / Delete
 
 #### Menu Structure
 
@@ -57,8 +58,10 @@ Recognized extensions (treated as archives): `7z`, `zip`, `rar`, `tar`, `gz`, `b
 | | Recent Archives | `IDM_FILE_MRU_BASE..LAST` | Max 10 items, `&1..&9` mnemonics |
 | | Close `Ctrl+F4` | `ID_CLOSE` | Close archive (not exit app) |
 | | Exit `Esc` | `IDM_FILE_EXIT` | Exit application |
-| Edit | Extract... `F5` | `ID_EXTRACT` | |
-| | Add... `Ctrl+A` | `ID_ADD` | Compress |
+| Actions | Extract... `F5` | `ID_EXTRACT` | Extract all entries |
+| | Extract selected... | `ID_EXTRACT_SELECTED` | Selected entries only; disabled if nothing selected |
+| | Add... `Ctrl+A` | `ID_ADD` | Compress new archive |
+| | Add to current archive... `Ctrl+U` | `ID_ADD_TO_CURRENT` | Add files to the currently open archive |
 | | Test `Ctrl+T` | `ID_TEST` | Integrity verification |
 | | Open with Association `Enter` | `ID_OPEN_ASSOC` | Extract temp then `ShellExecute` |
 | | Delete `Del` | `ID_DELETE` | 7z uses `IOutArchive`, RAR uses `rar d` |
@@ -144,7 +147,8 @@ Saved in INI file (same location as `AileEx.exe`, filename is `AileEx.ini`).
 [General]
 RarExtractor=7z              ; "7z" or "unrar"
 RarExePath=                  ; Absolute path to WinRAR.exe / Rar.exe (auto-detect from registry if empty)
-DefaultOutputDir=            ; Default extraction destination
+DefaultOutputDir=            ; Fixed output destination (used when OutputDirMode=fixed)
+OutputDirMode=source         ; "source" = use directory of source file; "fixed" = use DefaultOutputDir
 DefaultFormat=7z             ; Default compression format
 CompressionLevel=5           ; 0-9
 RarLevel=3                   ; RAR compression level 0-5
@@ -152,6 +156,7 @@ MkDir=2                      ; Subfolder creation on extract 0/1/2/3
 7zDllPath=                   ; Absolute path to 7z.dll (auto-detect from registry if empty)
 UnrarDllPath=                ; Absolute path to unrar.dll (same directory as AileEx.exe if empty)
 DefaultSfxMode=              ; SFX mode "" / "gui" / "console" — last selected in compress dialog
+FontName=Segoe UI            ; Font used in main window controls
 
 [AdvancedCompress]            ; Last-used values from advanced options dialog
 DictSize=
@@ -252,12 +257,9 @@ Priority and implementation approach for unimplemented features: see [`docs/road
   - 7z / ZIP split creation and reading supported (implemented 2026-05-08, uses `CMultiVolOutStream` + `IArchiveOpenVolumeCallback`)
   - GZ / BZ2 / XZ / TAR do not support splitting (format specifications require non-seekable output)
 - Individual extraction from solid archives not possible (7z.dll limitation)
-- Adding/updating existing archives not implemented (`ID_ADD` is new creation only)
 - Shell integration (context menu) not implemented
-- Archive comment display/editing not implemented
 - Archive search/filter not implemented
 - Multi-archive simultaneous browse (tabs etc.) not implemented
-- Multi-language support (i18n) not implemented (Japanese hardcoded)
 - RAR delete cancel path not implemented (`RarProcess::Delete` does not support `Cancel()`)
 - Header-encrypted 7z archive deletion fails (password is not passed to the delete path)
 - Manual test matrix partially implemented (RAR formats confirmed only)
