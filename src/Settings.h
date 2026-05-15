@@ -19,6 +19,10 @@ public:
     const std::wstring& GetDefaultOutputDir() const { return m_defaultOutputDir; }
     void SetDefaultOutputDir(const wchar_t* v)      { m_defaultOutputDir = v; }
 
+    // Output dir mode: true = use fixed DefaultOutputDir, false = use source file's directory
+    bool GetOutputDirModeFixed() const              { return m_outputDirModeFixed; }
+    void SetOutputDirModeFixed(bool v)              { m_outputDirModeFixed = v; }
+
     const std::wstring& GetDefaultFormat() const    { return m_defaultFormat; }
     void SetDefaultFormat(const wchar_t* v)         { m_defaultFormat = v; }
 
@@ -104,6 +108,7 @@ private:
     std::wstring m_rarExtractor;
     std::wstring m_rarExePath;
     std::wstring m_defaultOutputDir;
+    bool         m_outputDirModeFixed;
     std::wstring m_defaultFormat;
     int          m_compressionLevel;
     int          m_rarLevel;

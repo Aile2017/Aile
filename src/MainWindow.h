@@ -38,6 +38,8 @@ private:
     void OnListDblClick();
     void OnExtract();
     void OnExtractSelected();
+    // Toolbar extract: extract selected items if any are selected, otherwise extract all.
+    void OnExtractSmart();
     // Common extraction driver. indices empty = extract all (7z path).
     // rarTargetPaths empty = extract all (unrar path).
     // presetDest: if non-empty, skip the folder picker and extract directly to this path.
@@ -88,6 +90,7 @@ private:
     HWND        m_hListView    = nullptr;
     HWND        m_hStatus      = nullptr;
     HIMAGELIST  m_hSysImageList = nullptr;
+    HIMAGELIST  m_hToolbarImages = nullptr;  // down-scaled toolbar icons
     HFONT       m_hFont        = nullptr;
 
     std::wstring             m_archivePath;          // Display path (e.g. xx.001)
@@ -110,9 +113,9 @@ private:
     int                      m_iconIndexFolder = -1; // cached folder icon index
     HMENU                    m_hMruMenu = nullptr;   // Submenu for recently used archives
 
-    static constexpr int kSplitterW = 5;
+    static constexpr int kSplitterW = 3;
     static constexpr int kTreeMinW  = 80;
     static constexpr int kListMinW  = 80;
-    static constexpr int kToolbarH  = 40;
+    static constexpr int kToolbarH  = 38;  // 24px icon + 10 vertical padding + frame
     static constexpr int kStatusH   = 22;
 };

@@ -77,6 +77,9 @@
 #define IDC_MKDIR_2         3012
 #define IDC_MKDIR_3         3013
 #define IDC_FONT_NAME       3014
+// Output directory mode (radio buttons in the "Default output directory" group)
+#define IDC_OUTDIR_SOURCE   3015   // Same as source file location
+#define IDC_OUTDIR_FIXED    3016   // Use fixed DefaultOutputDir
 
 // Info dialog controls
 #define IDC_INFO_LIST       5001
@@ -106,6 +109,7 @@
 #define ID_OPEN_ASSOC       40009
 #define ID_EXTRACT_SELECTED 40016
 #define ID_ADD_TO_CURRENT   40018  // Add files to the currently open archive
+#define ID_EXTRACT_SMART    40020  // Toolbar extract: selected items if any, else all
 
 // Menu-only commands (Phase 1 menubar)
 #define IDM_FILE_OPEN       40010
@@ -178,6 +182,7 @@
 #define IDS_CTX_TEST                    11052
 #define IDS_CTX_INFO                    11053
 #define IDS_CTX_DELETE                  11054
+#define IDS_CTX_EXTRACT                 11055
 
 // --- File dialog filters / titles (filter strings use '|' as NUL sentinel) ---
 #define IDS_FILTER_ARCHIVE              11060

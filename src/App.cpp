@@ -104,10 +104,15 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
 
     CompressDlg::Params params;
     params.inputFiles = filePaths;
-    params.outputPath = m_settings.GetDefaultOutputDir();
     params.LoadFromSettings(m_settings);
-    if (!destDir.empty())
+    if (!destDir.empty()) {
         params.outputPath = destDir;
+    } else if (m_settings.GetOutputDirModeFixed()) {
+        params.outputPath = m_settings.GetDefaultOutputDir();
+    } else if (!filePaths.empty()) {
+        auto sl = filePaths[0].find_last_of(L"\\/");
+        params.outputPath = (sl != std::wstring::npos) ? filePaths[0].substr(0, sl) : L"";
+    }
 
     CompressDlg dlg;
     const auto* enc = m_sevenZip.IsLoaded() ? &m_sevenZip.GetEncoderNames() : nullptr;

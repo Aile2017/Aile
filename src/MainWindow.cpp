@@ -42,6 +42,19 @@ void ForceForeground(HWND hwnd) {
     if (attach) AttachThreadInput(myTid, fgTid, FALSE);
 }
 
+// Return the parent directory of a file/folder path.
+std::wstring ParentDir(const std::wstring& path) {
+    auto sl = path.find_last_of(L"\\/");
+    return (sl != std::wstring::npos) ? path.substr(0, sl) : path;
+}
+
+// Return the initial output path based on OutputDirMode setting and the given source files.
+std::wstring DefaultOutputPath(const Settings& s, const std::vector<std::wstring>& srcFiles) {
+    if (s.GetOutputDirModeFixed())
+        return s.GetDefaultOutputDir();
+    return srcFiles.empty() ? s.GetDefaultOutputDir() : ParentDir(srcFiles[0]);
+}
+
 // Return top-level entry count from archive m_items (unique first path components)
 int CountTopLevelEntries(const std::vector<ArchiveItem>& items) {
     std::set<std::wstring> tops;
@@ -351,7 +364,7 @@ LRESULT MainWindow::HandleMsg(UINT msg, WPARAM wp, LPARAM lp) {
             auto* pdi = reinterpret_cast<NMTTDISPINFOW*>(lp);
             UINT id = 0;
             switch (pdi->hdr.idFrom) {
-            case ID_EXTRACT:      id = IDS_TIP_EXTRACT;  break;
+            case ID_EXTRACT_SMART: id = IDS_TIP_EXTRACT; break;
             case ID_OPEN_ASSOC:   id = IDS_TIP_VIEW;     break;
             case ID_ADD:          id = IDS_TIP_ADD;      break;
             case ID_INFO:         id = IDS_TIP_INFO;     break;
@@ -471,6 +484,7 @@ LRESULT MainWindow::HandleMsg(UINT msg, WPARAM wp, LPARAM lp) {
         }
         // Clean up font
         if (m_hFont) DeleteObject(m_hFont);
+        if (m_hToolbarImages) ImageList_Destroy(m_hToolbarImages);
         PostQuitMessage(0);
         return 0;
     }
@@ -538,40 +552,55 @@ void MainWindow::CreateControls(HWND hwnd) {
         WS_CHILD | WS_VISIBLE | WS_TABSTOP | TBSTYLE_FLAT | TBSTYLE_TOOLTIPS | CCS_NODIVIDER | CCS_NORESIZE,
         0, 0, 0, kToolbarH, hwnd, nullptr, hInst, nullptr);
     SendMessageW(m_hToolbar, TB_BUTTONSTRUCTSIZE, sizeof(TBBUTTON), 0);
-    SendMessageW(m_hToolbar, TB_SETBITMAPSIZE, 0, MAKELPARAM(32, 32));
-    SendMessageW(m_hToolbar, TB_SETBUTTONSIZE, 0, MAKELPARAM(36, 36));
-    SendMessageW(m_hToolbar, TB_SETPADDING,    0, MAKELPARAM(2, 2));
 
-    // Load toolbar bitmaps
-    TBADDBITMAP ab = {};
-    ab.hInst = hInst;
-    
-    ab.nID = IDB_TOOLBAR_EXTRACT;
-    int idxExtract = (int)SendMessageW(m_hToolbar, TB_ADDBITMAP, 1, (LPARAM)&ab);
-    
-    ab.nID = IDB_TOOLBAR_OPEN;
-    int idxOpen = (int)SendMessageW(m_hToolbar, TB_ADDBITMAP, 1, (LPARAM)&ab);
-    
-    ab.nID = IDB_TOOLBAR_ADD;
-    int idxAdd = (int)SendMessageW(m_hToolbar, TB_ADDBITMAP, 1, (LPARAM)&ab);
-    
-    ab.nID = IDB_TOOLBAR_INFO;
-    int idxInfo = (int)SendMessageW(m_hToolbar, TB_ADDBITMAP, 1, (LPARAM)&ab);
-    
-    ab.nID = IDB_TOOLBAR_SETTINGS;
-    int idxSettings = (int)SendMessageW(m_hToolbar, TB_ADDBITMAP, 1, (LPARAM)&ab);
+    // The toolbar control does not scale bitmaps, so button size is bound to the
+    // source bitmap size (32x32). Down-scale the BMPs into an image list to get
+    // smaller buttons. Button size is then derived automatically (bitmap + padding).
+    constexpr int kIconSize = 24;
+    SendMessageW(m_hToolbar, TB_SETBITMAPSIZE, 0, MAKELPARAM(kIconSize, kIconSize));
+    // Vertical padding centres the icon in a taller button, giving breathing room
+    // above and below it. Keep horizontal padding small so buttons stay compact.
+    SendMessageW(m_hToolbar, TB_SETPADDING,    0, MAKELPARAM(4, 10));
 
-    ab.nID = IDB_TOOLBAR_TEST;
-    int idxTest = (int)SendMessageW(m_hToolbar, TB_ADDBITMAP, 1, (LPARAM)&ab);
+    const UINT bmpIds[] = {
+        IDB_TOOLBAR_EXTRACT, IDB_TOOLBAR_OPEN, IDB_TOOLBAR_ADD,
+        IDB_TOOLBAR_INFO,    IDB_TOOLBAR_TEST, IDB_TOOLBAR_SETTINGS,
+    };
+    m_hToolbarImages = ImageList_Create(kIconSize, kIconSize, ILC_COLOR32 | ILC_MASK,
+                                        _countof(bmpIds), 0);
+    HDC hdcScreen = GetDC(nullptr);
+    for (UINT id : bmpIds) {
+        HBITMAP hSrc = (HBITMAP)LoadImageW(hInst, MAKEINTRESOURCEW(id), IMAGE_BITMAP,
+                                           0, 0, LR_CREATEDIBSECTION);
+        HDC hdcSrc = CreateCompatibleDC(hdcScreen);
+        HDC hdcDst = CreateCompatibleDC(hdcScreen);
+        HBITMAP hDst = CreateCompatibleBitmap(hdcScreen, kIconSize, kIconSize);
+        HBITMAP hOldSrc = (HBITMAP)SelectObject(hdcSrc, hSrc);
+        HBITMAP hOldDst = (HBITMAP)SelectObject(hdcDst, hDst);
+        // The (0,0) pixel is the transparent key colour, as the toolbar used to treat it.
+        // COLORONCOLOR keeps the background pure so the colour-key mask has no halo.
+        COLORREF crBg = GetPixel(hdcSrc, 0, 0);
+        SetStretchBltMode(hdcDst, COLORONCOLOR);
+        StretchBlt(hdcDst, 0, 0, kIconSize, kIconSize, hdcSrc, 0, 0, 32, 32, SRCCOPY);
+        SelectObject(hdcSrc, hOldSrc);
+        SelectObject(hdcDst, hOldDst);
+        ImageList_AddMasked(m_hToolbarImages, hDst, crBg);
+        DeleteObject(hDst);
+        DeleteObject(hSrc);
+        DeleteDC(hdcSrc);
+        DeleteDC(hdcDst);
+    }
+    ReleaseDC(nullptr, hdcScreen);
+    SendMessageW(m_hToolbar, TB_SETIMAGELIST, 0, (LPARAM)m_hToolbarImages);
 
     TBBUTTON btns[] = {
-        {idxExtract, ID_EXTRACT,      TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
-        {idxOpen,    ID_OPEN_ASSOC,   TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
-        {idxAdd,     ID_ADD,          TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
-        {idxInfo,    ID_INFO,         TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
-        {idxTest,    ID_TEST,         TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
-        {0,          0,               0,               BTNS_SEP,    {}, 0, 0},
-        {idxSettings, ID_SETTINGS_DLG, TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
+        {0, ID_EXTRACT_SMART, TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
+        {1, ID_OPEN_ASSOC,    TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
+        {2, ID_ADD,           TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
+        {3, ID_INFO,          TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
+        {4, ID_TEST,          TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
+        {0, 0,                0,               BTNS_SEP,    {}, 0, 0},
+        {5, ID_SETTINGS_DLG,  TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
     };
     SendMessageW(m_hToolbar, TB_ADDBUTTONS, _countof(btns), (LPARAM)btns);
     SendMessageW(m_hToolbar, TB_AUTOSIZE, 0, 0);
@@ -738,8 +767,9 @@ void MainWindow::OnDropFiles(HDROP hDrop) {
             AddFilesToCurrentArchive(std::move(regular));
         } else {
             CompressDlg::Params params;
-            params.inputFiles = std::move(regular);
+            params.inputFiles  = std::move(regular);
             params.LoadFromSettings(App::Instance().GetSettings());
+            params.outputPath  = DefaultOutputPath(App::Instance().GetSettings(), params.inputFiles);
 
             CompressDlg dlg;
             auto& sz7 = App::Instance().Get7z();
@@ -761,6 +791,9 @@ void MainWindow::OnCommand(WORD id) {
     switch (id) {
     case ID_EXTRACT:
         OnExtract();
+        break;
+    case ID_EXTRACT_SMART:
+        OnExtractSmart();
         break;
     case ID_EXTRACT_SELECTED:
         OnExtractSelected();
@@ -990,6 +1023,14 @@ void MainWindow::TriggerExtract(const std::wstring& presetDest) {
     RunExtraction({}, {}, presetDest);
 }
 
+void MainWindow::OnExtractSmart() {
+    if (m_archivePath.empty()) return;
+    if (ListView_GetSelectedCount(m_hListView) > 0)
+        OnExtractSelected();
+    else
+        OnExtract();
+}
+
 void MainWindow::OnExtractSelected() {
     if (m_archivePath.empty()) return;
 
@@ -1062,8 +1103,20 @@ void MainWindow::RunExtraction(std::vector<UINT32> indices, std::set<std::wstrin
     wchar_t destDir[MAX_PATH] = {};
     if (!presetDest.empty()) {
         wcsncpy_s(destDir, presetDest.c_str(), MAX_PATH - 1);
-    } else if (!BrowseFolderDialog(m_hwnd, IDS_TITLE_SELECT_DEST_FOLDER, destDir, MAX_PATH)) {
-        return;
+    } else {
+        const Settings& st = app.GetSettings();
+        if (st.GetOutputDirModeFixed()) {
+            const auto& d = st.GetDefaultOutputDir();
+            if (!d.empty()) wcsncpy_s(destDir, d.c_str(), MAX_PATH - 1);
+        } else {
+            // Use the directory that contains the archive
+            auto sl = m_archivePath.find_last_of(L"\\/");
+            std::wstring archDir = (sl != std::wstring::npos)
+                                   ? m_archivePath.substr(0, sl) : m_archivePath;
+            wcsncpy_s(destDir, archDir.c_str(), MAX_PATH - 1);
+        }
+        if (!BrowseFolderDialog(m_hwnd, IDS_TITLE_SELECT_DEST_FOLDER, destDir, MAX_PATH))
+            return;
     }
 
     // Evaluate MkDir policy based on full archive structure
@@ -1126,15 +1179,17 @@ void MainWindow::OnContextMenu(HWND /*hwndFrom*/, int x, int y) {
     int selCount  = ListView_GetSelectedCount(m_hListView);
 
     HMENU hMenu = CreatePopupMenu();
+    std::wstring sExtract    = I18n::Tr(IDS_CTX_EXTRACT);
     std::wstring sExtractSel = I18n::Tr(IDS_CTX_EXTRACT_SELECTED);
     std::wstring sOpenAssoc  = I18n::Tr(IDS_CTX_OPEN_ASSOC);
     std::wstring sTest       = I18n::Tr(IDS_CTX_TEST);
     std::wstring sInfo       = I18n::Tr(IDS_CTX_INFO);
     std::wstring sDelete     = I18n::Tr(IDS_CTX_DELETE);
+    AppendMenuW(hMenu, MF_STRING | MF_ENABLED, ID_EXTRACT, sExtract.c_str());
     AppendMenuW(hMenu, MF_STRING | (selCount > 0 ? MF_ENABLED : MF_GRAYED),
                 ID_EXTRACT_SELECTED, sExtractSel.c_str());
     AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(hMenu, MF_STRING | (!readOnly && selCount > 0 ? MF_ENABLED : MF_GRAYED),
+    AppendMenuW(hMenu, MF_STRING | (selCount > 0 ? MF_ENABLED : MF_GRAYED),
                 ID_OPEN_ASSOC, sOpenAssoc.c_str());
     AppendMenuW(hMenu, MF_STRING | MF_ENABLED, ID_TEST, sTest.c_str());
     AppendMenuW(hMenu, MF_STRING | (selCount > 0 ? MF_ENABLED : MF_GRAYED),
@@ -1463,8 +1518,9 @@ void MainWindow::OnInitMenuPopup(HMENU hMenu) {
 
     setEnabled(ID_CLOSE,      hasArchive);
     setEnabled(ID_EXTRACT,    hasArchive);
+    setEnabled(ID_EXTRACT_SELECTED, hasArchive && selCount > 0);
     setEnabled(ID_TEST,       hasArchive);
-    setEnabled(ID_OPEN_ASSOC, hasArchive && !readOnly);
+    setEnabled(ID_OPEN_ASSOC, hasArchive);
     setEnabled(ID_INFO,       selCount > 0);
     setEnabled(IDM_FILE_PROPERTIES, hasArchive);
     setEnabled(ID_ARCHIVE_COMMENT, hasArchive);
@@ -1519,8 +1575,9 @@ void MainWindow::OnAddFiles() {
     if (files.empty()) return;
 
     CompressDlg::Params params;
-    params.inputFiles = std::move(files);
+    params.inputFiles  = std::move(files);
     params.LoadFromSettings(App::Instance().GetSettings());
+    params.outputPath  = DefaultOutputPath(App::Instance().GetSettings(), params.inputFiles);
 
     CompressDlg dlg;
     auto& sz7 = App::Instance().Get7z();

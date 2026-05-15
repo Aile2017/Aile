@@ -30,6 +30,15 @@ INT_PTR SettingsDlg::HandleMsg(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
     case WM_COMMAND:
         switch (LOWORD(wp)) {
+        case IDC_OUTDIR_SOURCE:
+        case IDC_OUTDIR_FIXED: {
+            bool fixed = (LOWORD(wp) == IDC_OUTDIR_FIXED);
+            CheckRadioButton(hwnd, IDC_OUTDIR_SOURCE, IDC_OUTDIR_FIXED,
+                             fixed ? IDC_OUTDIR_FIXED : IDC_OUTDIR_SOURCE);
+            EnableWindow(GetDlgItem(hwnd, IDC_DEFAULT_DIR), fixed);
+            EnableWindow(GetDlgItem(hwnd, IDC_BROWSE_DIR),  fixed);
+            break;
+        }
         case IDC_BROWSE_DIR:
             OnBrowseDir(hwnd);
             break;
@@ -72,13 +81,25 @@ void SettingsDlg::OnInit(HWND hwnd) {
     HWND hFont = GetDlgItem(hwnd, IDC_FONT_NAME);
     // Common font options
     std::wstring fonts[] = {L"Segoe UI", L"Meiryo UI", L"Yu Gothic", L"Arial", L"Tahoma", L"Courier New"};
-    int fontSel = 0;
+    int fontSel = -1;
     std::wstring currentFont = s.GetFontName();
     for (size_t i = 0; i < 6; ++i) {
         SendMessageW(hFont, CB_ADDSTRING, 0, (LPARAM)fonts[i].c_str());
         if (fonts[i] == currentFont) fontSel = (int)i;
     }
+    // The saved font may not be one of the presets (e.g. set manually in the ini).
+    // Add it so the dialog reflects the actual value instead of silently resetting it.
+    if (fontSel < 0 && !currentFont.empty())
+        fontSel = (int)SendMessageW(hFont, CB_ADDSTRING, 0, (LPARAM)currentFont.c_str());
+    if (fontSel < 0) fontSel = 0;
     SendMessageW(hFont, CB_SETCURSEL, fontSel, 0);
+
+    // Output dir mode radio buttons
+    bool fixedMode = s.GetOutputDirModeFixed();
+    CheckRadioButton(hwnd, IDC_OUTDIR_SOURCE, IDC_OUTDIR_FIXED,
+                     fixedMode ? IDC_OUTDIR_FIXED : IDC_OUTDIR_SOURCE);
+    EnableWindow(GetDlgItem(hwnd, IDC_DEFAULT_DIR), fixedMode);
+    EnableWindow(GetDlgItem(hwnd, IDC_BROWSE_DIR),  fixedMode);
 
     // Default output dir
     SetDlgItemTextW(hwnd, IDC_DEFAULT_DIR, s.GetDefaultOutputDir().c_str());
@@ -116,6 +137,8 @@ void SettingsDlg::OnBrowseFile(HWND hwnd, int pathCtrlId, UINT filterId, UINT ti
 
 bool SettingsDlg::OnOK(HWND hwnd) {
     Settings& s = App::Instance().GetSettings();
+
+    s.SetOutputDirModeFixed(IsDlgButtonChecked(hwnd, IDC_OUTDIR_FIXED) == BST_CHECKED);
 
     HWND hExt = GetDlgItem(hwnd, IDC_RAR_EXTRACTOR);
     int  sel  = (int)SendMessageW(hExt, CB_GETCURSEL, 0, 0);
