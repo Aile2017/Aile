@@ -49,10 +49,21 @@ std::wstring ParentDir(const std::wstring& path) {
 }
 
 // Return the initial output path based on OutputDirMode setting and the given source files.
+// Returns "dir\stem" (no extension) so CompressDlg::UpdateOutputExt can append the right one.
 std::wstring DefaultOutputPath(const Settings& s, const std::vector<std::wstring>& srcFiles) {
+    std::wstring dir;
     if (s.GetOutputDirModeFixed())
-        return s.GetDefaultOutputDir();
-    return srcFiles.empty() ? s.GetDefaultOutputDir() : ParentDir(srcFiles[0]);
+        dir = s.GetDefaultOutputDir();
+    else
+        dir = srcFiles.empty() ? s.GetDefaultOutputDir() : ParentDir(srcFiles[0]);
+
+    if (srcFiles.empty()) return dir;
+
+    auto sl = srcFiles[0].find_last_of(L"\\/");
+    std::wstring name = (sl != std::wstring::npos) ? srcFiles[0].substr(sl + 1) : srcFiles[0];
+    auto dot = name.rfind(L'.');
+    std::wstring stem = (dot != std::wstring::npos) ? name.substr(0, dot) : name;
+    return dir.empty() ? stem : dir + L"\\" + stem;
 }
 
 // Return top-level entry count from archive m_items (unique first path components)

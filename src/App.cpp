@@ -105,13 +105,26 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
     CompressDlg::Params params;
     params.inputFiles = filePaths;
     params.LoadFromSettings(m_settings);
-    if (!destDir.empty()) {
-        params.outputPath = destDir;
-    } else if (m_settings.GetOutputDirModeFixed()) {
-        params.outputPath = m_settings.GetDefaultOutputDir();
-    } else if (!filePaths.empty()) {
-        auto sl = filePaths[0].find_last_of(L"\\/");
-        params.outputPath = (sl != std::wstring::npos) ? filePaths[0].substr(0, sl) : L"";
+    {
+        std::wstring outDir;
+        if (!destDir.empty()) {
+            outDir = destDir;
+        } else if (m_settings.GetOutputDirModeFixed()) {
+            outDir = m_settings.GetDefaultOutputDir();
+        } else if (!filePaths.empty()) {
+            auto sl = filePaths[0].find_last_of(L"\\/");
+            outDir = (sl != std::wstring::npos) ? filePaths[0].substr(0, sl) : L"";
+        }
+        // Append stem of first input so CompressDlg shows "dir\name" and UpdateOutputExt adds the extension.
+        if (!filePaths.empty()) {
+            auto sl   = filePaths[0].find_last_of(L"\\/");
+            std::wstring name = (sl != std::wstring::npos) ? filePaths[0].substr(sl + 1) : filePaths[0];
+            auto dot  = name.rfind(L'.');
+            std::wstring stem = (dot != std::wstring::npos) ? name.substr(0, dot) : name;
+            params.outputPath = outDir.empty() ? stem : outDir + L"\\" + stem;
+        } else {
+            params.outputPath = outDir;
+        }
     }
 
     CompressDlg dlg;
