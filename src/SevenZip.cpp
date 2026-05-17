@@ -730,6 +730,7 @@ HRESULT SevenZip::OpenArchive(const wchar_t* path, std::vector<ArchiveItem>& ite
                 swprintf_s(tmpTar, L"%sailex_%llu.tar",
                            tmpDir, (unsigned long long)GetTickCount64());
                 CTempOutStream* outStream = new CTempOutStream();
+                bool keepTmp = false;
                 if (outStream->Create(tmpTar)) {
                     CTarExtractCallback* cb = new CTarExtractCallback(outStream);
                     UInt32 zeroIdx = 0;
@@ -739,13 +740,18 @@ HRESULT SevenZip::OpenArchive(const wchar_t* path, std::vector<ArchiveItem>& ite
                     if (SUCCEEDED(hrEx)) {
                         std::vector<ArchiveItem> tarItems;
                         HRESULT hrTar = OpenArchive(tmpTar, tarItems, password);
-                        if (SUCCEEDED(hrTar))
+                        if (SUCCEEDED(hrTar)) {
                             items = std::move(tarItems);
+                            // Keep temp .tar so Extract() can later address items by index.
+                            // Caller (MainWindow) cleans it up via effectivePath on close.
+                            if (effectivePath) *effectivePath = tmpTar;
+                            keepTmp = true;
+                        }
                     }
                 } else {
                     outStream->Release();
                 }
-                DeleteFileW(tmpTar);
+                if (!keepTmp) DeleteFileW(tmpTar);
             } // if likelyTar
         }
     }

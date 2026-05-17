@@ -791,7 +791,7 @@ void MainWindow::OnDropFiles(HDROP hDrop) {
                 auto& s = App::Instance().GetSettings();
                 params.SaveToSettings(s);
                 s.Save();
-                OnCompress(params);
+                OnCompress(params, /*openAfterCompress=*/true);
             }
         }
     }
@@ -954,8 +954,8 @@ void MainWindow::OnListDblClick() {
         if (fpIdx < (int)m_folderPaths.size())
             navigateToFolderIndex(fpIdx);
     } else {
-        // File → open extract dialog
-        OnExtract();
+        // File → open with associated application
+        OnOpenAssoc();
     }
 }
 
@@ -1928,7 +1928,7 @@ void MainWindow::OnDelete() {
     OpenArchive(archivePath.c_str());
 }
 
-void MainWindow::OnCompress(CompressDlg::Params& params) {
+void MainWindow::OnCompress(CompressDlg::Params& params, bool openAfterCompress) {
     if (params.inputFiles.empty() || params.outputPath.empty()) return;
 
     auto  inputs  = params.inputFiles;
@@ -2009,8 +2009,17 @@ void MainWindow::OnCompress(CompressDlg::Params& params) {
     delete sink;
     m_pSink = nullptr;
 
-    if (FAILED(hrDone) && hrDone != E_ABORT)
+    if (FAILED(hrDone) && hrDone != E_ABORT) {
         ShowError(I18n::Tr(IDS_ERR_COMPRESS_FAILED).c_str(), hrDone);
+    } else if (SUCCEEDED(hrDone) && openAfterCompress) {
+        // For split volumes (7z/zip), the first file is <outputPath>.001
+        std::wstring pathToOpen = params.outputPath;
+        if (!params.volumeSize.empty() && params.format != L"rar")
+            pathToOpen += L".001";
+        // Skip auto-open for RAR split volumes (part01.rar naming is ambiguous)
+        if (params.volumeSize.empty() || params.format != L"rar")
+            OpenArchive(pathToOpen.c_str());
+    }
 }
 
 // ---- Tree and List population ----

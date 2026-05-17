@@ -64,7 +64,7 @@ private:
     void OnMruOpen(int idx);
     void RebuildMruMenu();
     void CloseArchive();  // Close the open archive and clear the view (does not quit the app)
-    void OnCompress(CompressDlg::Params& params);
+    void OnCompress(CompressDlg::Params& params, bool openAfterCompress = false);
     void OnProgress(int pct, wchar_t* filename);  // takes ownership of filename
     void OnDone(HRESULT hr);
 

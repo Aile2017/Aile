@@ -12,11 +12,18 @@ For details, see `docs/specification.md`.
 - **OS**: Windows 11 (x64)
 - **Shell**: PowerShell (Bash also available; POSIX scripts prefer Bash)
 - **Compiler**: MSVC (Visual Studio 18/2026 Community)
-- **Compiler PATH**:
+- **Build commands** (Ninja generator — ninja.exe は VS が PATH に追加済みなので環境設定不要):
   ```powershell
-  $env:PATH = "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.44.35207\bin\Hostx64\x64;" + $env:PATH
+  cmake --build build          # Debug
+  cmake --build build_release  # Release
   ```
-- **Build commands**: `cmake --build build` (Debug) / `cmake --build build_release` (Release)
+- **キャッシュ再生成** (VS 更新後に `CMakeCache.txt` が壊れた場合のみ必要):
+  ```powershell
+  $vcvars = "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvarsall.bat"
+  $cmake  = "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
+  Remove-Item build\CMakeCache.txt, build_release\CMakeCache.txt -ErrorAction SilentlyContinue
+  cmd /c "`"$vcvars`" x64 -vcvars_ver=14.51 && `"$cmake`" -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug && `"$cmake`" -B build_release -G Ninja -DCMAKE_BUILD_TYPE=Release 2>&1"
+  ```
 
 ## Essential Documentation to Read First
 
