@@ -281,7 +281,7 @@ BEGIN
     IDS_PROGRESS_DELETING           "Deleting..."
     IDS_PROGRESS_ADDING             "Adding..."
     IDS_PROGRESS_SAVING_COMMENT     "Saving comment..."
-    IDS_FMT_STATUS_ENTRIES          "%zu entries  [%s]"
+    IDS_FMT_STATUS_ENTRIES          "%zu files  [%s]"
 
     IDS_COL_NAME                    "Name"
     IDS_COL_SIZE                    "Size"
@@ -737,7 +737,7 @@ BEGIN
     IDS_PROGRESS_DELETING           "削除中..."
     IDS_PROGRESS_ADDING             "追加中..."
     IDS_PROGRESS_SAVING_COMMENT     "コメントを保存中..."
-    IDS_FMT_STATUS_ENTRIES          "%zu 個のエントリ  [%s]"
+    IDS_FMT_STATUS_ENTRIES          "%zu 個のファイル  [%s]"
 
     IDS_COL_NAME                    "名前"
     IDS_COL_SIZE                    "サイズ"

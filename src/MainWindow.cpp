@@ -296,8 +296,10 @@ void MainWindow::OpenArchive(const wchar_t* path) {
         const std::wstring& dllName = m_openedWithUnrar
             ? app.GetUnrar().GetLoadedName()
             : app.Get7z().GetLoadedName();
+        size_t fileCount = std::count_if(m_items.begin(), m_items.end(),
+                                         [](const ArchiveItem& it){ return !it.isDir; });
         std::wstring status = I18n::TrFmt(IDS_FMT_STATUS_ENTRIES,
-                                          m_items.size(), dllName.c_str());
+                                          fileCount, dllName.c_str());
         SetWindowTextW(m_hStatus, status.c_str());
     }
 
