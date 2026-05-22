@@ -121,6 +121,8 @@
 #define IDM_VIEW_TOOLBAR    40015   // Toggle toolbar
 #define IDM_FILE_PROPERTIES 40017   // Archive properties
 #define ID_ARCHIVE_COMMENT  40019   // Show archive comment
+#define IDM_VIEW_ICONS      40022   // Toggle folder/file icons
+#define IDM_VIEW_MENUBAR    40023   // Toggle menu bar
 
 // Recently used archives - dynamic ID range (10 entries)
 #define IDM_FILE_MRU_BASE   41000

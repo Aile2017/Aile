@@ -151,9 +151,11 @@ bool MainWindow::RegisterClass(HINSTANCE hInst) {
 
 bool MainWindow::Create(HINSTANCE hInst, int nCmdShow) {
     auto& s = App::Instance().GetSettings();
-    m_treeWidth   = s.GetSplitterPos();
-    m_treeVisible = s.GetTreeVisible();
-    m_toolbarVisible = s.GetToolbarVisible();
+    m_treeWidth       = s.GetSplitterPos();
+    m_treeVisible     = s.GetTreeVisible();
+    m_toolbarVisible  = s.GetToolbarVisible();
+    m_iconsVisible    = s.GetIconsVisible();
+    m_menubarVisible  = s.GetMenubarVisible();
 
     int wx = s.GetWindowX(), wy = s.GetWindowY();
     int ww = s.GetWindowW(), wh = s.GetWindowH();
@@ -167,6 +169,8 @@ bool MainWindow::Create(HINSTANCE hInst, int nCmdShow) {
         nullptr, hMenu, hInst, this);
 
     if (!hwnd) return false;
+    if (!m_menubarVisible)
+        SetMenu(hwnd, nullptr);
     // If maximized was saved and caller did not request a specific show command, honour it
     if (s.GetWindowMaximized() && nCmdShow == SW_SHOWDEFAULT)
         nCmdShow = SW_SHOWMAXIMIZED;
@@ -333,6 +337,12 @@ bool MainWindow::PreTranslateMessage(const MSG& msg) {
             return true;
         }
     }
+    // F10 (WM_SYSKEYDOWN without Alt) toggles menu bar — works even when menu is hidden
+    if (msg.message == WM_SYSKEYDOWN && msg.wParam == VK_F10 &&
+        !(HIWORD(msg.lParam) & KF_ALTDOWN)) {
+        OnToggleMenubar();
+        return true;
+    }
     return false;
 }
 
@@ -479,6 +489,8 @@ LRESULT MainWindow::HandleMsg(UINT msg, WPARAM wp, LPARAM lp) {
             s.SetSplitterPos(m_treeWidth);
             s.SetTreeVisible(m_treeVisible);
             s.SetToolbarVisible(m_toolbarVisible);
+            s.SetIconsVisible(m_iconsVisible);
+            s.SetMenubarVisible(m_menubarVisible);
             s.Save();
         }
         // Delete session temp dir tree (files opened via browse mode)
@@ -522,6 +534,7 @@ static LRESULT CALLBACK ChildDropForwardProc(HWND hwnd, UINT msg, WPARAM wp, LPA
 }
 
 void MainWindow::OnCreate(HWND hwnd) {
+    m_hMenu = GetMenu(hwnd);
     CreateControls(hwnd);
     ApplyFontToControls();
     DragAcceptFiles(hwnd, TRUE);
@@ -685,7 +698,7 @@ void MainWindow::CreateControls(HWND hwnd) {
     SHFILEINFOW sfi = {};
     m_hSysImageList = (HIMAGELIST)SHGetFileInfoW(L"C:\\", 0, &sfi, sizeof(sfi),
                                                   SHGFI_SYSICONINDEX | SHGFI_SMALLICON);
-    if (m_hSysImageList) {
+    if (m_hSysImageList && m_iconsVisible) {
         TreeView_SetImageList(m_hTreeView, m_hSysImageList, TVSIL_NORMAL);
         ListView_SetImageList(m_hListView, m_hSysImageList, LVSIL_SMALL);
     }
@@ -927,6 +940,12 @@ void MainWindow::OnCommand(WORD id) {
         break;
     case IDM_VIEW_TOOLBAR:
         OnToggleToolbar();
+        break;
+    case IDM_VIEW_ICONS:
+        OnToggleIcons();
+        break;
+    case IDM_VIEW_MENUBAR:
+        OnToggleMenubar();
         break;
     case IDM_HELP_ABOUT:
         OnAbout();
@@ -1605,6 +1624,20 @@ void MainWindow::OnToggleToolbar() {
     ResizePanes(rc.right, rc.bottom);
 }
 
+void MainWindow::OnToggleIcons() {
+    m_iconsVisible = !m_iconsVisible;
+    HIMAGELIST il = m_iconsVisible ? m_hSysImageList : nullptr;
+    if (m_hTreeView) TreeView_SetImageList(m_hTreeView, il, TVSIL_NORMAL);
+    if (m_hListView) ListView_SetImageList(m_hListView, il, LVSIL_SMALL);
+    if (m_hTreeView) InvalidateRect(m_hTreeView, nullptr, TRUE);
+    if (m_hListView) InvalidateRect(m_hListView, nullptr, TRUE);
+}
+
+void MainWindow::OnToggleMenubar() {
+    m_menubarVisible = !m_menubarVisible;
+    SetMenu(m_hwnd, m_menubarVisible ? m_hMenu : nullptr);
+}
+
 // Update enabled/disabled state just before the menu is shown. WM_INITMENUPOPUP fires per popup,
 // so EnableMenuItem returns -1 without side effects when an ID is not in this popup.
 // Safe to call for all commands every time.
@@ -1632,6 +1665,10 @@ void MainWindow::OnInitMenuPopup(HMENU hMenu) {
                   MF_BYCOMMAND | (m_treeVisible ? MF_CHECKED : MF_UNCHECKED));
     CheckMenuItem(hMenu, IDM_VIEW_TOOLBAR,
                   MF_BYCOMMAND | (m_toolbarVisible ? MF_CHECKED : MF_UNCHECKED));
+    CheckMenuItem(hMenu, IDM_VIEW_ICONS,
+                  MF_BYCOMMAND | (m_iconsVisible ? MF_CHECKED : MF_UNCHECKED));
+    CheckMenuItem(hMenu, IDM_VIEW_MENUBAR,
+                  MF_BYCOMMAND | (m_menubarVisible ? MF_CHECKED : MF_UNCHECKED));
 }
 
 void MainWindow::CloseArchive() {

@@ -60,6 +60,8 @@ BEGIN
     BEGIN
         MENUITEM "Tool&bar",                            IDM_VIEW_TOOLBAR
         MENUITEM "&Tree",                               IDM_VIEW_TREE
+        MENUITEM "&Icons",                              IDM_VIEW_ICONS
+        MENUITEM "&Menu bar\tF10",                      IDM_VIEW_MENUBAR
     END
     POPUP "&Help"
     BEGIN
@@ -516,6 +518,8 @@ BEGIN
     BEGIN
         MENUITEM "ツールバー(&B)",                      IDM_VIEW_TOOLBAR
         MENUITEM "ツリー表示(&T)",                      IDM_VIEW_TREE
+        MENUITEM "アイコン表示(&I)",                    IDM_VIEW_ICONS
+        MENUITEM "メニューバー(&M)\tF10",               IDM_VIEW_MENUBAR
     END
     POPUP "ヘルプ(&H)"
     BEGIN

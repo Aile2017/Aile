@@ -60,6 +60,8 @@ private:
     void OnAbout();
     void OnToggleTree();
     void OnToggleToolbar();
+    void OnToggleIcons();
+    void OnToggleMenubar();
     void OnInitMenuPopup(HMENU hMenu);
     void OnMruOpen(int idx);
     void RebuildMruMenu();
@@ -115,6 +117,9 @@ private:
     bool                     m_draggingSplitter = false;
     bool                     m_treeVisible = true;   // Toggled from the View menu
     bool                     m_toolbarVisible = true; // Toggled from the View menu
+    bool                     m_iconsVisible = true;  // Toggled from the View menu
+    bool                     m_menubarVisible = true; // Toggled from View menu / F10
+    HMENU                    m_hMenu = nullptr;       // Saved menu bar handle for show/hide
     int                      m_iconIndexFolder = -1; // cached folder icon index
     HMENU                    m_hMruMenu = nullptr;   // Submenu for recently used archives
 

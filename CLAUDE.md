@@ -12,12 +12,12 @@ For details, see `docs/specification.md`.
 - **OS**: Windows 11 (x64)
 - **Shell**: PowerShell (Bash also available; POSIX scripts prefer Bash)
 - **Compiler**: MSVC (Visual Studio 18/2026 Community)
-- **Build commands** (Ninja generator — ninja.exe は VS が PATH に追加済みなので環境設定不要):
+- **Build commands** (Ninja generator — ninja.exe is already on PATH via VS, no extra setup needed):
   ```powershell
   cmake --build build          # Debug
   cmake --build build_release  # Release
   ```
-- **キャッシュ再生成** (VS 更新後に `CMakeCache.txt` が壊れた場合のみ必要):
+- **Cache regeneration** (only needed if `CMakeCache.txt` is corrupted after a VS update):
   ```powershell
   $vcvars = "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvarsall.bat"
   $cmake  = "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
@@ -39,7 +39,7 @@ For details, see `docs/specification.md`.
 
 ## Code Conventions
 
-- **Comments**: English (was Japanese; now translated). Write WHY, not WHAT (code explains itself).
+- **Comments**: English. Write WHY, not WHAT (code explains itself).
 - **Follow existing style**: `m_` prefix for class members, use `STDMETHODCALLTYPE`, return `HRESULT` appropriately
 - **New files**: Add to `CMakeLists.txt` `add_executable` list (CMake does not glob)
 - **Headers**: Use `#pragma once`
@@ -131,6 +131,27 @@ CompressDlg references this list, excluding codecs unsupported by DLL from metho
 Extract destination and settings dialogs use `IFileOpenDialog + FOS_PICKFOLDERS + FOS_FORCEFILESYSTEM` (replaces deprecated `SHBrowseForFolder`).
 Required header: `<shobjidl_core.h>`. Show current folder using `SHCreateItemFromParsingName` → `SetFolder()`.
 
+## Internationalization (i18n)
+
+UI is bilingual (English / Japanese) embedded in a single EXE. Language selection:
+
+- `I18n::Init()` calls `GetUserDefaultUILanguage()` and sets process language via `SetProcessPreferredUILanguages`.
+- `I18n::Tr(IDS)` / `TrFmt(IDS, ...)` / `TrFilter(IDS)` for string lookup.
+- Override with environment variable `AILEEX_LANG=en` or `AILEEX_LANG=ja` for testing.
+- `AileEx.rc` duplicates all dialogs/menus/STRINGTABLEs under `LANGUAGE LANG_ENGLISH` and `LANGUAGE LANG_JAPANESE` blocks.
+
+When adding new strings: add IDS constants to both language blocks in `AileEx.rc` and `resource.h`.
+
+## CLI Startup Modes
+
+AileEx supports the following command-line options (Noah-style):
+
+- `-x <archive>` — Extract mode: extract archive to configured destination
+- `-a <files...>` — Add/compress mode: compress specified files
+- `-d <archive>` — Delete/open mode: open archive and select for deletion
+
+These are processed in `App::ParseArgs` and route to the appropriate operation without showing the main window for simple batch use.
+
 ## GitHub Actions
 
 Added workflow_dispatch trigger release workflow to `.github/workflows/package-release.yml`.
@@ -142,7 +163,7 @@ Added workflow_dispatch trigger release workflow to `.github/workflows/package-r
 
 See [`docs/roadmap.md`](docs/roadmap.md) for feature priority and implementation hints.
 
-Recent small items left to address:
+Known incomplete items:
 
 - [ ] Manual test matrix: browse/compress/extract/cancel/drag-drop for each format
 - [ ] Bulk error handling review

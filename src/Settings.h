@@ -79,6 +79,8 @@ public:
     int  GetSplitterPos() const      { return m_splitterPos; }
     bool GetTreeVisible() const      { return m_treeVisible; }
     bool GetToolbarVisible() const   { return m_toolbarVisible; }
+    bool GetIconsVisible() const     { return m_iconsVisible; }
+    bool GetMenubarVisible() const   { return m_menubarVisible; }
     void SetWindowPlacement(int x, int y, int w, int h, bool maximized) {
         m_windowX = x; m_windowY = y; m_windowW = w; m_windowH = h;
         m_windowMaximized = maximized;
@@ -86,6 +88,8 @@ public:
     void SetSplitterPos(int v)       { m_splitterPos = v; }
     void SetTreeVisible(bool v)      { m_treeVisible = v; }
     void SetToolbarVisible(bool v)   { m_toolbarVisible = v; }
+    void SetIconsVisible(bool v)     { m_iconsVisible = v; }
+    void SetMenubarVisible(bool v)   { m_menubarVisible = v; }
 
     const std::wstring& Get7zDllPath() const        { return m_7zDllPath; }
     void Set7zDllPath(const wchar_t* v)             { m_7zDllPath = v; }
@@ -134,6 +138,8 @@ private:
     int          m_splitterPos;
     bool         m_treeVisible;
     bool         m_toolbarVisible;
+    bool         m_iconsVisible;
+    bool         m_menubarVisible;
     std::wstring m_7zDllPath;
     std::wstring m_unrarDllPath;
     std::wstring m_fontName;
