@@ -1,0 +1,11 @@
+load:
+ (name 7zG.exe)
+
+decode:
+ (cmd x (arc))
+
+decode1:
+ (cmd x -y (arc) (list))
+
+list:
+ (xscan "------------------" 1 "------------------" 1 53 7z.exe l (arc))
