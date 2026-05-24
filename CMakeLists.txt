@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Static CRT linking: single EXE distribution (no dependency on msvcp140.dll / vcruntime140.dll)
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL$<$<CONFIG:Debug>:Debug>")
 
 # AileEx UI layer (C++17, STL, exceptions enabled — Class A/B sources)
 set(AILEFLOW_UI_SOURCES

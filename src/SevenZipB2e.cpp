@@ -29,6 +29,7 @@ void SevenZip::Unload()
 {
     m_hDll = nullptr;
     m_loadedName.clear();
+    m_listColumnLabel.clear();
     m_writableFormats.clear();
     m_encoderNames.clear();
 }
@@ -45,9 +46,12 @@ HRESULT SevenZip::OpenArchive(const wchar_t* path,
                                const wchar_t* /*password*/,
                                std::wstring* effectivePath)
 {
-    HRESULT hr = B2e_List(path, items);
-    if (SUCCEEDED(hr) && effectivePath)
-        *effectivePath = path;
+    std::wstring colHeader;
+    HRESULT hr = B2e_List(path, items, &colHeader);
+    if (SUCCEEDED(hr)) {
+        m_listColumnLabel = colHeader;
+        if (effectivePath) *effectivePath = path;
+    }
     return hr;
 }
 

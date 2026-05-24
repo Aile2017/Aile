@@ -27,8 +27,12 @@ CArcB2e::CArcB2e( const char* scriptname ) : CArchiver( scriptname )
 
 CArcB2e::~CArcB2e()
 {
-	if( !(--st_life) )
+	delete exe;
+	exe = NULL;
+	if( !(--st_life) ) {
 		delete rvm;
+		rvm = NULL;  // prevent dangling pointer when instances are created sequentially
+	}
 	delete [] m_ScriptBuf;
 }
 
@@ -518,8 +522,8 @@ bool CArcB2e::CB2eCore::exec_function( const kiVar& name, const CharArray& a, co
 			//-- (is_file) --------//
 			//---------------------//
 			if( c==1 )
-				*r = (x->m_psList->len()==1
-					  && !kiSUtil::isdir( (*x->m_psList)[0].cFileName )) ? "1" : "0";
+				*r = (x->m_psList->len()==2
+					  && !kiSUtil::isdir( (*x->m_psList)[1].cFileName )) ? "1" : "0";
 		}else if( name=="is_folder" ){
 			processed=true;
 
@@ -527,8 +531,8 @@ bool CArcB2e::CB2eCore::exec_function( const kiVar& name, const CharArray& a, co
 			//-- (is_folder) ------//
 			//---------------------//
 			if( c==1 )
-				*r = (x->m_psList->len()==1
-					  && kiSUtil::isdir( (*x->m_psList)[0].cFileName )) ? "1" : "0";
+				*r = (x->m_psList->len()==2
+					  && kiSUtil::isdir( (*x->m_psList)[1].cFileName )) ? "1" : "0";
 		}else if( name=="is_multiple" ){
 			processed=true;
 
@@ -536,7 +540,7 @@ bool CArcB2e::CB2eCore::exec_function( const kiVar& name, const CharArray& a, co
 			//-- (is_multiple) ----//
 			//---------------------//
 			if( c==1 )
-				*r = x->m_psList->len()>1 ? "1" : "0";
+				*r = x->m_psList->len()>2 ? "1" : "0";
 		}else if( name=="find" ){
 			processed=true;
 
@@ -716,10 +720,10 @@ void CArcB2e::CB2eCore::list( const char* opt, const CharArray& a, const BoolArr
 		if( *opt=='\\' || *opt=='/' )
 			opt++;
 
-		// List up
+		// List up — skip wfd[0] (output archive); sources start at index 1
 		kiVar t2,t3;
 		*r = "";
-		for( unsigned int i=0; i!=x->m_psList->len(); i++ )
+		for( unsigned int i=1; i!=x->m_psList->len(); i++ )
 		{
 			// Filename part
 			t = ( part==full ? *x->m_psDir : (const char*)"");

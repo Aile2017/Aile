@@ -256,8 +256,8 @@ CAPTION "About"
 FONT 9, "Segoe UI", 400, 0, 0x1
 BEGIN
     ICON            IDI_AILEEX,     IDC_STATIC,         12,  12,  20,  20
-    LTEXT           "AileEx Archive Manager", IDC_ABOUT_TITLE, 44, 14, 240, 14
-    LTEXT           "https://github.com/Aile2017/AileEx", IDC_ABOUT_URL, 44, 32, 240, 10
+    LTEXT           "AileFlow Archive Manager", IDC_ABOUT_TITLE, 44, 14, 240, 14
+    LTEXT           "https://github.com/Aile2017/AileFlow", IDC_ABOUT_URL, 44, 32, 240, 10
     LTEXT           "Components:", IDC_STATIC,           12,  60, 100,  10
     EDITTEXT        IDC_ABOUT_LIST,                     12,  74, 276,  68,
                     ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | NOT WS_TABSTOP | WS_VSCROLL | WS_BORDER
@@ -266,7 +266,7 @@ END
 
 STRINGTABLE
 BEGIN
-    IDS_APP_TITLE                   "AileEx"
+    IDS_APP_TITLE                   "AileFlow"
     IDS_ERR_INIT_FAILED             "Initialization failed."
     IDS_ERR_7Z_NOT_LOADED           "7z.dll is not loaded."
     IDS_CANCELLED                   "Cancelled"
@@ -715,8 +715,8 @@ CAPTION "バージョン情報"
 FONT 9, "Segoe UI", 400, 0, 0x1
 BEGIN
     ICON            IDI_AILEEX,     IDC_STATIC,         12,  12,  20,  20
-    LTEXT           "AileEx Archive Manager", IDC_ABOUT_TITLE, 44, 14, 240, 14
-    LTEXT           "https://github.com/Aile2017/AileEx", IDC_ABOUT_URL, 44, 32, 240, 10
+    LTEXT           "AileFlow Archive Manager", IDC_ABOUT_TITLE, 44, 14, 240, 14
+    LTEXT           "https://github.com/Aile2017/AileFlow", IDC_ABOUT_URL, 44, 32, 240, 10
     LTEXT           "コンポーネント:", IDC_STATIC,       12,  60, 100,  10
     EDITTEXT        IDC_ABOUT_LIST,                     12,  74, 276,  68,
                     ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | NOT WS_TABSTOP | WS_VSCROLL | WS_BORDER
@@ -725,7 +725,7 @@ END
 
 STRINGTABLE
 BEGIN
-    IDS_APP_TITLE                   "AileEx"
+    IDS_APP_TITLE                   "AileFlow"
     IDS_ERR_INIT_FAILED             "初期化に失敗しました。"
     IDS_ERR_7Z_NOT_LOADED           "7z.dll が読み込まれていません。"
     IDS_CANCELLED                   "キャンセルされました"

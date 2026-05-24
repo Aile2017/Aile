@@ -10,15 +10,28 @@
 #include "ArchiveItem.h"
 #include "WorkerThread.h"
 
-// Format descriptor returned by B2e_GetWritableFormats().
-struct B2eFormatInfo {
-    std::wstring label;  // e.g. L"7-Zip (.7z)"
-    std::wstring ext;    // e.g. L"7z"
+// One entry from the (type ...) line of a .b2e load: section.
+struct B2eMethodInfo {
+    std::wstring name;       // e.g. L"LZMA2", L"gzip"
+    std::wstring outputExt;  // output file extension, e.g. L"7z", L"tar.gz"
+    bool         isDefault;  // marked with * in the type list
 };
 
-// Returns all formats whose .b2e script has an encode: section.
-// Used by SevenZip::Load() to populate m_writableFormats / m_encoderNames.
+// Format descriptor returned by B2e_GetWritableFormats().
+struct B2eFormatInfo {
+    std::wstring label;                  // e.g. L"7-Zip (.7z)"
+    std::wstring ext;                    // e.g. L"7z"
+    std::vector<B2eMethodInfo> methods;  // ordered by type-list position (index = level for B2e_Compress)
+};
+
+// Dynamically scans the b2e/ directory next to the EXE.
+// Returns every .b2e file that has an encode: section, with its method list parsed
+// from the (type ...) line.  Used by the compression dialog and SevenZip::Load().
 std::vector<B2eFormatInfo> B2e_GetWritableFormats();
+
+// Returns one line per external tool used by B2E scripts, formatted as
+// "toolname.exe   version" (name left-padded to 12 chars).  Duplicates removed.
+std::vector<std::wstring> B2e_GetComponentVersions();
 
 // Returns true if ext (no dot, case-insensitive, e.g. L"7z") is handled
 // by a .b2e script (for listing or extraction).
@@ -28,8 +41,11 @@ bool B2e_IsArchiveExt(const wchar_t* ext);
 // Returns S_OK and fills items on success.
 // Returns E_NOTIMPL if the extension has no .b2e handler.
 // Returns E_FAIL if the archive could not be opened or listed.
+// columnHeader (optional): receives the header line that appears before the
+// first separator in the listing output (e.g. "   Date      Time ...  Name").
 HRESULT B2e_List(const wchar_t* archivePath,
-                 std::vector<ArchiveItem>& items);
+                 std::vector<ArchiveItem>& items,
+                 std::wstring* columnHeader = nullptr);
 
 // Extract entries from an archive.
 // indices: positions into allItems (as returned by B2e_List). Empty = extract all.

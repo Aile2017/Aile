@@ -14,7 +14,7 @@ with Noah's B2E script engine. This section documents what is unavailable or deg
 | **Add to current archive** (`ID_ADD_TO_CURRENT`) | B2E always creates new archives; no append operation. Menu item is grayed. |
 | **Archive comment write** | B2E has no comment API. Comment dialog opens read-only. |
 | **Split volume creation** | `encode:` scripts have no volume-size option. The volume size field in the compression dialog is ignored. |
-| **Console-mode SFX** | `sfxd:` scripts only create GUI SFX (`7z.sfx`); `7zCon.sfx` is not defined. |
+| **SFX creation** | GUI SFX (`7z.sfx`) is unavailable via B2E. The SFX control is hidden in the compression dialog when the B2E backend is active. |
 
 ---
 
@@ -27,11 +27,11 @@ with Noah's B2E script engine. This section documents what is unavailable or deg
 | **Archive properties** | Detailed per-archive metadata from `IInArchive::GetArchivePropertyInfo` | Shows entry count and total sizes aggregated from the item list only. No format name, method list, or encrypted-header flag. |
 | **Password on encrypted archives** | AileFlow's own password dialog shown before the list appears | Password dialog shown by the B2E engine's `input()` callback when the `.b2e` script requests it. Timing and appearance depend on the script; not all formats prompt consistently. |
 | **Progress reporting** | Percentage + filename in AileFlow's `ProgressDlg` via `IArchiveExtractCallback` | External tool shows its own window (7zG.exe GUI) or no progress. AileFlow's progress dialog opens but has no data from the external tool. |
-| **Compression advanced options** | Dictionary size / word size / solid block / threads — individually configurable | B2E supports only discrete method levels mapped to hardcoded CLI options. `AdvancedCompressDlg` options (dict size, threads, etc.) are accepted by the dialog but not passed to B2E. |
+| **Compression advanced options** | Dictionary size / word size / solid block / threads — individually configurable | B2E supports only discrete method levels. The Advanced button is hidden in B2E mode. |
 | **Selective extraction (7z, ZIP)** | Any selected entries can be extracted independently | `7z.b2e` and `zip.zipx.b2e` have no `decode1:` section; selective extraction falls back to full extraction. RAR / LZH / TAR / CAB retain selective extraction via their `decode1:` sections. |
 | **RAR backend selection** | Switch between 7z.dll and unrar.dll; auto-fallback | Fixed: WinRAR.exe via `rar.b2e`. No fallback. |
 | **Format auto-detection** | Magic-byte detection by 7z.dll | Extension-based matching of `.b2e` filenames only. Files with wrong or missing extensions will not open. |
-| **Compression method selection** | Method dropdown populated from `IGetMethodProperties` (lzma, deflate, zstd …) | Method dropdown is not populated; only the compression level slider (0–9) is effective. |
+| **Compression method selection** | Method dropdown populated from `IGetMethodProperties` (lzma, deflate, zstd …) | Method dropdown populated from the `(type ...)` line in each `.b2e` encode section. Selection maps to the `level` index passed to `B2e_Compress`. Compression quality slider (0–9) not used. |
 
 ---
 

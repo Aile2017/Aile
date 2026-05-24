@@ -145,6 +145,10 @@ public:
     // Empty if DLL is not loaded or enumeration is unavailable.
     const std::vector<std::wstring>& GetEncoderNames() const { return m_encoderNames; }
 
+    // Column label for the listing "Info" column (B2E only: the raw header line
+    // from 7z.exe l that appears before the first separator).  Empty for 7z.dll.
+    const std::wstring& GetListColumnLabel() const { return m_listColumnLabel; }
+
     // ext: extension only (no dot, e.g. L"7z"). Case-insensitive.
     bool IsArchiveExt(const wchar_t* ext) const;
 
@@ -160,6 +164,7 @@ private:
     Func_GetMethodProperty       m_pfnGetMethodProp   = nullptr;
     Func_GetNumberOfFormats      m_pfnGetNumFormats   = nullptr;
     Func_GetHandlerProperty2     m_pfnGetHandlerProp2 = nullptr;
+    std::wstring                 m_listColumnLabel; // B2E: raw header from 7z.exe l; empty for dll
     std::vector<std::wstring>    m_encoderNames;   // lowercased; populated by EnumerateCodecs()
     std::map<std::wstring, GUID> m_extToClsid;     // extension (lowercase) → CLSID
     std::vector<WritableFormat>  m_writableFormats; // writable formats (for UI)

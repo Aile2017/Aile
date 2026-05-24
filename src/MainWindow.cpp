@@ -8,6 +8,7 @@
 #include "InfoDlg.h"
 #include "PropertiesDlg.h"
 #include "ProgressDlg.h"
+#include "B2eBridge.h"
 #include "RarProcess.h"
 #include "SettingsDlg.h"
 #include "resource.h"
@@ -163,7 +164,7 @@ bool MainWindow::Create(HINSTANCE hInst, int nCmdShow) {
 
     HMENU hMenu = LoadMenuW(hInst, MAKEINTRESOURCEW(IDR_MAIN_MENU));
     HWND hwnd = CreateWindowExW(
-        0, ClassName(), L"AileEx",
+        0, ClassName(), L"AileFlow",
         WS_OVERLAPPEDWINDOW,
         wx, wy, ww, wh,
         nullptr, hMenu, hInst, this);
@@ -296,7 +297,7 @@ void MainWindow::OpenArchive(const wchar_t* path) {
 
     // Update title
     const wchar_t* leaf = wcsrchr(path, L'\\');
-    std::wstring title = std::wstring(L"AileEx - ") + (leaf ? leaf + 1 : path);
+    std::wstring title = std::wstring(L"AileFlow - ") + (leaf ? leaf + 1 : path);
     SetWindowTextW(m_hwnd, title.c_str());
 
     // Update status
@@ -309,6 +310,37 @@ void MainWindow::OpenArchive(const wchar_t* path) {
         std::wstring status = I18n::TrFmt(IDS_FMT_STATUS_ENTRIES,
                                           fileCount, dllName.c_str());
         SetWindowTextW(m_hStatus, status.c_str());
+    }
+
+    // B2E mode: configure the listing columns for raw output display.
+    if (!m_openedWithUnrar && app.Get7z().GetLoadedPath().empty()) {
+        // Column 1: left-aligned, header = raw listing header from 7z.exe l
+        {
+            const std::wstring& lbl = app.Get7z().GetListColumnLabel();
+            LVCOLUMNW lvc = {};
+            lvc.mask    = LVCF_TEXT | LVCF_FMT;
+            lvc.fmt     = LVCFMT_LEFT;
+            lvc.pszText = lbl.empty() ? const_cast<wchar_t*>(L"") : const_cast<wchar_t*>(lbl.c_str());
+            ListView_SetColumn(m_hListView, 1, &lvc);
+        }
+        // Remove columns 2-5 (Packed, Ratio, Type, Modified) — not populated by B2E.
+        // Delete from the highest index to avoid shifting. Guard with colCount so this
+        // is a no-op on subsequent archive opens (after the columns are already gone).
+        {
+            HWND hHeader = ListView_GetHeader(m_hListView);
+            int colCount = hHeader ? Header_GetItemCount(hHeader) : 0;
+            for (int c = colCount - 1; c >= 2; --c)
+                ListView_DeleteColumn(m_hListView, c);
+        }
+        // Expand column 1 to fill the remaining ListView width.
+        {
+            RECT rc = {};
+            GetClientRect(m_hListView, &rc);
+            int nameWidth = ListView_GetColumnWidth(m_hListView, 0);
+            int infoWidth = rc.right - nameWidth;
+            if (infoWidth < 200) infoWidth = 200;
+            ListView_SetColumnWidth(m_hListView, 1, infoWidth);
+        }
     }
 
     PopulateTree();
@@ -875,9 +907,10 @@ void MainWindow::OnDropFiles(HDROP hDrop) {
 
             CompressDlg dlg;
             auto& sz7 = App::Instance().Get7z();
-            const auto* enc = sz7.IsLoaded() ? &sz7.GetEncoderNames() : nullptr;
-            const auto* wf  = sz7.IsLoaded() ? &sz7.GetWritableFormats() : nullptr;
-            if (dlg.Show(m_hwnd, params, enc, wf)) {
+            const auto* enc  = sz7.IsLoaded() ? &sz7.GetEncoderNames()    : nullptr;
+            const auto* wf   = sz7.IsLoaded() ? &sz7.GetWritableFormats() : nullptr;
+            bool isB2e = sz7.IsLoaded() && sz7.GetLoadedPath().empty();
+            if (dlg.Show(m_hwnd, params, enc, wf, isB2e)) {
                 auto& s = App::Instance().GetSettings();
                 params.SaveToSettings(s);
                 s.Save();
@@ -988,8 +1021,8 @@ void MainWindow::OnListDblClick() {
         if (m_currentFolderPath.empty()) return;
         
         // Find parent folder path
-        size_t lastSlash = m_currentFolderPath.rfind(L'/');
-        std::wstring parentPath = (lastSlash != std::wstring::npos) ? 
+        size_t lastSlash = m_currentFolderPath.find_last_of(L"/\\");
+        std::wstring parentPath = (lastSlash != std::wstring::npos) ?
             m_currentFolderPath.substr(0, lastSlash) : L"";
         
         // Find parent folder in m_folderPaths and navigate
@@ -1484,45 +1517,13 @@ static INT_PTR CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM /*lp
     if (msg == WM_INITDIALOG) {
         App& app = App::Instance();
 
-        struct Entry { std::wstring name; std::wstring path; };
-        std::vector<Entry> entries;
-
-        auto& sz = app.Get7z();
-        if (sz.IsLoaded()) {
-            std::wstring p = sz.GetLoadedPath();
-            entries.push_back({ LeafName(p), p });
-        }
-        auto& ur = app.GetUnrar();
-        if (ur.IsLoaded()) {
-            std::wstring p = ur.GetLoadedPath();
-            entries.push_back({ LeafName(p), p });
-        }
-        // RAR exe: if setting is empty, auto-detect (registry + known paths) as fallback,
-        // so About dialog shows it even if Settings not configured.
-        std::wstring rarExe = app.GetSettings().GetRarExePath();
-        if (rarExe.empty() || !PathFileExistsW(rarExe.c_str()))
-            rarExe = RarProcess::FindRarExe();
-        if (!rarExe.empty() && PathFileExistsW(rarExe.c_str()))
-            entries.push_back({ LeafName(rarExe), rarExe });
-
-        // Get versions + align by max name column width
-        size_t maxName = 0;
-        std::vector<std::wstring> versions;
-        versions.reserve(entries.size());
-        for (auto& e : entries) {
-            if (e.name.size() > maxName) maxName = e.name.size();
-            versions.push_back(GetFileVersionString(e.path.c_str()));
-        }
-
+        // B2E backend: list external tools from .b2e scripts with their versions.
+        // Each line is pre-formatted by CArcModule::ver() as "%-12s version".
+        auto comps = B2e_GetComponentVersions();
         std::wstring text;
-        for (size_t i = 0; i < entries.size(); ++i) {
-            text += entries[i].name;
-            // Pad right of name column to align versions
-            text.append(maxName + 2 - entries[i].name.size(), L' ');
-            text += versions[i].empty() ? I18n::Tr(IDS_ABOUT_NO_VERSION) : versions[i];
-            text += L"\r\n";
-        }
-        if (entries.empty())
+        for (const auto& line : comps)
+            text += line + L"\r\n";
+        if (comps.empty())
             text = I18n::Tr(IDS_ABOUT_NOT_LOADED);
 
         SetDlgItemTextW(hwnd, IDC_ABOUT_LIST, text.c_str());
@@ -1698,7 +1699,7 @@ void MainWindow::CloseArchive() {
     if (m_hTreeView) TreeView_DeleteAllItems(m_hTreeView);
     if (m_hListView) ListView_DeleteAllItems(m_hListView);
 
-    SetWindowTextW(m_hwnd, L"AileEx");
+    SetWindowTextW(m_hwnd, L"AileFlow");
     if (m_hStatus) SetWindowTextW(m_hStatus, L"");
     UpdateExtractDestEdit();
 }
@@ -1730,9 +1731,10 @@ void MainWindow::OnAddFiles() {
 
     CompressDlg dlg;
     auto& sz7 = App::Instance().Get7z();
-    const auto* enc = sz7.IsLoaded() ? &sz7.GetEncoderNames() : nullptr;
-    const auto* wf  = sz7.IsLoaded() ? &sz7.GetWritableFormats() : nullptr;
-    if (dlg.Show(m_hwnd, params, enc, wf)) {
+    const auto* enc  = sz7.IsLoaded() ? &sz7.GetEncoderNames()    : nullptr;
+    const auto* wf   = sz7.IsLoaded() ? &sz7.GetWritableFormats() : nullptr;
+    bool isB2e = sz7.IsLoaded() && sz7.GetLoadedPath().empty();
+    if (dlg.Show(m_hwnd, params, enc, wf, isB2e)) {
         auto& s = App::Instance().GetSettings();
         params.SaveToSettings(s);
         s.Save();
@@ -2180,12 +2182,12 @@ void MainWindow::PopulateTree() {
             folderSet.insert(it.path);
         // Add all ancestor paths so implicit folders (archives without dir entries) work too
         std::wstring p = it.path;
-        auto pos = p.rfind(L'/');
+        auto pos = p.find_last_of(L"/\\");
         while (pos != std::wstring::npos) {
             p = p.substr(0, pos);
             if (!filePaths.count(p))
                 folderSet.insert(p);
-            pos = p.rfind(L'/');
+            pos = p.find_last_of(L"/\\");
         }
     }
 
@@ -2222,7 +2224,7 @@ void MainWindow::PopulateTree() {
 
         // Parent path
         std::wstring parentPath;
-        auto slash = fp.rfind(L'/');
+        auto slash = fp.find_last_of(L"/\\");
         if (slash != std::wstring::npos) parentPath = fp.substr(0, slash);
 
         HTREEITEM hParent = hRoot;
@@ -2303,7 +2305,7 @@ void MainWindow::PopulateList(const std::wstring& folderPath) {
     std::set<std::wstring> explicitDirPaths;  // folder paths actually present in m_items
     for (auto& it : m_items) {
         std::wstring itemDir;
-        auto pos = it.path.rfind(L'/');
+        auto pos = it.path.find_last_of(L"/\\");
         if (pos != std::wstring::npos) itemDir = it.path.substr(0, pos);
         if (itemDir != folderPath) continue;
         if (it.name.empty()) continue;
@@ -2363,7 +2365,7 @@ void MainWindow::PopulateList(const std::wstring& folderPath) {
         const std::wstring& fp = m_folderPaths[i];
         // Check whether fp is a direct child of folderPath
         std::wstring parentPath;
-        auto slash = fp.rfind(L'/');
+        auto slash = fp.find_last_of(L"/\\");
         if (slash != std::wstring::npos) parentPath = fp.substr(0, slash);
         if (parentPath != folderPath) continue;
         // Skip if a real entry already exists
@@ -2418,8 +2420,10 @@ void MainWindow::PopulateList(const std::wstring& folderPath) {
         lvi.pszText  = const_cast<wchar_t*>(it.name.c_str());
         ListView_InsertItem(m_hListView, &lvi);
 
-        // Size column
-        std::wstring sizeStr = it.isDir ? L"" : FormatFileSize(it.size);
+        // Size column — for B2E archives item.comment holds the raw listing line;
+        // for 7z.dll archives comment is empty and size is meaningful.
+        std::wstring sizeStr = it.isDir ? L""
+            : (!it.comment.empty() ? it.comment : FormatFileSize(it.size));
         ListView_SetItemText(m_hListView, row, 1, const_cast<wchar_t*>(sizeStr.c_str()));
 
         // Packed size
@@ -2540,7 +2544,7 @@ void MainWindow::ShowError(const wchar_t* msg, HRESULT hr) {
         text += hrStr;
     }
     HWND parent = IsWindowVisible(m_hwnd) ? m_hwnd : nullptr;
-    MessageBoxW(parent, text.c_str(), L"AileEx", MB_ICONERROR);
+    MessageBoxW(parent, text.c_str(), L"AileFlow", MB_ICONERROR);
 }
 
 bool MainWindow::Ensure7zLoaded(bool useUnrar) {

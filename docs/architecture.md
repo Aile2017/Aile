@@ -21,7 +21,9 @@ AileFlow/
                                   (B2E patches: m_isReadOnly for all archives,
                                    skip outer password retry, OnTest not-supported guard)
     [A] MainWindow.h            … Unchanged from AileEx
-    [A] CompressDlg.cpp/h       … Compression dialog
+    [B] CompressDlg.cpp/h       … Compression dialog
+                                  (B2E patches: B2E mode hides Level/Password/SFX/Advanced;
+                                   Method combo populated from b2e type list; dynamic b2e scanning)
     [A] AdvancedCompressDlg.cpp/h … Advanced compression options dialog
     [A] SettingsDlg.cpp/h       … Settings dialog
     [A] Settings.cpp/h          … INI load/save
@@ -38,7 +40,11 @@ AileFlow/
     [B] SevenZip.h              … Archive backend public API (signature kept identical to AileEx)
     [B] SevenZipB2e.cpp         … B2E implementation of SevenZip.h (replaces SevenZip.cpp)
     [C] B2eBridge.h             … UNICODE/ANSI bridge API (no kilib types exposed)
+                                  B2eFormatInfo: label/ext + methods (B2eMethodInfo list)
+                                  B2eMethodInfo: name / outputExt / isDefault (from type list)
     [C] B2eBridge.cpp           … Bridge implementation (ANSI mode, KILIB_B2E_SOURCES)
+                                  B2e_GetWritableFormats(): scans b2e/*.b2e dynamically
+                                  B2e_GetComponentVersions(): processes 0.b2e first
     [C] ArcB2e.cpp/h            … B2E script engine (from Noah; input() adds password dialog)
     [C] Archiver.cpp/h          … Archiver base class (from Noah)
     [C] AileFlowKiLib.cpp       … kilib startup shim (kiStr::standalone_init, init_b2e_path)
@@ -174,6 +180,82 @@ B2E script calls (input "message:" "")
 
 `MainWindow::OpenArchive()` skips its own `PromptPassword()` retry loop when using the B2E
 backend, since B2E scripts handle password prompting internally.
+
+---
+
+## Data Flow: Compression (B2E mode)
+
+```
+User opens compression dialog
+  → MainWindow detects B2E mode: sz7.IsLoaded() && sz7.GetLoadedPath().empty()
+  → CompressDlg::Show(..., isB2e=true)
+      → B2e_GetWritableFormats()   [B2eBridge, scans b2e/*.b2e at dialog-open time]
+          for each *.b2e in b2e/ (except 0.b2e):
+              check for "encode:" section → skip if absent
+              parse "(type fmt m1 *m2 ...)" line
+                  "fmt" → B2eFormatInfo.ext  (e.g. "7z", "tar")
+                  each token → B2eMethodInfo { name, outputExt, isDefault }
+                      tar methods: outputExt from kTarMethodExts[] table
+                      others:      outputExt = fmt ext
+              label: "7-Zip (.7z)" for "7z"; "FMT (.ext)" otherwise
+      → m_b2eFormats populated; m_writableFormats built from it
+      → ApplyB2eLayout(): hides Level / Password / Encrypt headers / SFX / Advanced
+          uses MapDialogRect(DLU → px) to resize dialog correctly
+          moves OK/Cancel up by 82 DLU (converted to pixels)
+      → OnFormatChange(): repopulates Method combo from B2eFormatInfo.methods
+          item data = index in methods[] = level parameter for B2e_Compress
+      → OnOK(): reads Method combo selection index → Params.level
+
+User clicks OK
+  → SevenZipB2e::Compress()
+      → B2e_Compress(srcPaths, outPath, level=Params.level, sink)
+          → CArcB2e::pack()
+              → exec_script(m_EncScr)   [encode: section of .b2e]
+                  → Rythp VM executes compression command with external tool
+```
+
+### B2E Level Parameter
+
+`level` is an index into the `(type ...)` entry list, **not** a 0–9 compression quality scale:
+
+| level | meaning |
+|---|---|
+| 0 | first method in type list (typically Store) |
+| 1 | second method (the `*`-marked default) |
+| 2+ | successive methods in the list |
+
+---
+
+## Data Flow: About Dialog / Component Versions
+
+```
+User opens About dialog
+  → B2e_GetComponentVersions()   [B2eBridge]
+      processScript("0.b2e")     ← always first: registers 7z.exe + Dec*W.EXE via (use ...)
+      for each B2E_TABLE entry:
+          processScript("<name>.b2e")
+      → de-duplicated list: "toolname.exe   version" lines
+  → About dialog displays:
+      Application name: AileFlow Archive Manager
+      URL: https://github.com/Aile2017/AileFlow
+      Component versions: 7z.exe, DecCabW.EXE, DecLHaW.EXE, DecZipW.EXE, WinRAR.exe, ...
+```
+
+---
+
+## Build Configuration
+
+| Setting | Value |
+|---|---|
+| Toolchain | MSVC (Visual Studio 2026), CMake + Ninja |
+| C++ standard | C++17 (UI layer) |
+| CRT linking | **Dynamic (`/MD`)** — requires `VCRUNTIME140.dll` / `MSVCP140.dll` at runtime |
+| Unicode | UNICODE / _UNICODE (UI layer); ANSI for KILIB_B2E_SOURCES |
+| Release output | `build_release/` (run `cmake --build build_release --config Release`) |
+| B2E scripts | Copied to `<exe>/b2e/` by CMake `POST_BUILD` command |
+
+The CRT is linked dynamically (`/MD`) to keep the EXE size small (~350 KB Release).
+AileEx uses `/MT` (static CRT, ~498 KB); AileFlow deliberately deviates here.
 
 ---
 
