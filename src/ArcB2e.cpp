@@ -810,15 +810,53 @@ void CArcB2e::CB2eCore::resp( bool needq, const char* opt, const CharArray& a, c
 	}
 }
 
+// Dialog data passed via LPARAM to B2eInputDlgProc.
+struct B2eInputData {
+	wchar_t result[512];
+	const wchar_t* title;   // optional window title; null = keep default
+};
+
+static INT_PTR CALLBACK B2eInputDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+	if (msg == WM_INITDIALOG) {
+		SetWindowLongPtrW(hwnd, DWLP_USER, lp);
+		auto* d = reinterpret_cast<B2eInputData*>(lp);
+		if (d && d->title && d->title[0])
+			SetWindowTextW(hwnd, d->title);
+		return TRUE;
+	}
+	auto* d = reinterpret_cast<B2eInputData*>(GetWindowLongPtrW(hwnd, DWLP_USER));
+	if (msg == WM_COMMAND && d) {
+		if (LOWORD(wp) == IDOK) {
+			GetDlgItemTextW(hwnd, IDC_PASSWORD_INPUT, d->result, 512);
+			EndDialog(hwnd, IDOK);
+		} else if (LOWORD(wp) == IDCANCEL) {
+			EndDialog(hwnd, IDCANCEL);
+		}
+	}
+	return FALSE;
+}
+
 void CArcB2e::CB2eCore::input( const char* msg, const char* defval, kiVar* r )
 {
-	// Phase 1 stub: show a simple Win32 input box.
-	// Phase 4 will replace this with a proper integrated dialog.
-	char buf[32768] = {};
-	if( defval ) ki_strcpy( buf, defval );
+	// Convert the script prompt to a dialog title.
+	wchar_t title[256] = {};
+	if (msg && msg[0])
+		MultiByteToWideChar(CP_ACP, 0, msg, -1, title, 256);
 
-	// Use a minimal Win32 dialog via InputBox pattern.
-	// For now, prompt via a MessageBox + use defval as the result.
-	// Real password input is not functional until Phase 4.
-	*r = buf;
+	B2eInputData data = {};
+	data.title = title[0] ? title : nullptr;
+
+	INT_PTR res = DialogBoxParamW(
+		GetModuleHandleW(NULL),
+		MAKEINTRESOURCEW(IDD_PASSWORD),
+		GetActiveWindow(), B2eInputDlgProc, (LPARAM)&data);
+
+	if (res == IDOK) {
+		char ansi[512] = {};
+		WideCharToMultiByte(CP_ACP, 0, data.result, -1, ansi, sizeof(ansi), NULL, NULL);
+		*r = ansi;
+	} else {
+		*r = defval ? defval : "";
+	}
 }

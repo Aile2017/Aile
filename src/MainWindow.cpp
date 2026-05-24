@@ -230,8 +230,9 @@ void MainWindow::OpenArchive(const wchar_t* path) {
     }
 
     // On open failure: may be encrypted header, prompt for password and retry.
+    // B2E backend handles passwords internally via input() — skip outer retry.
     // Respect the user's preferred backend (preferUnrar) and fall back to the other.
-    if (FAILED(hr)) {
+    if (FAILED(hr) && !app.Get7z().GetLoadedPath().empty()) {
         std::wstring pw = PromptPassword();
         if (!pw.empty()) {
             m_items.clear();
@@ -268,6 +269,9 @@ void MainWindow::OpenArchive(const wchar_t* path) {
         _wcsicmp(m_effectiveArchivePath.c_str(), m_archivePath.c_str()) != 0) {
         m_isReadOnly = true;
     }
+    // B2E backend: delete/add-to-existing are not supported.
+    if (SUCCEEDED(hr) && !m_openedWithUnrar && app.Get7z().GetLoadedPath().empty())
+        m_isReadOnly = true;
 
     if (FAILED(hr)) {
         std::wstring msg = I18n::Tr(IDS_ERR_OPEN_ARCHIVE);
@@ -1339,6 +1343,12 @@ void MainWindow::OnTest() {
 
     App& app = App::Instance();
     bool useUnrar = m_openedWithUnrar;
+    // B2E backend: integrity test is not supported.
+    if (!useUnrar && app.Get7z().GetLoadedPath().empty()) {
+        MessageBoxW(m_hwnd, I18n::Tr(IDS_ERR_OP_NOT_SUPPORTED).c_str(),
+                    I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONINFORMATION);
+        return;
+    }
     if (!Ensure7zLoaded(useUnrar)) return;
 
     ProgressDlg progDlg;

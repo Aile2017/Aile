@@ -353,6 +353,7 @@ BEGIN
     IDS_FMT_SFX_NOT_FOUND_7Z        "SFX module '%s' was not found in the same folder as 7z.dll."
     IDS_FMT_SFX_NOT_FOUND_RAR       "SFX module '%s' was not found in the same folder as rar.exe / WinRAR.exe."
     IDS_ERR_RAR_NOT_FOUND           "WinRAR.exe / Rar.exe was not found.\nPlease verify the path in Settings."
+    IDS_ERR_OP_NOT_SUPPORTED        "This operation is not supported by the B2E archive backend."
 
     IDS_FMT_DND_PROMPT              "Dropped files:\n%s\nWhat would you like to do?\n\n[Yes]    Add to current archive ""%s""\n[No]     Create a new archive\n[Cancel] Do nothing"
     IDS_DND_ELLIPSIS                "  ...\n"
@@ -811,6 +812,7 @@ BEGIN
     IDS_FMT_SFX_NOT_FOUND_7Z        "SFX モジュール '%s' が 7z.dll と同じフォルダに見つかりません。"
     IDS_FMT_SFX_NOT_FOUND_RAR       "SFX モジュール '%s' が rar.exe / WinRAR.exe と同じフォルダに見つかりません。"
     IDS_ERR_RAR_NOT_FOUND           "WinRAR.exe / Rar.exe が見つかりません。\n設定でパスを確認してください。"
+    IDS_ERR_OP_NOT_SUPPORTED        "この操作は B2E アーカイブバックエンドでは対応していません。"
 
     IDS_FMT_DND_PROMPT              "ドロップされたファイル:\n%s\nどう処理しますか？\n\n[はい]  現在のアーカイブ「%s」に追加\n[いいえ] 新規アーカイブを作成\n[キャンセル] 何もしない"
     IDS_DND_ELLIPSIS                "  …\n"

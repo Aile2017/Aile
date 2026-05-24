@@ -231,6 +231,7 @@
 #define IDS_FMT_SFX_NOT_FOUND_7Z        11104
 #define IDS_FMT_SFX_NOT_FOUND_RAR       11105
 #define IDS_ERR_RAR_NOT_FOUND           11106
+#define IDS_ERR_OP_NOT_SUPPORTED        11107
 
 // --- Drag & Drop ---
 #define IDS_FMT_DND_PROMPT              11110
