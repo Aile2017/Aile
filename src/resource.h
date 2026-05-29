@@ -81,6 +81,15 @@
 #define IDC_OUTDIR_SOURCE   3015   // Same as source file location
 #define IDC_OUTDIR_FIXED    3016   // Use fixed DefaultOutputDir
 
+// Phase 1+2: Extraction behavior and general behavior controls
+#define IDC_EXT_STRIP_ALL       3017  // Strip all known extensions (default)
+#define IDC_EXT_STRIP_ONE       3018  // Strip one extension only
+#define IDC_EXT_STRIP_KEEP      3019  // Keep all extensions
+#define IDC_STRIP_TRAILING_NUM  3020  // Strip trailing digits/-/_/. from stem
+#define IDC_COLLAPSE_SINGLE_DIR 3021  // Collapse single-subfolder output (break_ddir)
+#define IDC_START_MINIMIZED     3022  // Start minimized
+#define IDC_OPEN_FOLDER_AFTER   3023  // Open output folder after extraction
+
 // Info dialog controls
 #define IDC_INFO_LIST       5001
 

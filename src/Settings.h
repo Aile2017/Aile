@@ -100,6 +100,32 @@ public:
     const std::wstring& GetFontName() const         { return m_fontName; }
     void SetFontName(const wchar_t* v)              { m_fontName = v; }
 
+    // Phase 1+2: Extraction behavior
+    // ExtStripMode: 0=strip all known exts (default), 1=strip one ext, 2=keep all
+    int  GetExtStripMode() const                    { return m_extStripMode; }
+    void SetExtStripMode(int v)                     { m_extStripMode = v; }
+
+    bool GetStripTrailingNumber() const             { return m_stripTrailingNumber; }
+    void SetStripTrailingNumber(bool v)             { m_stripTrailingNumber = v; }
+
+    // break_ddir: collapse single-subfolder output after extraction
+    bool GetBreakDDir() const                       { return m_breakDDir; }
+    void SetBreakDDir(bool v)                       { m_breakDDir = v; }
+
+    // Phase 1: General behavior
+    bool GetStartMinimized() const                  { return m_startMinimized; }
+    void SetStartMinimized(bool v)                  { m_startMinimized = v; }
+
+    bool GetOpenFolderAfterExtract() const          { return m_openFolderAfterExtract; }
+    void SetOpenFolderAfterExtract(bool v)          { m_openFolderAfterExtract = v; }
+
+    // OpenFolderCommand: INI-only. Empty = use Explorer (ShellExecuteW).
+    const std::wstring& GetOpenFolderCommand() const { return m_openFolderCommand; }
+    void SetOpenFolderCommand(const wchar_t* v)     { m_openFolderCommand = v; }
+
+    // ConcurrentLimit: INI-only. 0 = no limit. Default 4.
+    int  GetConcurrentLimit() const                 { return m_concurrentLimit; }
+
     // MRU (recently used archives) — head is most recent; duplicates removed case-insensitively.
     const std::vector<std::wstring>& GetMruPaths() const { return m_mruPaths; }
     void AddMru(const std::wstring& path);
@@ -144,6 +170,14 @@ private:
     std::wstring m_unrarDllPath;
     std::wstring m_fontName;
     std::vector<std::wstring> m_mruPaths;
+    // Phase 1+2
+    int          m_extStripMode;
+    bool         m_stripTrailingNumber;
+    bool         m_breakDDir;
+    bool         m_startMinimized;
+    bool         m_openFolderAfterExtract;
+    std::wstring m_openFolderCommand;
+    int          m_concurrentLimit;
 
     std::wstring ReadStr(const wchar_t* section, const wchar_t* key, const wchar_t* def) const;
     void         WriteStr(const wchar_t* section, const wchar_t* key, const wchar_t* val) const;

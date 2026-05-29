@@ -58,6 +58,8 @@ void App::ReloadDlls() {
 
 int App::RunBrowseMode(const std::vector<std::wstring>& archivePaths, int nCmdShow) {
     MainWindow wnd;
+    if (m_settings.GetStartMinimized() && nCmdShow == SW_SHOWDEFAULT)
+        nCmdShow = SW_MINIMIZE;
     if (!wnd.Create(m_hInst, nCmdShow)) return 1;
 
     for (auto& p : archivePaths)
@@ -97,8 +99,29 @@ int App::RunBrowseMode(const std::vector<std::wstring>& archivePaths, int nCmdSh
     return (int)msg.wParam;
 }
 
+// Derive output path for a single source file (no extension, CompressDlg appends it).
+static std::wstring DeriveOutputPath(const Settings& s, const std::wstring& srcFile,
+                                     const std::wstring& destDir) {
+    std::wstring outDir;
+    if (!destDir.empty()) {
+        outDir = destDir;
+    } else if (s.GetOutputDirModeFixed()) {
+        outDir = s.GetDefaultOutputDir();
+    } else {
+        auto sl = srcFile.find_last_of(L"\\/");
+        outDir  = (sl != std::wstring::npos) ? srcFile.substr(0, sl) : L"";
+    }
+    auto sl   = srcFile.find_last_of(L"\\/");
+    std::wstring name = (sl != std::wstring::npos) ? srcFile.substr(sl + 1) : srcFile;
+    auto dot  = name.rfind(L'.');
+    std::wstring stem = (dot != std::wstring::npos) ? name.substr(0, dot) : name;
+    return outDir.empty() ? stem : outDir + L"\\" + stem;
+}
+
 int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdShow,
-                         const std::wstring& destDir) {
+                         const std::wstring& destDir,
+                         const std::wstring& typeOverride,
+                         const std::wstring& methodOverride) {
     MainWindow wnd;
     if (!wnd.Create(m_hInst, nCmdShow)) return 1;
 
@@ -115,7 +138,6 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
             auto sl = filePaths[0].find_last_of(L"\\/");
             outDir = (sl != std::wstring::npos) ? filePaths[0].substr(0, sl) : L"";
         }
-        // Append stem of first input so CompressDlg shows "dir\name" and UpdateOutputExt adds the extension.
         if (!filePaths.empty()) {
             auto sl   = filePaths[0].find_last_of(L"\\/");
             std::wstring name = (sl != std::wstring::npos) ? filePaths[0].substr(sl + 1) : filePaths[0];
@@ -127,14 +149,22 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
         }
     }
 
-    CompressDlg dlg;
-    const auto* enc = m_sevenZip.IsLoaded() ? &m_sevenZip.GetEncoderNames() : nullptr;
-    const auto* wf  = m_sevenZip.IsLoaded() ? &m_sevenZip.GetWritableFormats() : nullptr;
-    if (!dlg.Show(wnd.Hwnd(), params, enc, wf)) {
-        return 0;
+    // Apply -t/-m CLI overrides (skip dialog); otherwise show CompressDlg.
+    if (!typeOverride.empty()) {
+        params.format = typeOverride;
+        if (!methodOverride.empty()) params.method = methodOverride;
+        if (params.outputPath.find(L'.') == std::wstring::npos)
+            params.outputPath += L"." + params.format;
+    } else {
+        CompressDlg dlg;
+        const auto* enc = m_sevenZip.IsLoaded() ? &m_sevenZip.GetEncoderNames() : nullptr;
+        const auto* wf  = m_sevenZip.IsLoaded() ? &m_sevenZip.GetWritableFormats() : nullptr;
+        if (!dlg.Show(wnd.Hwnd(), params, enc, wf)) {
+            return 0;
+        }
+        params.SaveToSettings(m_settings);
+        m_settings.Save();
     }
-    params.SaveToSettings(m_settings);
-    m_settings.Save();
 
     ProgressDlg progDlg;
     progDlg.Show(wnd.Hwnd(), I18n::Tr(IDS_PROGRESS_COMPRESSING).c_str());
@@ -184,6 +214,78 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
         progDlg.RunMessageLoop();
         worker.Wait();
         delete sink;
+    }
+    return 0;
+}
+
+int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCmdShow,
+                             const std::wstring& destDir,
+                             const std::wstring& typeOverride,
+                             const std::wstring& methodOverride) {
+    if (filePaths.empty()) return 0;
+
+    MainWindow wnd;
+    if (!wnd.Create(m_hInst, SW_HIDE)) return 1;
+
+    // Show CompressDlg once for the first file; apply same settings to all files.
+    CompressDlg::Params baseParams;
+    baseParams.inputFiles = { filePaths[0] };
+    baseParams.LoadFromSettings(m_settings);
+    baseParams.outputPath = DeriveOutputPath(m_settings, filePaths[0], destDir);
+
+    if (!typeOverride.empty()) {
+        baseParams.format = typeOverride;
+        if (!methodOverride.empty()) baseParams.method = methodOverride;
+        if (baseParams.outputPath.find(L'.') == std::wstring::npos)
+            baseParams.outputPath += L"." + baseParams.format;
+    } else {
+        CompressDlg dlg;
+        const auto* enc = m_sevenZip.IsLoaded() ? &m_sevenZip.GetEncoderNames()    : nullptr;
+        const auto* wf  = m_sevenZip.IsLoaded() ? &m_sevenZip.GetWritableFormats() : nullptr;
+        if (!dlg.Show(wnd.Hwnd(), baseParams, enc, wf)) return 0;
+        baseParams.SaveToSettings(m_settings);
+        m_settings.Save();
+    }
+
+    // Compress each file with the chosen settings.
+    for (const auto& file : filePaths) {
+        CompressDlg::Params params = baseParams;
+        params.inputFiles  = { file };
+        params.outputPath  = DeriveOutputPath(m_settings, file, destDir);
+        if (params.outputPath.find(L'.') == std::wstring::npos)
+            params.outputPath += L"." + params.format;
+
+        ProgressDlg progDlg;
+        progDlg.Show(wnd.Hwnd(), I18n::Tr(IDS_PROGRESS_COMPRESSING).c_str());
+
+        if (params.format == L"rar") {
+            auto* sink = new ProgressPostSink(wnd.Hwnd(), WM_APP_PROGRESS, WM_APP_DONE);
+            RunRarCompressSync(wnd.Hwnd(), params,
+                               m_settings.GetRarExePath().c_str(),
+                               progDlg, sink);
+            delete sink;
+        } else {
+            auto* sink = new ProgressPostSink(wnd.Hwnd(), WM_APP_PROGRESS, WM_APP_DONE);
+            auto& sz   = m_sevenZip;
+            progDlg.SetSink(sink);
+            WorkerThread worker;
+            worker.Start([&sz, params, sink]() -> HRESULT {
+                const wchar_t* pw = params.password.empty() ? nullptr : params.password.c_str();
+                CompressAdvanced adv;
+                adv.dictSize      = params.dictSize;
+                adv.wordSize      = params.wordSize;
+                adv.solidBlock    = params.solidBlock;
+                adv.threads       = params.threads;
+                adv.extra         = params.extra;
+                adv.volumeSize    = params.volumeSize;
+                return sz.Compress(params.inputFiles, params.outputPath.c_str(),
+                                   params.format.c_str(), params.level,
+                                   params.method.c_str(), pw, sink, &adv, params.encryptHeaders);
+            }, wnd.Hwnd(), WM_APP_DONE);
+            progDlg.RunMessageLoop();
+            worker.Wait();
+            delete sink;
+        }
     }
     return 0;
 }

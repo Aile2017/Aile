@@ -78,43 +78,131 @@ int CountTopLevelEntries(const std::vector<ArchiveItem>& items) {
     return (int)tops.size();
 }
 
-// Generate subfolder name from archive path (strip compound extensions: archive.tar.gz → archive,
-// archive.7z.001 → archive)
-std::wstring ArchiveBaseName(const std::wstring& archivePath) {
+// Generate subfolder name from archive path.
+// extStripMode: 0=strip all known compound exts (default), 1=strip one ext, 2=keep all.
+// stripTrailingNum: if true, strip trailing digits/-/_/. from stem (Noah StripTrailingNumber).
+std::wstring ArchiveBaseName(const std::wstring& archivePath, int extStripMode = 0, bool stripTrailingNum = false) {
     static const wchar_t* kExts[] = {
         L".7z", L".zip", L".rar", L".tar", L".gz", L".bz2", L".xz",
         L".cab", L".iso", L".jar", L".wim", L".lzh", L".lzma", L".arj",
         L".zst", L".lz4", L".lz5", L".br", L".liz", nullptr
     };
     std::wstring name = PathFindFileNameW(archivePath.c_str());
-    bool stripped = true;
-    while (stripped) {
-        stripped = false;
-        // Strip all-digit trailing extensions (.001 etc.)
+
+    if (extStripMode == 2) {
+        // keep: return filename as-is
+    } else if (extStripMode == 1) {
+        // strip one extension
         auto dot = name.rfind(L'.');
-        if (dot != std::wstring::npos && dot + 1 < name.size()) {
-            bool allDigits = true;
-            for (size_t i = dot + 1; i < name.size(); ++i)
-                if (!iswdigit(name[i])) { allDigits = false; break; }
-            if (allDigits) {
-                name = name.substr(0, dot);
-                stripped = true;
-                continue;
+        if (dot != std::wstring::npos)
+            name = name.substr(0, dot);
+    } else {
+        // strip all known compound extensions + numeric volume extensions (.001 etc.)
+        bool stripped = true;
+        while (stripped) {
+            stripped = false;
+            auto dot = name.rfind(L'.');
+            if (dot != std::wstring::npos && dot + 1 < name.size()) {
+                bool allDigits = true;
+                for (size_t i = dot + 1; i < name.size(); ++i)
+                    if (!iswdigit(name[i])) { allDigits = false; break; }
+                if (allDigits) {
+                    name = name.substr(0, dot);
+                    stripped = true;
+                    continue;
+                }
             }
-        }
-        for (int i = 0; kExts[i]; ++i) {
-            size_t elen = wcslen(kExts[i]);
-            if (name.size() <= elen) continue;
-            std::wstring tail = name.substr(name.size() - elen);
-            for (auto& c : tail) c = (wchar_t)towlower(c);
-            if (tail == kExts[i]) {
-                name = name.substr(0, name.size() - elen);
-                stripped = true;
-                break;
+            for (int i = 0; kExts[i]; ++i) {
+                size_t elen = wcslen(kExts[i]);
+                if (name.size() <= elen) continue;
+                std::wstring tail = name.substr(name.size() - elen);
+                for (auto& c : tail) c = (wchar_t)towlower(c);
+                if (tail == kExts[i]) {
+                    name = name.substr(0, name.size() - elen);
+                    stripped = true;
+                    break;
+                }
             }
         }
     }
+
+    if (stripTrailingNum && !name.empty()) {
+        // Noah StripTrailingNumber: strip trailing digits, hyphen, underscore, dot, space from stem.
+        static const std::wstring kStripSet = L"0123456789-_. ";
+        size_t end = name.size();
+        while (end > 0 && kStripSet.find(name[end - 1]) != std::wstring::npos)
+            --end;
+        if (end > 0) name = name.substr(0, end);
+    }
+
     return name.empty() ? L"archive" : name;
+}
+
+// Noah break_ddir: if destDir contains exactly one direct child directory (and nothing else),
+// move its contents up to destDir and remove it. Silently skips on any error.
+void CollapseIfSingleSubfolder(const std::wstring& destDir) {
+    WIN32_FIND_DATAW fd = {};
+    std::wstring pattern = destDir + L"\\*";
+    HANDLE hFind = FindFirstFileW(pattern.c_str(), &fd);
+    if (hFind == INVALID_HANDLE_VALUE) return;
+
+    std::wstring subName;
+    int count = 0;
+    bool isDir = false;
+    do {
+        if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0) continue;
+        ++count;
+        if (count > 1) break;
+        subName = fd.cFileName;
+        isDir   = (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+    } while (FindNextFileW(hFind, &fd));
+    FindClose(hFind);
+
+    if (count != 1 || !isDir) return;
+
+    std::wstring subDir = destDir + L"\\" + subName;
+
+    // Enumerate items inside the single subdirectory and move each to destDir.
+    pattern = subDir + L"\\*";
+    hFind   = FindFirstFileW(pattern.c_str(), &fd);
+    if (hFind == INVALID_HANDLE_VALUE) return;
+
+    std::vector<std::wstring> items;
+    do {
+        if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0) continue;
+        items.push_back(fd.cFileName);
+    } while (FindNextFileW(hFind, &fd));
+    FindClose(hFind);
+
+    for (const auto& item : items) {
+        std::wstring src = subDir + L"\\" + item;
+        std::wstring dst = destDir + L"\\" + item;
+        MoveFileExW(src.c_str(), dst.c_str(), MOVEFILE_REPLACE_EXISTING);
+    }
+    RemoveDirectoryW(subDir.c_str());
+}
+
+// Open the extracted output folder using OpenFolderCommand (if set) or Explorer.
+void OpenExtractedFolder(const std::wstring& dir) {
+    const std::wstring& cmd = App::Instance().GetSettings().GetOpenFolderCommand();
+    if (cmd.empty()) {
+        ShellExecuteW(nullptr, L"open", dir.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    } else {
+        // Substitute %1 with the quoted directory, or append it.
+        std::wstring expanded = cmd;
+        auto pos = expanded.find(L"%1");
+        std::wstring quoted = L"\"" + dir + L"\"";
+        if (pos != std::wstring::npos)
+            expanded.replace(pos, 2, quoted);
+        else
+            expanded += L" " + quoted;
+        SHELLEXECUTEINFOW sei = {};
+        sei.cbSize = sizeof(sei);
+        sei.fMask  = SEE_MASK_FLAG_NO_UI;
+        sei.lpFile = expanded.c_str();
+        sei.nShow  = SW_SHOWNORMAL;
+        ShellExecuteExW(&sei);
+    }
 }
 
 // Determine if subfolder should be created based on MkDir policy
@@ -1275,9 +1363,11 @@ void MainWindow::RunExtraction(std::vector<UINT32> indices, std::set<std::wstrin
     // Evaluate MkDir policy based on full archive structure
     std::wstring finalDest = destDir;
     {
-        int mkDir = app.GetSettings().GetMkDir();
+        auto& s   = app.GetSettings();
+        int mkDir = s.GetMkDir();
         if (ShouldCreateSubfolder(mkDir, m_items))
-            finalDest = std::wstring(destDir) + L"\\" + ArchiveBaseName(m_archivePath);
+            finalDest = std::wstring(destDir) + L"\\" +
+                        ArchiveBaseName(m_archivePath, s.GetExtStripMode(), s.GetStripTrailingNumber());
     }
 
     ProgressDlg progDlg;
@@ -1321,8 +1411,15 @@ void MainWindow::RunExtraction(std::vector<UINT32> indices, std::set<std::wstrin
     delete sink;
     m_pSink = nullptr;
 
-    if (FAILED(hrDone) && hrDone != E_ABORT)
+    if (SUCCEEDED(hrDone)) {
+        auto& s = App::Instance().GetSettings();
+        if (s.GetBreakDDir())
+            CollapseIfSingleSubfolder(finalDest);
+        if (s.GetOpenFolderAfterExtract())
+            OpenExtractedFolder(finalDest);
+    } else if (hrDone != E_ABORT) {
         ShowError(I18n::Tr(IDS_ERR_EXTRACT_FAILED).c_str(), hrDone);
+    }
 }
 
 void MainWindow::OnContextMenu(HWND /*hwndFrom*/, int x, int y) {

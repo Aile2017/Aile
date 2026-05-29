@@ -163,7 +163,7 @@ BEGIN
     PUSHBUTTON      "Cancel",          IDC_CANCEL,     116,  54,   68, 14
 END
 
-IDD_SETTINGS DIALOGEX 0, 0, 280, 310
+IDD_SETTINGS DIALOGEX 0, 0, 280, 402
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Settings"
 FONT 9, "Segoe UI", 400, 0, 0x1
@@ -174,33 +174,43 @@ BEGIN
     EDITTEXT        IDC_DEFAULT_DIR,    14,  39, 210,  14, ES_AUTOHSCROLL
     PUSHBUTTON      "Browse...",        IDC_BROWSE_DIR, 228, 38,  38,  15
 
-    GROUPBOX        "Create extraction subfolder",   IDC_STATIC,   7,  66, 266,  66
+    GROUPBOX        "Create extraction subfolder",   IDC_STATIC,   7,  66, 266, 106
     RADIOBUTTON     "Never",                                    IDC_MKDIR_0, 14,  78, 120,  9, WS_GROUP | WS_TABSTOP
     RADIOBUTTON     "Only when extracting a single file",       IDC_MKDIR_1, 14,  90, 180,  9
     RADIOBUTTON     "When extracting multiple entries (recommended)", IDC_MKDIR_2, 14, 102, 220,  9
     RADIOBUTTON     "Always",                                   IDC_MKDIR_3, 14, 114, 120,  9
+    LTEXT           "Name ext.:",       IDC_STATIC,    14, 127,  46,   8
+    RADIOBUTTON     "Strip all",        IDC_EXT_STRIP_ALL,  62, 126,  52, 9, WS_GROUP | WS_TABSTOP
+    RADIOBUTTON     "Strip one",        IDC_EXT_STRIP_ONE, 116, 126,  52, 9
+    RADIOBUTTON     "Keep",             IDC_EXT_STRIP_KEEP,172, 126,  44, 9
+    AUTOCHECKBOX    "Strip trailing numbers from name", IDC_STRIP_TRAILING_NUM,  14, 139, 200, 9
+    AUTOCHECKBOX    "Collapse single-subfolder output", IDC_COLLAPSE_SINGLE_DIR, 14, 152, 200, 9
 
-    GROUPBOX        "Font",              IDC_STATIC,     7, 140, 266,  30
-    LTEXT           "Font:",             IDC_STATIC,    14, 154,  48,   8
-    COMBOBOX        IDC_FONT_NAME,      64, 152, 150, 100, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    GROUPBOX        "Font",              IDC_STATIC,     7, 180, 266,  30
+    LTEXT           "Font:",             IDC_STATIC,    14, 194,  48,   8
+    COMBOBOX        IDC_FONT_NAME,      64, 192, 150, 100, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
 
-    GROUPBOX        "RAR extraction engine", IDC_STATIC,   7, 178, 266,  30
-    LTEXT           "Use:",              IDC_STATIC,    14, 192,  54,   8
-    COMBOBOX        IDC_RAR_EXTRACTOR,  70, 190, 110, 100, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    GROUPBOX        "RAR extraction engine", IDC_STATIC,   7, 218, 266,  30
+    LTEXT           "Use:",              IDC_STATIC,    14, 232,  54,   8
+    COMBOBOX        IDC_RAR_EXTRACTOR,  70, 230, 110, 100, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
 
-    GROUPBOX        "Executable / DLL paths", IDC_STATIC, 7, 216, 266, 74
-    LTEXT           "7z.dll:",           IDC_STATIC,    14, 230,  30,   8
-    EDITTEXT        IDC_7Z_DLL_PATH,    46, 228, 180,  14, ES_AUTOHSCROLL
-    PUSHBUTTON      "Browse...",        IDC_BROWSE_7Z, 230, 227,  36,  15
-    LTEXT           "unrar.dll:",       IDC_STATIC,    14, 248,  30,   8
-    EDITTEXT        IDC_UNRAR_DLL_PATH, 46, 246, 180,  14, ES_AUTOHSCROLL
-    PUSHBUTTON      "Browse...",        IDC_BROWSE_UNRAR, 230, 245, 36, 15
-    LTEXT           "rar.exe:",         IDC_STATIC,    14, 266,  30,   8
-    EDITTEXT        IDC_RAR_EXE_PATH,   46, 264, 180,  14, ES_AUTOHSCROLL
-    PUSHBUTTON      "Browse...",        IDC_BROWSE_RAR, 230, 263,  36,  15
+    GROUPBOX        "Executable / DLL paths", IDC_STATIC, 7, 256, 266, 74
+    LTEXT           "7z.dll:",           IDC_STATIC,    14, 270,  30,   8
+    EDITTEXT        IDC_7Z_DLL_PATH,    46, 268, 180,  14, ES_AUTOHSCROLL
+    PUSHBUTTON      "Browse...",        IDC_BROWSE_7Z, 230, 267,  36,  15
+    LTEXT           "unrar.dll:",       IDC_STATIC,    14, 288,  30,   8
+    EDITTEXT        IDC_UNRAR_DLL_PATH, 46, 286, 180,  14, ES_AUTOHSCROLL
+    PUSHBUTTON      "Browse...",        IDC_BROWSE_UNRAR, 230, 285, 36, 15
+    LTEXT           "rar.exe:",         IDC_STATIC,    14, 306,  30,   8
+    EDITTEXT        IDC_RAR_EXE_PATH,   46, 304, 180,  14, ES_AUTOHSCROLL
+    PUSHBUTTON      "Browse...",        IDC_BROWSE_RAR, 230, 303,  36,  15
 
-    DEFPUSHBUTTON   "OK",               IDOK,          168, 290,  50,  14
-    PUSHBUTTON      "Cancel",           IDCANCEL,      222, 290,  50,  14
+    GROUPBOX        "Behavior",          IDC_STATIC,     7, 338, 266,  42
+    AUTOCHECKBOX    "Start minimized",  IDC_START_MINIMIZED,   14, 350, 150,  9
+    AUTOCHECKBOX    "Open output folder after extraction", IDC_OPEN_FOLDER_AFTER, 14, 363, 200, 9
+
+    DEFPUSHBUTTON   "OK",               IDOK,          168, 388,  50,  14
+    PUSHBUTTON      "Cancel",           IDCANCEL,      222, 388,  50,  14
 END
 
 IDD_INFO DIALOGEX 0, 0, 340, 280
@@ -622,7 +632,7 @@ BEGIN
     PUSHBUTTON      "キャンセル",       IDC_CANCEL,     116,  54,   68, 14
 END
 
-IDD_SETTINGS DIALOGEX 0, 0, 280, 310
+IDD_SETTINGS DIALOGEX 0, 0, 280, 402
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "設定"
 FONT 9, "Segoe UI", 400, 0, 0x1
@@ -633,33 +643,43 @@ BEGIN
     EDITTEXT        IDC_DEFAULT_DIR,    14,  39, 210,  14, ES_AUTOHSCROLL
     PUSHBUTTON      "参照...",           IDC_BROWSE_DIR, 228, 38,  38,  15
 
-    GROUPBOX        "展開サブフォルダ作成", IDC_STATIC,   7,  66, 266,  66
+    GROUPBOX        "展開サブフォルダ作成", IDC_STATIC,   7,  66, 266, 106
     RADIOBUTTON     "作成しない",                     IDC_MKDIR_0, 14,  78, 120,  9, WS_GROUP | WS_TABSTOP
     RADIOBUTTON     "単一ファイル展開時のみ作成",      IDC_MKDIR_1, 14,  90, 160,  9
     RADIOBUTTON     "複数エントリ展開時に作成（推奨）", IDC_MKDIR_2, 14, 102, 180,  9
     RADIOBUTTON     "常に作成する",                   IDC_MKDIR_3, 14, 114, 120,  9
+    LTEXT           "拡張子処理:",       IDC_STATIC,    14, 127,  50,   8
+    RADIOBUTTON     "すべて除去",        IDC_EXT_STRIP_ALL,  66, 126,  60, 9, WS_GROUP | WS_TABSTOP
+    RADIOBUTTON     "1つ除去",           IDC_EXT_STRIP_ONE, 128, 126,  48, 9
+    RADIOBUTTON     "保持",              IDC_EXT_STRIP_KEEP,178, 126,  40, 9
+    AUTOCHECKBOX    "末尾の数字を除去する",    IDC_STRIP_TRAILING_NUM,  14, 139, 170, 9
+    AUTOCHECKBOX    "単一サブフォルダを折り畳む", IDC_COLLAPSE_SINGLE_DIR, 14, 152, 180, 9
 
-    GROUPBOX        "フォント",          IDC_STATIC,     7, 140, 266,  30
-    LTEXT           "フォント:",         IDC_STATIC,    14, 154,  48,   8
-    COMBOBOX        IDC_FONT_NAME,      64, 152, 150, 100, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    GROUPBOX        "フォント",          IDC_STATIC,     7, 180, 266,  30
+    LTEXT           "フォント:",         IDC_STATIC,    14, 194,  48,   8
+    COMBOBOX        IDC_FONT_NAME,      64, 192, 150, 100, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
 
-    GROUPBOX        "RARファイルの展開エンジン", IDC_STATIC,   7, 178, 266,  30
-    LTEXT           "展開に使用:",       IDC_STATIC,    14, 192,  54,   8
-    COMBOBOX        IDC_RAR_EXTRACTOR,  70, 190, 110, 100, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    GROUPBOX        "RARファイルの展開エンジン", IDC_STATIC,   7, 218, 266,  30
+    LTEXT           "展開に使用:",       IDC_STATIC,    14, 232,  54,   8
+    COMBOBOX        IDC_RAR_EXTRACTOR,  70, 230, 110, 100, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
 
-    GROUPBOX        "実行ファイル・DLL パス", IDC_STATIC, 7, 216, 266, 74
-    LTEXT           "7z.dll:",           IDC_STATIC,    14, 230,  30,   8
-    EDITTEXT        IDC_7Z_DLL_PATH,    46, 228, 180,  14, ES_AUTOHSCROLL
-    PUSHBUTTON      "参照...",               IDC_BROWSE_7Z, 230, 227,  36,  15
-    LTEXT           "unrar.dll:",        IDC_STATIC,    14, 248,  30,   8
-    EDITTEXT        IDC_UNRAR_DLL_PATH, 46, 246, 180,  14, ES_AUTOHSCROLL
-    PUSHBUTTON      "参照...",               IDC_BROWSE_UNRAR, 230, 245, 36, 15
-    LTEXT           "rar.exe:",          IDC_STATIC,    14, 266,  30,   8
-    EDITTEXT        IDC_RAR_EXE_PATH,   46, 264, 180,  14, ES_AUTOHSCROLL
-    PUSHBUTTON      "参照...",               IDC_BROWSE_RAR, 230, 263,  36,  15
+    GROUPBOX        "実行ファイル・DLL パス", IDC_STATIC, 7, 256, 266, 74
+    LTEXT           "7z.dll:",           IDC_STATIC,    14, 270,  30,   8
+    EDITTEXT        IDC_7Z_DLL_PATH,    46, 268, 180,  14, ES_AUTOHSCROLL
+    PUSHBUTTON      "参照...",               IDC_BROWSE_7Z, 230, 267,  36,  15
+    LTEXT           "unrar.dll:",        IDC_STATIC,    14, 288,  30,   8
+    EDITTEXT        IDC_UNRAR_DLL_PATH, 46, 286, 180,  14, ES_AUTOHSCROLL
+    PUSHBUTTON      "参照...",               IDC_BROWSE_UNRAR, 230, 285, 36, 15
+    LTEXT           "rar.exe:",          IDC_STATIC,    14, 306,  30,   8
+    EDITTEXT        IDC_RAR_EXE_PATH,   46, 304, 180,  14, ES_AUTOHSCROLL
+    PUSHBUTTON      "参照...",               IDC_BROWSE_RAR, 230, 303,  36,  15
 
-    DEFPUSHBUTTON   "OK",               IDOK,          168, 290,  50,  14
-    PUSHBUTTON      "キャンセル",        IDCANCEL,      222, 290,  50,  14
+    GROUPBOX        "動作",              IDC_STATIC,     7, 338, 266,  42
+    AUTOCHECKBOX    "最小化で起動する",  IDC_START_MINIMIZED,   14, 350, 150,  9
+    AUTOCHECKBOX    "展開後にフォルダを開く", IDC_OPEN_FOLDER_AFTER, 14, 363, 180, 9
+
+    DEFPUSHBUTTON   "OK",               IDOK,          168, 388,  50,  14
+    PUSHBUTTON      "キャンセル",        IDCANCEL,      222, 388,  50,  14
 END
 
 IDD_INFO DIALOGEX 0, 0, 340, 280

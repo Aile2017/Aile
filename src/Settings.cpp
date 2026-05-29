@@ -66,6 +66,30 @@ void Settings::Load() {
     if (m_windowH < 300) m_windowH = 300;
     if (m_splitterPos < 80) m_splitterPos = 80;
 
+    // Phase 1+2 settings
+    GetPrivateProfileStringW(L"General", L"ExtStripMode", L"0", buf, 16, m_iniPath);
+    m_extStripMode = _wtoi(buf);
+    if (m_extStripMode < 0 || m_extStripMode > 2) m_extStripMode = 0;
+
+    GetPrivateProfileStringW(L"General", L"StripTrailingNumber", L"0", buf, 16, m_iniPath);
+    m_stripTrailingNumber = _wtoi(buf) != 0;
+
+    GetPrivateProfileStringW(L"General", L"BreakDDir", L"0", buf, 16, m_iniPath);
+    m_breakDDir = _wtoi(buf) != 0;
+
+    GetPrivateProfileStringW(L"General", L"StartMinimized", L"0", buf, 16, m_iniPath);
+    m_startMinimized = _wtoi(buf) != 0;
+
+    GetPrivateProfileStringW(L"General", L"OpenFolderAfterExtract", L"0", buf, 16, m_iniPath);
+    m_openFolderAfterExtract = _wtoi(buf) != 0;
+
+    m_openFolderCommand = ReadStr(L"General", L"OpenFolderCommand", L"");
+
+    GetPrivateProfileStringW(L"General", L"ConcurrentLimit", L"4", buf, 16, m_iniPath);
+    m_concurrentLimit = _wtoi(buf);
+    if (m_concurrentLimit < 0) m_concurrentLimit = 0;
+    if (m_concurrentLimit > 64) m_concurrentLimit = 64;
+
     // MRU — Path0 is the most recent. Stop as soon as an empty entry is encountered.
     m_mruPaths.clear();
     for (size_t i = 0; i < kMaxMru; ++i) {
@@ -127,6 +151,17 @@ void Settings::Save() const {
     WriteStr(L"Window", L"ToolbarVisible", m_toolbarVisible ? L"1" : L"0");
     WriteStr(L"Window", L"IconsVisible", m_iconsVisible ? L"1" : L"0");
     WriteStr(L"Window", L"MenubarVisible", m_menubarVisible ? L"1" : L"0");
+
+    // Phase 1+2 settings
+    _itow_s(m_extStripMode, buf, 10);
+    WriteStr(L"General", L"ExtStripMode", buf);
+    WriteStr(L"General", L"StripTrailingNumber", m_stripTrailingNumber ? L"1" : L"0");
+    WriteStr(L"General", L"BreakDDir",           m_breakDDir           ? L"1" : L"0");
+    WriteStr(L"General", L"StartMinimized",       m_startMinimized      ? L"1" : L"0");
+    WriteStr(L"General", L"OpenFolderAfterExtract", m_openFolderAfterExtract ? L"1" : L"0");
+    WriteStr(L"General", L"OpenFolderCommand",    m_openFolderCommand.c_str());
+    _itow_s(m_concurrentLimit, buf, 10);
+    WriteStr(L"General", L"ConcurrentLimit", buf);
 
     // MRU — pass nullptr to WritePrivateProfileStringW to delete obsolete keys from the ini.
     for (size_t i = 0; i < kMaxMru; ++i) {
