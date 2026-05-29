@@ -31,8 +31,8 @@ uses the richer AileEx UI layer, which introduces some features not in Noah whil
 | # | Feature | Noah | AileFlow |
 |---|---|---|---|
 | 7 | **Drag-out (DnD source)** | `CArcViewDlg` inherits `kiDataObject`. Dragging items from the list extracts them to a temp directory and offers them as `CF_HDROP`, so they can be dropped into Explorer or other targets. | `MainWindow` does not implement `IDataObject`; drag-out is not supported. |
-| 8 | **Structured file-list columns** | Displays `INDIVIDUALINFO` fields: Name / Size / Date-Time / Ratio / Method / Path. | Displays Name + raw `Info` line only; no structured size, date, or method columns from B2E listing. |
-| 9 | **`.hlp` + `.cnt` co-selection** | When the user opens a `.hlp` file from the viewer, the corresponding `.cnt` (table of contents) file is also extracted and selected so the Windows Help system functions correctly. | Not implemented. |
+| 8 | **Structured file-list columns** | Displays `INDIVIDUALINFO` fields: Name / Size / Date-Time / Ratio / Method / Path. | Displays Name + raw `Info` line only; no structured size, date, or method columns from B2E listing. **No change planned** — raw `7z.exe l` output display is acceptable. |
+| 9 | **`.hlp` + `.cnt` co-selection** | When the user opens a `.hlp` file from the viewer, the corresponding `.cnt` (table of contents) file is also extracted and selected so the Windows Help system functions correctly. | **No change planned** — WinHelp is obsolete on modern Windows. |
 
 ---
 
@@ -56,8 +56,7 @@ early implementation:
 2. **Extension strip mode + trailing-number removal** (gaps #2, #3) — needed for Noah `Noah.ini`
    compatibility; the generation logic exists in `NoahAM.cpp` (`generate_dirname`).
 
-3. **Structured file-list columns** (gap #8) — can be improved by parsing `7z.exe l -slt`
-   output (see `docs/limitations.md` § "Richer List Columns") without changing the B2E interface.
+3. **Structured file-list columns** (gap #8) — no change planned; raw `7z.exe l` output display is acceptable.
 
 ---
 
