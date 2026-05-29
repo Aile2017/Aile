@@ -39,6 +39,9 @@ INT_PTR SettingsDlg::HandleMsg(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             EnableWindow(GetDlgItem(hwnd, IDC_BROWSE_DIR),  fixed);
             break;
         }
+        case IDC_BROWSE_FONT:
+            OnBrowseFont(hwnd);
+            break;
         case IDC_BROWSE_DIR:
             OnBrowseDir(hwnd);
             break;
@@ -77,22 +80,8 @@ void SettingsDlg::OnInit(HWND hwnd) {
     int extSel = (unrarLoaded && s.GetRarExtractor() == L"unrar") ? 1 : 0;
     SendMessageW(hExt, CB_SETCURSEL, extSel, 0);
 
-    // Font combo
-    HWND hFont = GetDlgItem(hwnd, IDC_FONT_NAME);
-    // Common font options
-    std::wstring fonts[] = {L"Segoe UI", L"Meiryo UI", L"Yu Gothic", L"Arial", L"Tahoma", L"Courier New"};
-    int fontSel = -1;
-    std::wstring currentFont = s.GetFontName();
-    for (size_t i = 0; i < 6; ++i) {
-        SendMessageW(hFont, CB_ADDSTRING, 0, (LPARAM)fonts[i].c_str());
-        if (fonts[i] == currentFont) fontSel = (int)i;
-    }
-    // The saved font may not be one of the presets (e.g. set manually in the ini).
-    // Add it so the dialog reflects the actual value instead of silently resetting it.
-    if (fontSel < 0 && !currentFont.empty())
-        fontSel = (int)SendMessageW(hFont, CB_ADDSTRING, 0, (LPARAM)currentFont.c_str());
-    if (fontSel < 0) fontSel = 0;
-    SendMessageW(hFont, CB_SETCURSEL, fontSel, 0);
+    // Font — show current name; user opens ChooseFont via "..." button.
+    SetDlgItemTextW(hwnd, IDC_FONT_NAME, s.GetFontName().c_str());
 
     // Output dir mode radio buttons
     bool fixedMode = s.GetOutputDirModeFixed();
@@ -121,6 +110,26 @@ void SettingsDlg::OnInit(HWND hwnd) {
     SetDlgItemTextW(hwnd, IDC_RAR_EXE_PATH,   resolve(s.GetRarExePath(),   RarProcess::FindRarExe()).c_str());
 }
 
+void SettingsDlg::OnBrowseFont(HWND hwnd) {
+    wchar_t faceName[LF_FACESIZE] = {};
+    GetDlgItemTextW(hwnd, IDC_FONT_NAME, faceName, LF_FACESIZE);
+
+    LOGFONTW lf = {};
+    lf.lfCharSet = DEFAULT_CHARSET;
+    lf.lfHeight  = -12;
+    wcsncpy_s(lf.lfFaceName, faceName, LF_FACESIZE - 1);
+
+    CHOOSEFONTW cf   = {};
+    cf.lStructSize   = sizeof(cf);
+    cf.hwndOwner     = hwnd;
+    cf.lpLogFont     = &lf;
+    cf.Flags         = CF_SCREENFONTS | CF_INITTOLOGFONTSTRUCT |
+                       CF_NOVERTFONTS | CF_NOSCRIPTSEL;
+
+    if (ChooseFontW(&cf))
+        SetDlgItemTextW(hwnd, IDC_FONT_NAME, lf.lfFaceName);
+}
+
 void SettingsDlg::OnBrowseDir(HWND hwnd) {
     wchar_t path[MAX_PATH] = {};
     GetDlgItemTextW(hwnd, IDC_DEFAULT_DIR, path, MAX_PATH);
@@ -145,9 +154,8 @@ bool SettingsDlg::OnOK(HWND hwnd) {
     s.SetRarExtractor(sel == 1 ? L"unrar" : L"7z");
 
     // Font selection
-    HWND hFont = GetDlgItem(hwnd, IDC_FONT_NAME);
-    wchar_t fontBuf[64] = {};
-    GetDlgItemTextW(hwnd, IDC_FONT_NAME, fontBuf, 64);
+    wchar_t fontBuf[LF_FACESIZE] = {};
+    GetDlgItemTextW(hwnd, IDC_FONT_NAME, fontBuf, LF_FACESIZE);
     s.SetFontName(fontBuf);
 
     wchar_t buf[MAX_PATH] = {};

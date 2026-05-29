@@ -182,7 +182,8 @@ BEGIN
 
     GROUPBOX        "Font",              IDC_STATIC,     7, 140, 266,  30
     LTEXT           "Font:",             IDC_STATIC,    14, 154,  48,   8
-    COMBOBOX        IDC_FONT_NAME,      64, 152, 150, 100, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    EDITTEXT        IDC_FONT_NAME,      64, 152, 155,  14, ES_AUTOHSCROLL | ES_READONLY
+    PUSHBUTTON      "...",              IDC_BROWSE_FONT,223, 152,  38,  14
 
     GROUPBOX        "RAR extraction engine", IDC_STATIC,   7, 178, 266,  30
     LTEXT           "Use:",              IDC_STATIC,    14, 192,  54,   8
@@ -640,7 +641,8 @@ BEGIN
 
     GROUPBOX        "フォント",          IDC_STATIC,     7, 140, 266,  30
     LTEXT           "フォント:",         IDC_STATIC,    14, 154,  48,   8
-    COMBOBOX        IDC_FONT_NAME,      64, 152, 150, 100, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    EDITTEXT        IDC_FONT_NAME,      64, 152, 155,  14, ES_AUTOHSCROLL | ES_READONLY
+    PUSHBUTTON      "...",              IDC_BROWSE_FONT,223, 152,  38,  14
 
     GROUPBOX        "RARファイルの展開エンジン", IDC_STATIC,   7, 178, 266,  30
     LTEXT           "展開に使用:",       IDC_STATIC,    14, 192,  54,   8

@@ -77,6 +77,7 @@
 #define IDC_MKDIR_2         3012
 #define IDC_MKDIR_3         3013
 #define IDC_FONT_NAME       3014
+#define IDC_BROWSE_FONT     3024
 // Output directory mode (radio buttons in the "Default output directory" group)
 #define IDC_OUTDIR_SOURCE   3015   // Same as source file location
 #define IDC_OUTDIR_FIXED    3016   // Use fixed DefaultOutputDir
