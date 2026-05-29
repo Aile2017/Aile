@@ -1,0 +1,64 @@
+load:
+ (name 7zG.exe)
+ (type tar tar *gzip bzip2 xz zstd lizard lz4 lz5 brotli)
+
+encode:
+ (cmd a -ttar -r0 (arc.tar) (resp@ (listr)) -scsWIN)
+ (let f (arc.tar))
+ (if (method 2)
+   (exec
+    (cmd a -tgzip -mx %"%f.gz%" %"%f%")
+    (xcmd del %"%f%")
+   )
+ )
+ (if (method 3)
+   (exec
+    (cmd a -tbzip2 -mx %"%f.bz2%" %"%f%")
+    (xcmd del %"%f%")
+   )
+ )
+ (if (method 4)
+   (exec
+    (cmd a -txz -mx %"%f.xz%" %"%f%")
+    (xcmd del %"%f%")
+   )
+ )
+ (if (method 5)
+   (exec
+    (cmd a -tzstd -mx=22 %"%f.zst%" %"%f%")
+    (xcmd del %"%f%")
+   )
+ )
+ (if (method 6)
+   (exec
+    (cmd a -tlizard -mx=29 %"%f.liz%" %"%f%")
+    (xcmd del %"%f%")
+   )
+ )
+ (if (method 7)
+   (exec
+    (cmd a -tlz4 -mx=12 %"%f.lz4%" %"%f%")
+    (xcmd del %"%f%")
+   )
+ )
+ (if (method 8)
+   (exec
+    (cmd a -tlz5 -mx=15 %"%f.lz5%" %"%f%")
+    (xcmd del %"%f%")
+   )
+ )
+ (if (method 9)
+   (exec
+    (cmd a -tbrotli -mx=11 %"%f.br%" %"%f%")
+    (xcmd del %"%f%")
+   )
+ )
+
+decode:
+ (cmd x (arc))
+
+decode1:
+ (cmd x -y (arc) (list))
+
+list:
+ (xscan "------------------" 1 "------------------" 1 53 7z.exe l (arc))

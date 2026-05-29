@@ -13,7 +13,6 @@ set(AILEFLOW_UI_SOURCES
     src/App.cpp
     src/MainWindow.cpp
     src/CompressDlg.cpp
-    src/CompressHelper.cpp
     src/AdvancedCompressDlg.cpp
     src/RarAdvancedDlg.cpp
     src/InfoDlg.cpp
@@ -24,8 +23,6 @@ set(AILEFLOW_UI_SOURCES
     src/Settings.cpp
     src/I18n.cpp
     src/SevenZipB2e.cpp
-    src/UnrarDll.cpp
-    src/RarProcess.cpp
     src/WorkerThread.cpp
 )
 

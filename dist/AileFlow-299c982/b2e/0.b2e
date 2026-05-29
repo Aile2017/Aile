@@ -1,0 +1,8 @@
+load:
+ (name 7z.exe)
+ (let B DecCabW.EXE)
+ (use %B)
+ (let B DecLHaW.EXE)
+ (use %B)
+ (let B DecZipW.EXE)
+ (use %B)

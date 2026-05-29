@@ -1,0 +1,21 @@
+load:
+ (name cabarc.exe)
+ (type cab Store MSZIP *LZX21)
+
+encode:
+ (if (method 1) (let o "NONE"))
+ (if (method 2) (let o "MSZIP"))
+ (if (method 3) (let o "LZX:21"))
+ (cmd -r -p -m %o n (arc.cab) (resp@ (listr)))
+
+sfx:
+ (xcmd copy /b (find DecCabW.EXE) + (arc) (arc.exe))
+
+decode:
+ (xcmd 7zG.exe x (arc))
+
+decode1:
+ (xcmd 7zG.exe x -y (arc))
+
+list:
+ (xscan "------------------" 1 "------------------" 1 53 7z.exe l (arc))

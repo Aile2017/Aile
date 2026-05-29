@@ -1,0 +1,27 @@
+load:
+ (name 7zG.exe)
+ (type zip Store *Deflate Deflate64 BZip2 LZMA PPMd password)
+
+encode:
+ (if (method 1) (let o "-mm=Copy"))
+ (if (method 2) (let o "-mx=9 -mm=Deflate"))
+ (if (method 3) (let o "-mx=9 -mm=Deflate64"))
+ (if (method 4) (let o "-mx=9 -mm=BZip2"))
+ (if (method 5) (let o "-mx=9 -mm=LZMA"))
+ (if (method 6) (let o "-mx=9 -mm=PPMd"))
+ (if (method 7) (exec
+    (let p (input "Password"))
+    (let o "-p%p -mx=9 -mm=Deflate")))
+ (cmd a -tzip %o (arc.zip) (resp@ (listr)) -scsWIN)
+
+sfx:
+ (xcmd copy /b (find DecZipW.EXE) + (arc) (arc.exe))
+
+decode:
+ (cmd x (arc))
+
+decode1:
+ (cmd x -y (arc) (list))
+
+list:
+ (xscan "------------------" 1 "------------------" 1 53 7z.exe l (arc))

@@ -4,7 +4,6 @@
 #include <string>
 #include "Settings.h"
 #include "SevenZip.h"
-#include "UnrarDll.h"
 
 class App {
 public:
@@ -16,7 +15,6 @@ public:
     HINSTANCE GetInstance() const { return m_hInst; }
     Settings& GetSettings()       { return m_settings; }
     SevenZip& Get7z()             { return m_sevenZip; }
-    UnrarDll& GetUnrar()          { return m_unrar; }
 
     // Reload DLLs after settings change.
     void ReloadDlls();
@@ -44,5 +42,4 @@ private:
     HINSTANCE m_hInst   = nullptr;
     Settings  m_settings;
     SevenZip  m_sevenZip;
-    UnrarDll  m_unrar;
 };

@@ -8,7 +8,6 @@
 #include "ArchiveItem.h"
 #include "WorkerThread.h"
 #include "CompressDlg.h"
-#include "RarProcess.h"
 
 class MainWindow {
 public:
@@ -40,11 +39,9 @@ private:
     void OnExtractSelected(const std::wstring& presetDest = L"");
     // Toolbar extract: extract selected items if any are selected, otherwise extract all.
     void OnExtractSmart();
-    // Common extraction driver. indices empty = extract all (7z path).
-    // rarTargetPaths empty = extract all (unrar path).
+    // Common extraction driver. indices empty = extract all.
     // presetDest: if non-empty, skip the folder picker and extract directly to this path.
-    void RunExtraction(std::vector<UINT32> indices, std::set<std::wstring> rarTargetPaths,
-                       std::wstring presetDest = L"");
+    void RunExtraction(std::vector<UINT32> indices, std::wstring presetDest = L"");
     void OnContextMenu(HWND hwndFrom, int x, int y);
     void OnTest();
     void OnOpenAssoc();
@@ -80,8 +77,8 @@ private:
     // Search `m_folderPaths` for `folderPath` and select it in the tree. Does nothing if not found.
     void SelectTreeFolder(const std::wstring& folderPath);
     void ShowError(const wchar_t* msg, HRESULT hr = 0);
-    // Returns false and shows error if 7z is required but not loaded.
-    bool Ensure7zLoaded(bool useUnrar = false);
+    // Returns false and shows error if B2E engine is not loaded.
+    bool Ensure7zLoaded();
     // Returns entered password, or empty string if user cancelled.
     std::wstring PromptPassword();
     void ApplyFontToControls();
@@ -103,7 +100,6 @@ private:
     std::wstring             m_archivePath;          // Display path (e.g. xx.001)
     std::wstring             m_effectiveArchivePath; // Operative path (differs from m_archivePath only when a split archive is auto-unwrapped)
     std::wstring             m_password;             // Password used to open the current archive (empty if none)
-    bool                     m_openedWithUnrar = false;
     bool                     m_isReadOnly      = false;  // Write operations disabled (e.g. split auto-unwrap)
     std::vector<ArchiveItem> m_items;
     std::vector<std::wstring> m_folderPaths;  // sorted; index matches TreeView lParam

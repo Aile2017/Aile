@@ -1,7 +1,6 @@
 ﻿#include "App.h"
 #include "MainWindow.h"
 #include "CompressDlg.h"
-#include "CompressHelper.h"
 #include "I18n.h"
 #include "ProgressDlg.h"
 #include "WorkerThread.h"
@@ -23,17 +22,7 @@ bool App::Init(HINSTANCE hInst) {
 
     m_settings.Load();
 
-    if (!m_sevenZip.Load(m_settings.Get7zDllPath().empty()
-                         ? nullptr
-                         : m_settings.Get7zDllPath().c_str())) {
-        // Non-fatal: user can still use RAR mode.
-    }
-
-    if (!m_unrar.Load(m_settings.GetUnrarDllPath().empty()
-                      ? nullptr
-                      : m_settings.GetUnrarDllPath().c_str())) {
-        // Non-fatal.
-    }
+    m_sevenZip.Load(nullptr);  // B2E backend always succeeds; path parameter is ignored.
 
     if (!MainWindow::RegisterClass(hInst)) return false;
 
@@ -42,18 +31,12 @@ bool App::Init(HINSTANCE hInst) {
 
 void App::Shutdown() {
     m_sevenZip.Unload();
-    m_unrar.Unload();
     m_settings.Save();
 }
 
 void App::ReloadDlls() {
     m_sevenZip.Unload();
-    m_unrar.Unload();
-
-    m_sevenZip.Load(m_settings.Get7zDllPath().empty()
-                    ? nullptr : m_settings.Get7zDllPath().c_str());
-    m_unrar.Load(m_settings.GetUnrarDllPath().empty()
-                 ? nullptr : m_settings.GetUnrarDllPath().c_str());
+    m_sevenZip.Load(nullptr);
 }
 
 int App::RunBrowseMode(const std::vector<std::wstring>& archivePaths, int nCmdShow) {
@@ -169,42 +152,21 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
     ProgressDlg progDlg;
     progDlg.Show(wnd.Hwnd(), I18n::Tr(IDS_PROGRESS_COMPRESSING).c_str());
 
-    if (params.format == L"rar") {
-        auto* sink = new ProgressPostSink(wnd.Hwnd(), WM_APP_PROGRESS, WM_APP_DONE);
-        RunRarCompressSync(wnd.Hwnd(), params,
-                           m_settings.GetRarExePath().c_str(),
-                           progDlg, sink);
-        delete sink;
-    } else {
-        // Resolve 7z SFX module (search same folder as 7z.dll if specified)
-        std::wstring sfxModulePath;
-        if (!params.sfxMode.empty()) {
-            sfxModulePath = Resolve7zSfxModulePath(
-                m_sevenZip.GetLoadedPath().c_str(), params.sfxMode.c_str());
-            if (sfxModulePath.empty()) {
-                progDlg.Dismiss();
-                const wchar_t* leaf = (params.sfxMode == L"console") ? L"7zCon.sfx" : L"7z.sfx";
-                std::wstring msg = I18n::TrFmt(IDS_FMT_SFX_NOT_FOUND_7Z, leaf);
-                MessageBoxW(wnd.Hwnd(), msg.c_str(), I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
-                return 0;
-            }
-        }
-
+    {
         auto* sink = new ProgressPostSink(wnd.Hwnd(), WM_APP_PROGRESS, WM_APP_DONE);
         auto& sz   = m_sevenZip;
         progDlg.SetSink(sink);
 
         WorkerThread worker;
-        worker.Start([&sz, params, sink, sfxModulePath]() -> HRESULT {
+        worker.Start([&sz, params, sink]() -> HRESULT {
             const wchar_t* pw = params.password.empty() ? nullptr : params.password.c_str();
             CompressAdvanced adv;
-            adv.dictSize      = params.dictSize;
-            adv.wordSize      = params.wordSize;
-            adv.solidBlock    = params.solidBlock;
-            adv.threads       = params.threads;
-            adv.extra         = params.extra;
-            adv.volumeSize    = params.volumeSize;
-            adv.sfxModulePath = sfxModulePath;
+            adv.dictSize   = params.dictSize;
+            adv.wordSize   = params.wordSize;
+            adv.solidBlock = params.solidBlock;
+            adv.threads    = params.threads;
+            adv.extra      = params.extra;
+            adv.volumeSize = params.volumeSize;
             return sz.Compress(params.inputFiles, params.outputPath.c_str(),
                                params.format.c_str(), params.level,
                                params.method.c_str(), pw, sink, &adv,
@@ -258,13 +220,7 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
         ProgressDlg progDlg;
         progDlg.Show(wnd.Hwnd(), I18n::Tr(IDS_PROGRESS_COMPRESSING).c_str());
 
-        if (params.format == L"rar") {
-            auto* sink = new ProgressPostSink(wnd.Hwnd(), WM_APP_PROGRESS, WM_APP_DONE);
-            RunRarCompressSync(wnd.Hwnd(), params,
-                               m_settings.GetRarExePath().c_str(),
-                               progDlg, sink);
-            delete sink;
-        } else {
+        {
             auto* sink = new ProgressPostSink(wnd.Hwnd(), WM_APP_PROGRESS, WM_APP_DONE);
             auto& sz   = m_sevenZip;
             progDlg.SetSink(sink);
@@ -272,12 +228,12 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
             worker.Start([&sz, params, sink]() -> HRESULT {
                 const wchar_t* pw = params.password.empty() ? nullptr : params.password.c_str();
                 CompressAdvanced adv;
-                adv.dictSize      = params.dictSize;
-                adv.wordSize      = params.wordSize;
-                adv.solidBlock    = params.solidBlock;
-                adv.threads       = params.threads;
-                adv.extra         = params.extra;
-                adv.volumeSize    = params.volumeSize;
+                adv.dictSize   = params.dictSize;
+                adv.wordSize   = params.wordSize;
+                adv.solidBlock = params.solidBlock;
+                adv.threads    = params.threads;
+                adv.extra      = params.extra;
+                adv.volumeSize = params.volumeSize;
                 return sz.Compress(params.inputFiles, params.outputPath.c_str(),
                                    params.format.c_str(), params.level,
                                    params.method.c_str(), pw, sink, &adv, params.encryptHeaders);
