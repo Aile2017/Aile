@@ -1,11 +1,8 @@
 ﻿#include "MainWindow.h"
 #include "App.h"
 #include "CompressDlg.h"
-#include "CommentDlg.h"
 #include "DialogUtils.h"
 #include "I18n.h"
-#include "InfoDlg.h"
-#include "PropertiesDlg.h"
 #include "ProgressDlg.h"
 #include "B2eBridge.h"
 #include "SettingsDlg.h"
@@ -66,13 +63,25 @@ std::wstring DefaultOutputPath(const Settings& s, const std::vector<std::wstring
     return dir.empty() ? stem : dir + L"\\" + stem;
 }
 
+// Return the top-level component of an archive path.
+// Handles both / and \ separators and strips any trailing separator.
+static std::wstring TopLevelName(const std::wstring& path) {
+    // Find effective end (strip trailing / or \)
+    size_t end = path.size();
+    while (end > 0 && (path[end - 1] == L'/' || path[end - 1] == L'\\')) --end;
+    // Find first internal separator
+    size_t sep = path.find_first_of(L"/\\");
+    if (sep == std::wstring::npos || sep >= end)
+        return path.substr(0, end);   // no separator before end → whole stem
+    return path.substr(0, sep);
+}
+
 // Return top-level entry count from archive m_items (unique first path components)
 int CountTopLevelEntries(const std::vector<ArchiveItem>& items) {
     std::set<std::wstring> tops;
     for (const auto& item : items) {
         if (item.path.empty()) continue;
-        auto slash = item.path.find(L'/');
-        tops.insert(slash != std::wstring::npos ? item.path.substr(0, slash) : item.path);
+        tops.insert(TopLevelName(item.path));
     }
     return (int)tops.size();
 }
@@ -213,10 +222,14 @@ bool ShouldCreateSubfolder(int mkDir, const std::vector<ArchiveItem>& items) {
     if (mkDir == 2) return topCount >= 2;
     // mkDir == 1: single top-level entry that is a file (not directory)
     if (topCount != 1) return false;
-    // If single top-level is directory, archive has folder structure, so not needed
+    // If that single top-level entry is a directory, the archive already has folder structure
     for (const auto& item : items) {
-        if (item.isDir && item.path.find(L'/') == std::wstring::npos)
-            return false; // Top-level directory exists
+        if (!item.isDir) continue;
+        // Strip trailing separators, then check for any remaining separator
+        std::wstring p = item.path;
+        while (!p.empty() && (p.back() == L'/' || p.back() == L'\\')) p.pop_back();
+        if (p.find_first_of(L"/\\") == std::wstring::npos)
+            return false;  // top-level directory exists
     }
     return true;
 }
@@ -531,7 +544,6 @@ LRESULT MainWindow::HandleMsg(UINT msg, WPARAM wp, LPARAM lp) {
             case ID_EXTRACT_SMART: id = IDS_TIP_EXTRACT; break;
             case ID_OPEN_ASSOC:   id = IDS_TIP_VIEW;     break;
             case ID_ADD:          id = IDS_TIP_ADD;      break;
-            case ID_INFO:         id = IDS_TIP_INFO;     break;
             case ID_TEST:         id = IDS_TIP_TEST;     break;
             case ID_SETTINGS_DLG: id = IDS_TIP_SETTINGS; break;
             }
@@ -731,7 +743,7 @@ void MainWindow::CreateControls(HWND hwnd) {
 
     const UINT bmpIds[] = {
         IDB_TOOLBAR_EXTRACT, IDB_TOOLBAR_OPEN, IDB_TOOLBAR_ADD,
-        IDB_TOOLBAR_INFO,    IDB_TOOLBAR_TEST, IDB_TOOLBAR_SETTINGS,
+        IDB_TOOLBAR_TEST,    IDB_TOOLBAR_SETTINGS,
     };
     m_hToolbarImages = ImageList_Create(kIconSize, kIconSize, ILC_COLOR32 | ILC_MASK,
                                         _countof(bmpIds), 0);
@@ -764,10 +776,9 @@ void MainWindow::CreateControls(HWND hwnd) {
         {0, ID_EXTRACT_SMART, TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
         {1, ID_OPEN_ASSOC,    TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
         {2, ID_ADD,           TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
-        {3, ID_INFO,          TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
-        {4, ID_TEST,          TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
+        {3, ID_TEST,          TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
         {0, 0,                0,               BTNS_SEP,    {}, 0, 0},
-        {5, ID_SETTINGS_DLG,  TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
+        {4, ID_SETTINGS_DLG,  TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
         {0, 0,                0,               BTNS_SEP,    {}, 0, 0},  // separator before Extract to:
     };
     SendMessageW(m_hToolbar, TB_ADDBUTTONS, _countof(btns), (LPARAM)btns);
@@ -1049,12 +1060,6 @@ void MainWindow::OnCommand(WORD id) {
     case ID_TEST:
         OnTest();
         break;
-    case ID_INFO:
-        OnInfo();
-        break;
-    case ID_ARCHIVE_COMMENT:
-        OnArchiveComment();
-        break;
     case ID_DELETE:
         OnDelete();
         break;
@@ -1069,9 +1074,6 @@ void MainWindow::OnCommand(WORD id) {
         break;
     case IDM_FILE_OPEN:
         OnFileOpen();
-        break;
-    case IDM_FILE_PROPERTIES:
-        OnArchiveProperties();
         break;
     case IDM_FILE_EXIT:
         DestroyWindow(m_hwnd);
@@ -1286,21 +1288,43 @@ void MainWindow::OnOpenAssoc() {
     }
     const std::wstring& tempDir = m_tempViewDir;
 
-    // Extract single file to temp dir
-    std::vector<UINT32> indices = { idx };
-    HRESULT hr = app.Get7z().Extract(m_effectiveArchivePath.c_str(), indices,
-                                      tempDir.c_str(),
-                                      m_password.empty() ? nullptr : m_password.c_str(),
-                                      nullptr);
+    // Copy data needed after the worker loop — m_items/m_archivePath may change
+    // if the user opens another archive during message dispatch.
+    std::vector<UINT32> indices    = { idx };
+    std::wstring        itemPath   = it.path;
+    std::wstring        archivePath = m_effectiveArchivePath;
+    std::wstring        password   = m_password;
+    std::wstring        tmpDir     = tempDir;
+    auto& sz = app.Get7z();
+
+    m_worker.Start([&sz, archivePath, indices, tmpDir, password]() -> HRESULT {
+        int r = SHCreateDirectoryExW(nullptr, tmpDir.c_str(), nullptr);
+        if (r != ERROR_SUCCESS && r != ERROR_ALREADY_EXISTS)
+            return HRESULT_FROM_WIN32(r);
+        return sz.Extract(archivePath.c_str(), indices, tmpDir.c_str(),
+                          password.empty() ? nullptr : password.c_str(), nullptr);
+    }, m_hwnd, WM_APP_DONE);
+
+    HRESULT hr = S_OK;
+    MSG msg;
+    while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
+        if (msg.message == WM_APP_DONE) { hr = (HRESULT)msg.wParam; break; }
+        if (!IsDialogMessageW(m_hwnd, &msg)) {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+    }
+    m_worker.Wait();
+
     if (FAILED(hr)) {
         ShowError(I18n::Tr(IDS_ERR_EXTRACT_FILE_FAILED).c_str(), hr);
         return;
     }
 
     // Build local path (archive path uses '/', convert to '\')
-    std::wstring relPath = it.path;
+    std::wstring relPath = itemPath;
     for (auto& c : relPath) if (c == L'/') c = L'\\';
-    std::wstring localPath = tempDir + relPath;
+    std::wstring localPath = tmpDir + relPath;
 
     // Open with associated application
     HINSTANCE hi = ShellExecuteW(m_hwnd, L"open", localPath.c_str(),
@@ -1426,26 +1450,31 @@ void MainWindow::RunExtraction(std::vector<UINT32> indices, std::wstring presetD
                         ArchiveBaseName(m_archivePath, s.GetExtStripMode(), s.GetStripTrailingNumber());
     }
 
-    ProgressDlg progDlg;
-    progDlg.Show(m_hwnd, I18n::Tr(IDS_PROGRESS_EXTRACTING).c_str());
-
-    auto* sink = new ProgressPostSink(m_hwnd, WM_APP_PROGRESS, WM_APP_DONE);
-    m_pSink    = sink;
-    progDlg.SetSink(sink);
-
     auto archivePath = m_effectiveArchivePath;
     std::wstring password = m_password;
 
     auto& sz = app.Get7z();
-    m_worker.Start([&sz, archivePath, indices, destDir = finalDest, password, sink]() -> HRESULT {
+    m_worker.Start([&sz, archivePath, indices, destDir = finalDest, password]() -> HRESULT {
+        // B2e_Extract relies on SetCurrentDirectory(destDir) to set the extraction target.
+        // SetCurrentDirectory fails if the directory does not yet exist, leaving the CWD
+        // unchanged and causing extraction to land in the wrong place.  Create it first.
+        int r = SHCreateDirectoryExW(nullptr, destDir.c_str(), nullptr);
+        if (r != ERROR_SUCCESS && r != ERROR_ALREADY_EXISTS)
+            return HRESULT_FROM_WIN32(r);
         const wchar_t* pw = password.empty() ? nullptr : password.c_str();
-        return sz.Extract(archivePath.c_str(), indices, destDir.c_str(), pw, sink);
+        return sz.Extract(archivePath.c_str(), indices, destDir.c_str(), pw, nullptr);
     }, m_hwnd, WM_APP_DONE);
 
-    HRESULT hrDone = progDlg.RunMessageLoop();
+    HRESULT hrDone = S_OK;
+    MSG msg;
+    while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
+        if (msg.message == WM_APP_DONE) { hrDone = (HRESULT)msg.wParam; break; }
+        if (!IsDialogMessageW(m_hwnd, &msg)) {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+    }
     m_worker.Wait();
-    delete sink;
-    m_pSink = nullptr;
 
     if (SUCCEEDED(hrDone)) {
         auto& s = App::Instance().GetSettings();
@@ -1469,7 +1498,6 @@ void MainWindow::OnContextMenu(HWND /*hwndFrom*/, int x, int y) {
     std::wstring sExtractSel = I18n::Tr(IDS_CTX_EXTRACT_SELECTED);
     std::wstring sOpenAssoc  = I18n::Tr(IDS_CTX_OPEN_ASSOC);
     std::wstring sTest       = I18n::Tr(IDS_CTX_TEST);
-    std::wstring sInfo       = I18n::Tr(IDS_CTX_INFO);
     std::wstring sDelete     = I18n::Tr(IDS_CTX_DELETE);
     AppendMenuW(hMenu, MF_STRING | MF_ENABLED, ID_EXTRACT, sExtract.c_str());
     AppendMenuW(hMenu, MF_STRING | (selCount > 0 ? MF_ENABLED : MF_GRAYED),
@@ -1478,8 +1506,6 @@ void MainWindow::OnContextMenu(HWND /*hwndFrom*/, int x, int y) {
     AppendMenuW(hMenu, MF_STRING | (selCount > 0 ? MF_ENABLED : MF_GRAYED),
                 ID_OPEN_ASSOC, sOpenAssoc.c_str());
     AppendMenuW(hMenu, MF_STRING | MF_ENABLED, ID_TEST, sTest.c_str());
-    AppendMenuW(hMenu, MF_STRING | (selCount > 0 ? MF_ENABLED : MF_GRAYED),
-                ID_INFO, sInfo.c_str());
     AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(hMenu, MF_STRING | (!readOnly && selCount > 0 ? MF_ENABLED : MF_GRAYED),
                 ID_DELETE, sDelete.c_str());
@@ -1752,9 +1778,6 @@ void MainWindow::OnInitMenuPopup(HMENU hMenu) {
     setEnabled(ID_EXTRACT_SELECTED, hasArchive && selCount > 0);
     setEnabled(ID_TEST,       hasArchive);
     setEnabled(ID_OPEN_ASSOC, hasArchive);
-    setEnabled(ID_INFO,       selCount > 0);
-    setEnabled(IDM_FILE_PROPERTIES, hasArchive);
-    setEnabled(ID_ARCHIVE_COMMENT, hasArchive);
     setEnabled(ID_ADD_TO_CURRENT, hasArchive && !m_isReadOnly);
     setEnabled(ID_DELETE,     hasArchive && !readOnly && selCount > 0);
 
@@ -1876,51 +1899,7 @@ void MainWindow::AddFilesToCurrentArchive(std::vector<std::wstring> srcPaths) {
     if (!archiveFolder.empty()) SelectTreeFolder(archiveFolder);
 }
 
-void MainWindow::OnInfo() {
-    int sel = ListView_GetNextItem(m_hListView, -1, LVNI_SELECTED);
-    if (sel < 0) return;
 
-    LVITEMW lvi = {};
-    lvi.iItem = sel;
-    lvi.mask  = LVIF_PARAM;
-    ListView_GetItem(m_hListView, &lvi);
-    UINT32 arcIdx = (UINT32)lvi.lParam;
-    if (arcIdx >= (UINT32)m_items.size()) return;
-
-    InfoDlg dlg;
-    dlg.Show(m_hwnd, m_items[arcIdx]);
-}
-
-void MainWindow::OnArchiveProperties() {
-    if (m_archivePath.empty()) return;
-
-    // Pass the operative path (temp file after split auto-unwrap) to 7z.dll if present.
-    const std::wstring& target = m_effectiveArchivePath.empty()
-                                 ? m_archivePath
-                                 : m_effectiveArchivePath;
-
-    ArchiveProperties props;
-    bool haveProps = false;
-
-    // Archives opened via unrar.dll are unlikely to be readable by 7z.dll (e.g. dll without RAR support).
-    // Try anyway; if it fails, fall back to displaying info from items.
-    auto& sz7 = App::Instance().Get7z();
-    if (sz7.IsLoaded()) {
-        HRESULT hr = sz7.GetArchiveProperties(target.c_str(), nullptr, props);
-        if (SUCCEEDED(hr)) haveProps = true;
-    }
-
-    PropertiesDlg dlg;
-    dlg.Show(m_hwnd, m_archivePath, m_items,
-             haveProps ? &props : nullptr, L"");
-}
-
-void MainWindow::OnArchiveComment() {
-    if (m_archivePath.empty()) return;
-    // Archive comment read/write not supported by B2E backend.
-    MessageBoxW(m_hwnd, I18n::Tr(IDS_ERR_OP_NOT_SUPPORTED).c_str(),
-                I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONINFORMATION);
-}
 
 
 void MainWindow::OnDelete() {

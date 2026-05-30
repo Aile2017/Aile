@@ -124,12 +124,6 @@ HRESULT SevenZip::AddToArchive(const wchar_t*, const std::vector<std::wstring>&,
                                 const wchar_t*, const wchar_t*, int, const wchar_t*,
                                 IExtractProgressSink*, const CompressAdvanced*) { return E_NOTIMPL; }
 
-HRESULT SevenZip::GetArchiveComment(const wchar_t*, const wchar_t*,
-                                     std::wstring&) { return E_NOTIMPL; }
-
-HRESULT SevenZip::SetZipArchiveComment(const wchar_t*,
-                                        const std::wstring&) { return E_NOTIMPL; }
-
 HRESULT SevenZip::GetArchiveProperties(const wchar_t*, const wchar_t*,
                                         ArchiveProperties&) { return E_NOTIMPL; }
 

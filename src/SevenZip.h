@@ -76,19 +76,6 @@ public:
                     const wchar_t* password,
                     IExtractProgressSink* sink);
 
-    // Retrieves the whole-archive comment. Returns empty for formats/archives without one.
-    // Note: the 7z format has no whole-archive comment by spec (per-item kpidComment exists).
-    HRESULT GetArchiveComment(const wchar_t* path,
-                              const wchar_t* password,
-                              std::wstring& out);
-
-    // Overwrites the whole-archive comment in a ZIP file (direct EOCD record patch).
-    // Only .zip format is supported. Passing an empty string removes the comment.
-    // E_INVALIDARG if the comment exceeds 65535 bytes (ZIP spec limit).
-    // Works correctly on ZIP64 archives (>4 GB) since the EOCD is in the same position.
-    HRESULT SetZipArchiveComment(const wchar_t* archivePath,
-                                 const std::wstring& comment);
-
     // Retrieves whole-archive properties (for the properties dialog).
     // Fills format-specific metadata from IInArchive::GetArchiveProperty / GetArchivePropertyInfo
     // and aggregates from entry enumeration (file count, total size, etc.).

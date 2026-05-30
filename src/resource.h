@@ -11,7 +11,6 @@
 #define IDB_TOOLBAR_EXTRACT 111
 #define IDB_TOOLBAR_OPEN    112
 #define IDB_TOOLBAR_ADD     113
-#define IDB_TOOLBAR_INFO    114
 #define IDB_TOOLBAR_SETTINGS 115
 #define IDB_TOOLBAR_TEST     116
 
@@ -19,13 +18,10 @@
 #define IDD_COMPRESS        201
 #define IDD_PROGRESS        202
 #define IDD_SETTINGS        203
-#define IDD_INFO            204
 #define IDD_COMPRESS_ADV    205
 #define IDD_RAR_COMPRESS_ADV  206
 #define IDD_PASSWORD        207
 #define IDD_ABOUT           208
-#define IDD_ARCHIVE_PROPS   209
-#define IDD_COMMENT         210
 
 // Compress dialog controls
 #define IDC_OUTPUT_PATH     1001
@@ -85,15 +81,6 @@
 #define IDC_COLLAPSE_SINGLE_DIR 3021  // Collapse single-subfolder output (break_ddir)
 #define IDC_OPEN_FOLDER_AFTER   3023  // Open output folder after extraction
 
-// Info dialog controls
-#define IDC_INFO_LIST       5001
-
-// Archive properties dialog controls
-#define IDC_ARCPROP_LIST    5101
-
-// Comment dialog controls
-#define IDC_COMMENT_EDIT    5201
-
 #define IDC_PASSWORD_INPUT  8001
 
 // About dialog controls
@@ -109,7 +96,6 @@
 #define ID_TEST             40005
 #define ID_DELETE           40006
 #define ID_CLOSE            40007
-#define ID_INFO             40008
 #define ID_OPEN_ASSOC       40009
 #define ID_EXTRACT_SELECTED 40016
 #define ID_ADD_TO_CURRENT   40018  // Add files to the currently open archive
@@ -123,8 +109,6 @@
 #define IDM_VIEW_TREE       40013   // Toggle tree view
 #define IDM_HELP_ABOUT      40014
 #define IDM_VIEW_TOOLBAR    40015   // Toggle toolbar
-#define IDM_FILE_PROPERTIES 40017   // Archive properties
-#define ID_ARCHIVE_COMMENT  40019   // Show archive comment
 #define IDM_VIEW_ICONS      40022   // Toggle folder/file icons
 #define IDM_VIEW_MENUBAR    40023   // Toggle menu bar
 
@@ -161,7 +145,6 @@
 #define IDS_PROGRESS_TESTING            11022
 #define IDS_PROGRESS_DELETING           11023
 #define IDS_PROGRESS_ADDING             11024
-#define IDS_PROGRESS_SAVING_COMMENT     11025
 #define IDS_FMT_STATUS_ENTRIES          11026
 
 // --- Column headers ---
@@ -179,7 +162,6 @@
 #define IDS_TIP_EXTRACT                 11040
 #define IDS_TIP_VIEW                    11041
 #define IDS_TIP_ADD                     11042
-#define IDS_TIP_INFO                    11043
 #define IDS_TIP_TEST                    11044
 #define IDS_TIP_SETTINGS                11045
 
@@ -187,7 +169,6 @@
 #define IDS_CTX_EXTRACT_SELECTED        11050
 #define IDS_CTX_OPEN_ASSOC              11051
 #define IDS_CTX_TEST                    11052
-#define IDS_CTX_INFO                    11053
 #define IDS_CTX_DELETE                  11054
 #define IDS_CTX_EXTRACT                 11055
 
@@ -224,9 +205,7 @@
 #define IDS_MRU_NO_HISTORY              11094
 #define IDS_OP_FAILED                   11095
 #define IDS_ERR_ADD_FAILED              11096
-#define IDS_ERR_ZIP_COMMENT_NEEDS_7Z    11097
 #define IDS_ERR_RAR_LAUNCH              11098
-#define IDS_ERR_COMMENT_SAVE_FAILED     11099
 #define IDS_FMT_DELETE_CONFIRM          11100
 #define IDS_TITLE_DELETE_CONFIRM        11101
 #define IDS_ERR_DELETE_FAILED           11102
@@ -253,46 +232,7 @@
 #define IDS_LEVEL_9                     11130
 #define IDS_INFO_SPECIFY_OUTPUT         11131
 
-// --- Comment dialog ---
-#define IDS_FMT_COMMENT_TITLE           11135
-#define IDS_COMMENT_READONLY            11136
-
-// --- Info / Properties dialogs ---
-#define IDS_COL_LABEL                   11140
-#define IDS_COL_VALUE                   11141
-#define IDS_FMT_INFO_TITLE              11142
-#define IDS_FMT_PROPS_TITLE             11143
-#define IDS_INFO_FILE_NAME              11144
-#define IDS_INFO_ARCHIVE_PATH           11145
-#define IDS_INFO_KIND                   11146
-#define IDS_INFO_ORIG_SIZE              11147
-#define IDS_INFO_PACKED_SIZE            11148
-#define IDS_INFO_RATIO                  11149
-#define IDS_INFO_METHOD                 11150
-#define IDS_INFO_CRC32                  11151
-#define IDS_INFO_ENCRYPTED              11152
-#define IDS_INFO_FILE_ATTRS             11153
-#define IDS_INFO_HOST_OS                11154
-#define IDS_INFO_MTIME                  11155
-#define IDS_INFO_CTIME                  11156
-#define IDS_INFO_ATIME                  11157
-#define IDS_INFO_COMMENT                11158
-#define IDS_INFO_FULL_PATH              11160
-#define IDS_INFO_FORMAT                 11161
-#define IDS_INFO_FILE_SIZE              11162
-#define IDS_INFO_OS_CTIME               11163
-#define IDS_INFO_OS_MTIME               11164
-#define IDS_PROPS_SUMMARY_HEAD          11165
-#define IDS_PROPS_DETAIL_HEAD           11166
-#define IDS_PROPS_NUM_FILES             11167
-#define IDS_PROPS_NUM_FOLDERS           11168
-#define IDS_PROPS_TOTAL_SIZE            11169
-#define IDS_PROPS_TOTAL_PACKED          11170
-#define IDS_PROPS_RATIO                 11171
-#define IDS_PROPS_HAS_ENCRYPTED         11172
-#define IDS_PROPS_METHOD_USED           11173
-
-// --- SevenZip PropID names (used by SevenZip::PropIdName + PropertiesDlg compare) ---
+// --- SevenZip PropID names ---
 #define IDS_PROP_PATH                   11200
 #define IDS_PROP_NAME                   11201
 #define IDS_PROP_EXTENSION              11202

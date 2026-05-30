@@ -50,9 +50,6 @@ private:
     void OnAddFilesToCurrentArchive();
     // Worker-driven file addition to the currently open archive. Shows a file picker if `srcPaths` is empty.
     void AddFilesToCurrentArchive(std::vector<std::wstring> srcPaths);
-    void OnInfo();
-    void OnArchiveProperties();
-    void OnArchiveComment();
     void OnDelete();
     void OnFileOpen();
     void OnAbout();

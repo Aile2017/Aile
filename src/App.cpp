@@ -57,7 +57,6 @@ int App::RunBrowseMode(const std::vector<std::wstring>& archivePaths, int nCmdSh
         { FVIRTKEY | FCONTROL, (WORD)'T',  ID_TEST },
         { FVIRTKEY,              VK_DELETE, ID_DELETE     },
         { FVIRTKEY | FCONTROL, VK_F4,     ID_CLOSE      },  // Close: close the archive
-        { FVIRTKEY | FALT,     VK_RETURN, IDM_FILE_PROPERTIES }, // Alt+Enter: archive properties
         // VK_RETURN is handled contextually inside ListView/TreeView so not defined here
         { FVIRTKEY,              VK_ESCAPE, IDM_FILE_EXIT },  // Exit: quit the application
     };

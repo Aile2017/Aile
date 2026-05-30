@@ -12,7 +12,6 @@ IDI_AILEEX ICON "AileFlow.ico"
 IDB_TOOLBAR_EXTRACT BITMAP "Extract.bmp"
 IDB_TOOLBAR_OPEN    BITMAP "Open.bmp"
 IDB_TOOLBAR_ADD     BITMAP "Add.bmp"
-IDB_TOOLBAR_INFO    BITMAP "Info.bmp"
 IDB_TOOLBAR_SETTINGS BITMAP "Settings.bmp"
 IDB_TOOLBAR_TEST     BITMAP "Test.bmp"
 
@@ -36,8 +35,6 @@ BEGIN
             MENUITEM "(no history)",                    IDM_FILE_MRU_PH, GRAYED
         END
         MENUITEM SEPARATOR
-        MENUITEM "Archive &properties\tAlt+Enter",      IDM_FILE_PROPERTIES
-        MENUITEM SEPARATOR
         MENUITEM "&Close\tCtrl+F4",                     ID_CLOSE
         MENUITEM "E&xit\tEsc",                          IDM_FILE_EXIT
     END
@@ -51,8 +48,6 @@ BEGIN
         MENUITEM SEPARATOR
         MENUITEM "&Open with...\tEnter",                ID_OPEN_ASSOC
         MENUITEM "&Delete\tDel",                        ID_DELETE
-        MENUITEM "&Info",                               ID_INFO
-        MENUITEM "Archive co&mment...",                 ID_ARCHIVE_COMMENT
         MENUITEM SEPARATOR
         MENUITEM "&Settings...",                        ID_SETTINGS_DLG
     END
@@ -198,42 +193,6 @@ BEGIN
     PUSHBUTTON      "Cancel",           IDCANCEL,      222, 252,  50,  14
 END
 
-IDD_INFO DIALOGEX 0, 0, 340, 280
-STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "File info"
-FONT 9, "Segoe UI", 400, 0, 0x1
-BEGIN
-    CONTROL         "", IDC_INFO_LIST, "SysListView32",
-                    LVS_REPORT | LVS_NOSORTHEADER | LVS_SINGLESEL |
-                    WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL,
-                    7, 7, 326, 253
-    DEFPUSHBUTTON   "Close", IDOK, 145, 263, 50, 14
-END
-
-IDD_COMMENT DIALOGEX 0, 0, 360, 220
-STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "Archive comment"
-FONT 9, "Segoe UI", 400, 0, 0x1
-BEGIN
-    EDITTEXT        IDC_COMMENT_EDIT, 7, 7, 346, 190,
-                    ES_MULTILINE | ES_AUTOVSCROLL | ES_WANTRETURN |
-                    WS_VSCROLL | WS_BORDER | WS_TABSTOP
-    DEFPUSHBUTTON   "Save",  IDOK,     245, 202, 50, 14
-    PUSHBUTTON      "Close", IDCANCEL, 303, 202, 50, 14
-END
-
-IDD_ARCHIVE_PROPS DIALOGEX 0, 0, 380, 320
-STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "Archive properties"
-FONT 9, "Segoe UI", 400, 0, 0x1
-BEGIN
-    CONTROL         "", IDC_ARCPROP_LIST, "SysListView32",
-                    LVS_REPORT | LVS_NOSORTHEADER | LVS_SINGLESEL |
-                    WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL,
-                    7, 7, 366, 290
-    DEFPUSHBUTTON   "Close", IDOK, 165, 302, 50, 14
-END
-
 IDD_PASSWORD DIALOGEX 0, 0, 220, 72
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Password"
@@ -276,7 +235,6 @@ BEGIN
     IDS_PROGRESS_TESTING            "Testing..."
     IDS_PROGRESS_DELETING           "Deleting..."
     IDS_PROGRESS_ADDING             "Adding..."
-    IDS_PROGRESS_SAVING_COMMENT     "Saving comment..."
     IDS_FMT_STATUS_ENTRIES          "%zu files  [%s]"
 
     IDS_COL_NAME                    "Name"
@@ -292,7 +250,6 @@ BEGIN
     IDS_TIP_EXTRACT                 "Extract"
     IDS_TIP_VIEW                    "View"
     IDS_TIP_ADD                     "Add"
-    IDS_TIP_INFO                    "Info"
     IDS_TIP_TEST                    "Test"
     IDS_TIP_SETTINGS                "Settings"
 
@@ -300,7 +257,6 @@ BEGIN
     IDS_CTX_EXTRACT_SELECTED        "&Extract selected"
     IDS_CTX_OPEN_ASSOC              "&Open with associated app"
     IDS_CTX_TEST                    "&Test"
-    IDS_CTX_INFO                    "&Info"
     IDS_CTX_DELETE                  "&Delete"
 
     IDS_FILTER_ARCHIVE              "Archive files|*.zip;*.7z;*.rar;*.tar;*.gz;*.bz2;*.xz;*.tgz;*.tbz;*.tbz2;*.txz|All files|*.*|"
@@ -337,9 +293,7 @@ BEGIN
     IDS_MRU_NO_HISTORY              "(no history)"
     IDS_OP_FAILED                   "Operation failed."
     IDS_ERR_ADD_FAILED              "Failed to add to archive."
-    IDS_ERR_ZIP_COMMENT_NEEDS_7Z    "ZIP comment write does not need 7z.dll, but it is required internally."
     IDS_ERR_RAR_LAUNCH              "Failed to launch rar.exe."
-    IDS_ERR_COMMENT_SAVE_FAILED     "Failed to save the comment."
     IDS_FMT_DELETE_CONFIRM          "Delete %d selected items from the archive.\n(Folders are deleted recursively.)\n\nProceed?"
     IDS_TITLE_DELETE_CONFIRM        "Confirm delete"
     IDS_ERR_DELETE_FAILED           "Delete failed."
@@ -364,45 +318,6 @@ BEGIN
     IDS_LEVEL_9                     "9 - Ultra"
     IDS_INFO_SPECIFY_OUTPUT         "Please specify the output."
 
-    IDS_FMT_COMMENT_TITLE           "Archive comment - %s"
-    IDS_COMMENT_READONLY            "  (read-only)"
-END
-
-STRINGTABLE
-BEGIN
-    IDS_COL_LABEL                   "Item"
-    IDS_COL_VALUE                   "Value"
-    IDS_FMT_INFO_TITLE              "File info - %s"
-    IDS_FMT_PROPS_TITLE             "Archive properties - %s"
-    IDS_INFO_FILE_NAME              "File name"
-    IDS_INFO_ARCHIVE_PATH           "Path inside archive"
-    IDS_INFO_KIND                   "Kind"
-    IDS_INFO_ORIG_SIZE              "Original size"
-    IDS_INFO_PACKED_SIZE            "Packed size"
-    IDS_INFO_RATIO                  "Compression ratio"
-    IDS_INFO_METHOD                 "Compression method"
-    IDS_INFO_CRC32                  "CRC-32"
-    IDS_INFO_ENCRYPTED              "Encrypted"
-    IDS_INFO_FILE_ATTRS             "File attributes"
-    IDS_INFO_HOST_OS                "Host OS"
-    IDS_INFO_MTIME                  "Modified"
-    IDS_INFO_CTIME                  "Created"
-    IDS_INFO_ATIME                  "Accessed"
-    IDS_INFO_COMMENT                "Comment"
-    IDS_INFO_FULL_PATH              "Full path"
-    IDS_INFO_FORMAT                 "Format"
-    IDS_INFO_FILE_SIZE              "File size"
-    IDS_INFO_OS_CTIME               "Created (OS)"
-    IDS_INFO_OS_MTIME               "Modified (OS)"
-    IDS_PROPS_SUMMARY_HEAD          "--- Summary ---"
-    IDS_PROPS_DETAIL_HEAD           "--- Detail ---"
-    IDS_PROPS_NUM_FILES             "Files"
-    IDS_PROPS_NUM_FOLDERS           "Folders"
-    IDS_PROPS_TOTAL_SIZE            "Total uncompressed size"
-    IDS_PROPS_TOTAL_PACKED          "Total compressed size"
-    IDS_PROPS_RATIO                 "Compression ratio"
-    IDS_PROPS_HAS_ENCRYPTED         "Encrypted entries"
-    IDS_PROPS_METHOD_USED           "Method"
 END
 
 STRINGTABLE
@@ -489,8 +404,6 @@ BEGIN
             MENUITEM "(履歴なし)",                      IDM_FILE_MRU_PH, GRAYED
         END
         MENUITEM SEPARATOR
-        MENUITEM "アーカイブのプロパティ(&P)\tAlt+Enter", IDM_FILE_PROPERTIES
-        MENUITEM SEPARATOR
         MENUITEM "閉じる(&C)\tCtrl+F4",                ID_CLOSE
         MENUITEM "終了(&X)\tEsc",                       IDM_FILE_EXIT
     END
@@ -504,8 +417,6 @@ BEGIN
         MENUITEM SEPARATOR
         MENUITEM "関連付けで開く(&O)\tEnter",           ID_OPEN_ASSOC
         MENUITEM "削除(&D)\tDel",                      ID_DELETE
-        MENUITEM "情報(&I)",                            ID_INFO
-        MENUITEM "アーカイブのコメント(&M)...",          ID_ARCHIVE_COMMENT
         MENUITEM SEPARATOR
         MENUITEM "設定(&S)...",                         ID_SETTINGS_DLG
     END
@@ -651,42 +562,6 @@ BEGIN
     PUSHBUTTON      "キャンセル",        IDCANCEL,      222, 252,  50,  14
 END
 
-IDD_INFO DIALOGEX 0, 0, 340, 280
-STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "ファイル情報"
-FONT 9, "Segoe UI", 400, 0, 0x1
-BEGIN
-    CONTROL         "", IDC_INFO_LIST, "SysListView32",
-                    LVS_REPORT | LVS_NOSORTHEADER | LVS_SINGLESEL |
-                    WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL,
-                    7, 7, 326, 253
-    DEFPUSHBUTTON   "閉じる", IDOK, 145, 263, 50, 14
-END
-
-IDD_COMMENT DIALOGEX 0, 0, 360, 220
-STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "アーカイブのコメント"
-FONT 9, "Segoe UI", 400, 0, 0x1
-BEGIN
-    EDITTEXT        IDC_COMMENT_EDIT, 7, 7, 346, 190,
-                    ES_MULTILINE | ES_AUTOVSCROLL | ES_WANTRETURN |
-                    WS_VSCROLL | WS_BORDER | WS_TABSTOP
-    DEFPUSHBUTTON   "保存", IDOK,     245, 202, 50, 14
-    PUSHBUTTON      "閉じる", IDCANCEL, 303, 202, 50, 14
-END
-
-IDD_ARCHIVE_PROPS DIALOGEX 0, 0, 380, 320
-STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "アーカイブのプロパティ"
-FONT 9, "Segoe UI", 400, 0, 0x1
-BEGIN
-    CONTROL         "", IDC_ARCPROP_LIST, "SysListView32",
-                    LVS_REPORT | LVS_NOSORTHEADER | LVS_SINGLESEL |
-                    WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL,
-                    7, 7, 366, 290
-    DEFPUSHBUTTON   "閉じる", IDOK, 165, 302, 50, 14
-END
-
 IDD_PASSWORD DIALOGEX 0, 0, 220, 72
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "パスワード"
@@ -729,7 +604,6 @@ BEGIN
     IDS_PROGRESS_TESTING            "テスト中..."
     IDS_PROGRESS_DELETING           "削除中..."
     IDS_PROGRESS_ADDING             "追加中..."
-    IDS_PROGRESS_SAVING_COMMENT     "コメントを保存中..."
     IDS_FMT_STATUS_ENTRIES          "%zu 個のファイル  [%s]"
 
     IDS_COL_NAME                    "名前"
@@ -745,7 +619,6 @@ BEGIN
     IDS_TIP_EXTRACT                 "展開"
     IDS_TIP_VIEW                    "閲覧"
     IDS_TIP_ADD                     "追加"
-    IDS_TIP_INFO                    "情報"
     IDS_TIP_TEST                    "テスト"
     IDS_TIP_SETTINGS                "設定"
 
@@ -753,7 +626,6 @@ BEGIN
     IDS_CTX_EXTRACT_SELECTED        "選択ファイルを展開(&E)"
     IDS_CTX_OPEN_ASSOC              "関連付けで開く(&O)"
     IDS_CTX_TEST                    "テスト(&T)"
-    IDS_CTX_INFO                    "情報(&I)"
     IDS_CTX_DELETE                  "削除(&D)"
 
     IDS_FILTER_ARCHIVE              "アーカイブファイル|*.zip;*.7z;*.rar;*.tar;*.gz;*.bz2;*.xz;*.tgz;*.tbz;*.tbz2;*.txz|すべてのファイル|*.*|"
@@ -790,9 +662,7 @@ BEGIN
     IDS_MRU_NO_HISTORY              "(履歴なし)"
     IDS_OP_FAILED                   "操作に失敗しました。"
     IDS_ERR_ADD_FAILED              "アーカイブへの追加に失敗しました。"
-    IDS_ERR_ZIP_COMMENT_NEEDS_7Z    "ZIP コメント書込には 7z.dll は不要ですが、内部処理に必要です。"
     IDS_ERR_RAR_LAUNCH              "rar.exe を起動できませんでした。"
-    IDS_ERR_COMMENT_SAVE_FAILED     "コメントの保存に失敗しました。"
     IDS_FMT_DELETE_CONFIRM          "選択した %d 個の項目をアーカイブから削除します。\n（フォルダは配下も含めて削除されます）\n\nよろしいですか？"
     IDS_TITLE_DELETE_CONFIRM        "削除確認"
     IDS_ERR_DELETE_FAILED           "削除に失敗しました。"
@@ -817,45 +687,6 @@ BEGIN
     IDS_LEVEL_9                     "9 – 超圧縮"
     IDS_INFO_SPECIFY_OUTPUT         "出力先を指定してください。"
 
-    IDS_FMT_COMMENT_TITLE           "アーカイブのコメント - %s"
-    IDS_COMMENT_READONLY            "  （読取専用）"
-END
-
-STRINGTABLE
-BEGIN
-    IDS_COL_LABEL                   "項目"
-    IDS_COL_VALUE                   "値"
-    IDS_FMT_INFO_TITLE              "ファイル情報 - %s"
-    IDS_FMT_PROPS_TITLE             "アーカイブのプロパティ - %s"
-    IDS_INFO_FILE_NAME              "ファイル名"
-    IDS_INFO_ARCHIVE_PATH           "アーカイブ内パス"
-    IDS_INFO_KIND                   "種類"
-    IDS_INFO_ORIG_SIZE              "元のサイズ"
-    IDS_INFO_PACKED_SIZE            "圧縮後サイズ"
-    IDS_INFO_RATIO                  "圧縮率"
-    IDS_INFO_METHOD                 "圧縮メソッド"
-    IDS_INFO_CRC32                  "CRC-32"
-    IDS_INFO_ENCRYPTED              "暗号化"
-    IDS_INFO_FILE_ATTRS             "ファイル属性"
-    IDS_INFO_HOST_OS                "ホスト OS"
-    IDS_INFO_MTIME                  "更新日時"
-    IDS_INFO_CTIME                  "作成日時"
-    IDS_INFO_ATIME                  "最終アクセス日時"
-    IDS_INFO_COMMENT                "コメント"
-    IDS_INFO_FULL_PATH              "フルパス"
-    IDS_INFO_FORMAT                 "形式"
-    IDS_INFO_FILE_SIZE              "ファイルサイズ"
-    IDS_INFO_OS_CTIME               "作成日時 (OS)"
-    IDS_INFO_OS_MTIME               "更新日時 (OS)"
-    IDS_PROPS_SUMMARY_HEAD          "――― 集計 ―――"
-    IDS_PROPS_DETAIL_HEAD           "――― 詳細 ―――"
-    IDS_PROPS_NUM_FILES             "ファイル数"
-    IDS_PROPS_NUM_FOLDERS           "フォルダ数"
-    IDS_PROPS_TOTAL_SIZE            "合計展開サイズ"
-    IDS_PROPS_TOTAL_PACKED          "合計圧縮サイズ"
-    IDS_PROPS_RATIO                 "圧縮率"
-    IDS_PROPS_HAS_ENCRYPTED         "暗号化エントリ"
-    IDS_PROPS_METHOD_USED           "使用メソッド"
 END
 
 STRINGTABLE
