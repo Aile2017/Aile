@@ -17,11 +17,37 @@
 #include <map>
 #include <commctrl.h>
 #include <algorithm>
+#include <objbase.h>
+#include <memory>
 #include <set>
 
 #pragma comment(lib, "version.lib")
 
 namespace {
+template <class T>
+struct ComReleaser {
+    void operator()(T* p) const noexcept {
+        if (p) p->Release();
+    }
+};
+
+struct CoTaskMemStringReleaser {
+    void operator()(wchar_t* p) const noexcept {
+        if (p) CoTaskMemFree(p);
+    }
+};
+
+std::wstring GetFullPathString(const wchar_t* path) {
+    if (!path || !path[0]) return {};
+    DWORD needed = GetFullPathNameW(path, 0, nullptr, nullptr);
+    if (!needed) return path;
+    std::wstring full(needed, L'\0');
+    DWORD written = GetFullPathNameW(path, needed, full.data(), nullptr);
+    if (!written || written >= needed) return path;
+    full.resize(written);
+    return full;
+}
+
 // Force foreground for cases like launcher-spawned processes where parent already exited.
 // SetForegroundWindow alone is restricted and demoted, so attach to foreground app's thread,
 // apply TopMost briefly to push Z-order, then call.
@@ -404,9 +430,8 @@ void MainWindow::OpenArchive(const wchar_t* path) {
 
     // Update MRU — normalize relative paths and mixed cases ("../" etc.) via GetFullPathNameW.
     {
-        wchar_t full[MAX_PATH] = {};
-        if (GetFullPathNameW(path, MAX_PATH, full, nullptr) == 0)
-            wcsncpy_s(full, path, MAX_PATH - 1);
+        std::wstring full = GetFullPathString(path);
+        if (full.empty()) full = path;
         auto& s = app.GetSettings();
         s.AddMru(full);
         s.Save();
@@ -999,13 +1024,12 @@ void MainWindow::OnDropFiles(HDROP hDrop) {
             }
             if (regular.size() > 2) sample += I18n::Tr(IDS_DND_ELLIPSIS);
 
-            wchar_t arcLeaf[MAX_PATH];
+            std::wstring arcLeaf = m_archivePath;
             {
-                std::wstring a = m_archivePath;
-                auto sl = a.find_last_of(L"\\/");
-                wcscpy_s(arcLeaf, (sl != std::wstring::npos) ? a.substr(sl + 1).c_str() : a.c_str());
+                auto sl = arcLeaf.find_last_of(L"\\/");
+                if (sl != std::wstring::npos) arcLeaf = arcLeaf.substr(sl + 1);
             }
-            std::wstring msg = I18n::TrFmt(IDS_FMT_DND_PROMPT, sample.c_str(), arcLeaf);
+            std::wstring msg = I18n::TrFmt(IDS_FMT_DND_PROMPT, sample.c_str(), arcLeaf.c_str());
             int r = MessageBoxW(m_hwnd, msg.c_str(), I18n::Tr(IDS_APP_TITLE).c_str(),
                                 MB_YESNOCANCEL | MB_ICONQUESTION | MB_DEFBUTTON1);
             if (r == IDCANCEL) return;
@@ -1094,10 +1118,9 @@ void MainWindow::OnCommand(WORD id) {
         OnAbout();
         break;
     case ID_TOOLBAR_BROWSE_DEST: {
-        wchar_t path[MAX_PATH] = {};
-        GetWindowTextW(m_hExtractEdit, path, MAX_PATH);
-        if (BrowseFolderDialog(m_hwnd, IDS_TITLE_SELECT_DEST_FOLDER, path, MAX_PATH))
-            SetWindowTextW(m_hExtractEdit, path);
+        std::wstring path = GetWindowTextString(m_hExtractEdit);
+        if (BrowseFolderDialog(m_hwnd, IDS_TITLE_SELECT_DEST_FOLDER, &path))
+            SetWindowTextW(m_hExtractEdit, path.c_str());
         break;
     }
     default:
@@ -1128,14 +1151,7 @@ void MainWindow::OnListBeginDrag() {
     if (indices.empty()) return;
 
     // Create session temp dir on first use (deleted on exit).
-    if (m_tempViewDir.empty()) {
-        wchar_t base[MAX_PATH] = {}, buf[MAX_PATH] = {};
-        GetTempPathW(MAX_PATH, base);
-        GetTempFileNameW(base, L"aex", 0, buf);
-        DeleteFileW(buf);
-        m_tempViewDir = std::wstring(buf) + L"\\";
-        SHCreateDirectoryExW(nullptr, m_tempViewDir.c_str(), nullptr);
-    }
+    if (!EnsureTempViewDir(I18n::Tr(IDS_ERR_EXTRACT_FILE_FAILED).c_str())) return;
 
     // Extract selected files to the temp dir.
     const wchar_t* pw = m_password.empty() ? nullptr : m_password.c_str();
@@ -1278,14 +1294,7 @@ void MainWindow::OnOpenAssoc() {
     }
 
     // Create a session-unique temp dir on first use (deleted on exit)
-    if (m_tempViewDir.empty()) {
-        wchar_t base[MAX_PATH] = {}, buf[MAX_PATH] = {};
-        GetTempPathW(MAX_PATH, base);
-        GetTempFileNameW(base, L"aex", 0, buf);
-        DeleteFileW(buf);  // GetTempFileName creates a file; we want a dir
-        m_tempViewDir = std::wstring(buf) + L"\\";
-        SHCreateDirectoryExW(nullptr, m_tempViewDir.c_str(), nullptr);
-    }
+    if (!EnsureTempViewDir(I18n::Tr(IDS_ERR_EXTRACT_FILE_FAILED).c_str())) return;
     const std::wstring& tempDir = m_tempViewDir;
 
     // Copy data needed after the worker loop — m_items/m_archivePath may change
@@ -1348,9 +1357,8 @@ void MainWindow::TriggerExtract(const std::wstring& presetDest) {
 
 void MainWindow::OnExtractSmart() {
     if (m_archivePath.empty()) return;
-    wchar_t buf[MAX_PATH] = {};
-    if (m_hExtractEdit) GetWindowTextW(m_hExtractEdit, buf, MAX_PATH);
-    std::wstring dest = buf;
+    std::wstring dest;
+    if (m_hExtractEdit) dest = GetWindowTextString(m_hExtractEdit);
     if (ListView_GetSelectedCount(m_hListView) > 0)
         OnExtractSelected(dest);
     else
@@ -1421,22 +1429,22 @@ void MainWindow::RunExtraction(std::vector<UINT32> indices, std::wstring presetD
         }
     }
 
-    wchar_t destDir[MAX_PATH] = {};
+    std::wstring destDir;
     if (!presetDest.empty()) {
-        wcsncpy_s(destDir, presetDest.c_str(), MAX_PATH - 1);
+        destDir = presetDest;
     } else {
         const Settings& st = app.GetSettings();
         if (st.GetOutputDirModeFixed()) {
             const auto& d = st.GetDefaultOutputDir();
-            if (!d.empty()) wcsncpy_s(destDir, d.c_str(), MAX_PATH - 1);
+            if (!d.empty()) destDir = d;
         } else {
             // Use the directory that contains the archive
             auto sl = m_archivePath.find_last_of(L"\\/");
             std::wstring archDir = (sl != std::wstring::npos)
                                    ? m_archivePath.substr(0, sl) : m_archivePath;
-            wcsncpy_s(destDir, archDir.c_str(), MAX_PATH - 1);
+            destDir = archDir;
         }
-        if (!BrowseFolderDialog(m_hwnd, IDS_TITLE_SELECT_DEST_FOLDER, destDir, MAX_PATH))
+        if (!BrowseFolderDialog(m_hwnd, IDS_TITLE_SELECT_DEST_FOLDER, &destDir))
             return;
     }
 
@@ -1447,7 +1455,7 @@ void MainWindow::RunExtraction(std::vector<UINT32> indices, std::wstring presetD
         auto& s   = app.GetSettings();
         int mkDir = s.GetMkDir();
         if (ShouldCreateSubfolder(mkDir, m_items))
-            finalDest = std::wstring(destDir) + L"\\" +
+            finalDest = destDir + L"\\" +
                         ArchiveBaseName(m_archivePath, s.GetExtStripMode(), s.GetStripTrailingNumber());
     }
 
@@ -1540,10 +1548,11 @@ void MainWindow::OnTest() {
 
 
 void MainWindow::OnFileOpen() {
-    IFileOpenDialog* pfd = nullptr;
+    IFileOpenDialog* rawDialog = nullptr;
     if (FAILED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER,
-                                IID_PPV_ARGS(&pfd))))
+                                IID_PPV_ARGS(&rawDialog))))
         return;
+    std::unique_ptr<IFileOpenDialog, ComReleaser<IFileOpenDialog>> pfd(rawDialog);
 
     // IDS_FILTER_ARCHIVE / IDS_FILTER_ALL_FILES stored as "label|pattern|" for OFN,
     // split by '|' and repass to COMDLG_FILTERSPEC.
@@ -1565,17 +1574,16 @@ void MainWindow::OnFileOpen() {
     pfd->SetTitle(I18n::Tr(IDS_TITLE_OPEN_ARCHIVE).c_str());
 
     if (SUCCEEDED(pfd->Show(m_hwnd))) {
-        IShellItem* psi = nullptr;
-        if (SUCCEEDED(pfd->GetResult(&psi))) {
-            PWSTR psz = nullptr;
-            if (SUCCEEDED(psi->GetDisplayName(SIGDN_FILESYSPATH, &psz)) && psz) {
-                OpenArchive(psz);
-                CoTaskMemFree(psz);
+        IShellItem* rawItem = nullptr;
+        if (SUCCEEDED(pfd->GetResult(&rawItem))) {
+            std::unique_ptr<IShellItem, ComReleaser<IShellItem>> psi(rawItem);
+            PWSTR rawPath = nullptr;
+            if (SUCCEEDED(psi->GetDisplayName(SIGDN_FILESYSPATH, &rawPath)) && rawPath) {
+                std::unique_ptr<wchar_t, CoTaskMemStringReleaser> psz(rawPath);
+                OpenArchive(psz.get());
             }
-            psi->Release();
         }
     }
-    pfd->Release();
 }
 
 static INT_PTR CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM /*lp*/) {
@@ -2373,6 +2381,45 @@ void MainWindow::ShowError(const wchar_t* msg, HRESULT hr) {
     }
     HWND parent = IsWindowVisible(m_hwnd) ? m_hwnd : nullptr;
     MessageBoxW(parent, text.c_str(), L"AileFlow", MB_ICONERROR);
+}
+
+bool MainWindow::EnsureTempViewDir(const wchar_t* errorMsg) {
+    if (!m_tempViewDir.empty()) return true;
+
+    std::vector<wchar_t> base(32768, L'\0');
+    DWORD baseLen = GetTempPathW((DWORD)base.size(), base.data());
+    if (!baseLen || baseLen >= base.size()) {
+        DWORD err = GetLastError();
+        ShowError(errorMsg, HRESULT_FROM_WIN32(err ? err : ERROR_INSUFFICIENT_BUFFER));
+        return false;
+    }
+
+    GUID guid = {};
+    HRESULT hr = CoCreateGuid(&guid);
+    if (FAILED(hr)) {
+        ShowError(errorMsg, hr);
+        return false;
+    }
+
+    wchar_t guidText[40] = {};
+    if (!StringFromGUID2(guid, guidText, _countof(guidText))) {
+        ShowError(errorMsg, E_FAIL);
+        return false;
+    }
+
+    std::wstring tempDir = base.data();
+    tempDir += L"aex";
+    tempDir += guidText;
+    tempDir += L"\\";
+
+    int r = SHCreateDirectoryExW(nullptr, tempDir.c_str(), nullptr);
+    if (r != ERROR_SUCCESS && r != ERROR_ALREADY_EXISTS) {
+        ShowError(errorMsg, HRESULT_FROM_WIN32(r));
+        return false;
+    }
+
+    m_tempViewDir = std::move(tempDir);
+    return true;
 }
 
 bool MainWindow::Ensure7zLoaded() {

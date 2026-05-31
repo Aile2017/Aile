@@ -111,10 +111,9 @@ void SettingsDlg::OnBrowseFont(HWND hwnd) {
 }
 
 void SettingsDlg::OnBrowseDir(HWND hwnd) {
-    wchar_t path[MAX_PATH] = {};
-    GetDlgItemTextW(hwnd, IDC_DEFAULT_DIR, path, MAX_PATH);
-    if (BrowseFolderDialog(hwnd, IDS_TITLE_SELECT_DEFAULT_DIR, path, MAX_PATH))
-        SetDlgItemTextW(hwnd, IDC_DEFAULT_DIR, path);
+    std::wstring path = GetDlgItemTextString(hwnd, IDC_DEFAULT_DIR);
+    if (BrowseFolderDialog(hwnd, IDS_TITLE_SELECT_DEFAULT_DIR, &path))
+        SetDlgItemTextW(hwnd, IDC_DEFAULT_DIR, path.c_str());
 }
 
 bool SettingsDlg::OnOK(HWND hwnd) {
@@ -127,9 +126,8 @@ bool SettingsDlg::OnOK(HWND hwnd) {
     GetDlgItemTextW(hwnd, IDC_FONT_NAME, fontBuf, 64);
     s.SetFontName(fontBuf);
 
-    wchar_t buf[MAX_PATH] = {};
-    GetDlgItemTextW(hwnd, IDC_DEFAULT_DIR, buf, MAX_PATH);
-    s.SetDefaultOutputDir(buf);
+    std::wstring path = GetDlgItemTextString(hwnd, IDC_DEFAULT_DIR);
+    s.SetDefaultOutputDir(path.c_str());
 
     // MkDir policy
     int mkDir = 2;

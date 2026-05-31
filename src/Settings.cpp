@@ -1,10 +1,17 @@
 #include "Settings.h"
 #include <shlwapi.h>
 #include <algorithm>
+#include <vector>
 
 void Settings::BuildIniPath() const {
-    GetModuleFileNameW(nullptr, m_iniPath, MAX_PATH);
-    PathRenameExtensionW(m_iniPath, L".ini");
+    std::vector<wchar_t> buf(32768, L'\0');
+    DWORD len = GetModuleFileNameW(nullptr, buf.data(), (DWORD)buf.size());
+    if (!len || len >= buf.size()) {
+        m_iniPath.clear();
+        return;
+    }
+    m_iniPath.assign(buf.data(), len);
+    PathRenameExtensionW(m_iniPath.data(), L".ini");
 }
 
 void Settings::Load() {
@@ -19,15 +26,15 @@ void Settings::Load() {
     m_fontName         = ReadStr(L"General", L"FontName",         L"Segoe UI");
 
     wchar_t buf[16] = {};
-    GetPrivateProfileStringW(L"General", L"CompressionLevel", L"5", buf, 16, m_iniPath);
+    GetPrivateProfileStringW(L"General", L"CompressionLevel", L"5", buf, 16, m_iniPath.c_str());
     m_compressionLevel = _wtoi(buf);
     if (m_compressionLevel < 0 || m_compressionLevel > 9) m_compressionLevel = 5;
 
-    GetPrivateProfileStringW(L"General", L"RarLevel", L"3", buf, 16, m_iniPath);
+    GetPrivateProfileStringW(L"General", L"RarLevel", L"3", buf, 16, m_iniPath.c_str());
     m_rarLevel = _wtoi(buf);
     if (m_rarLevel < 0 || m_rarLevel > 5) m_rarLevel = 3;
 
-    GetPrivateProfileStringW(L"General", L"MkDir", L"2", buf, 16, m_iniPath);
+    GetPrivateProfileStringW(L"General", L"MkDir", L"2", buf, 16, m_iniPath.c_str());
     m_mkDir = _wtoi(buf);
     if (m_mkDir < 0 || m_mkDir > 3) m_mkDir = 2;
 
@@ -43,42 +50,42 @@ void Settings::Load() {
     m_rarAdvDictSize  = ReadStr(L"RarAdvanced", L"DictSize",  L"");
     m_rarAdvVolume    = ReadStr(L"RarAdvanced", L"Volume",    L"");
     m_rarAdvExtra     = ReadStr(L"RarAdvanced", L"Extra",     L"");
-    GetPrivateProfileStringW(L"RarAdvanced", L"Solid",    L"1", buf, 16, m_iniPath); m_rarAdvSolid    = _wtoi(buf) != 0;
-    GetPrivateProfileStringW(L"RarAdvanced", L"Threads",  L"0", buf, 16, m_iniPath); m_rarAdvThreads  = _wtoi(buf);
-    GetPrivateProfileStringW(L"RarAdvanced", L"Recovery", L"0", buf, 16, m_iniPath); m_rarAdvRecovery = _wtoi(buf);
+    GetPrivateProfileStringW(L"RarAdvanced", L"Solid",    L"1", buf, 16, m_iniPath.c_str()); m_rarAdvSolid    = _wtoi(buf) != 0;
+    GetPrivateProfileStringW(L"RarAdvanced", L"Threads",  L"0", buf, 16, m_iniPath.c_str()); m_rarAdvThreads  = _wtoi(buf);
+    GetPrivateProfileStringW(L"RarAdvanced", L"Recovery", L"0", buf, 16, m_iniPath.c_str()); m_rarAdvRecovery = _wtoi(buf);
 
     // Window placement
-    GetPrivateProfileStringW(L"Window", L"X",         L"-1",    buf, 16, m_iniPath); m_windowX        = _wtoi(buf);
-    GetPrivateProfileStringW(L"Window", L"Y",         L"-1",    buf, 16, m_iniPath); m_windowY        = _wtoi(buf);
-    GetPrivateProfileStringW(L"Window", L"W",         L"900",   buf, 16, m_iniPath); m_windowW        = _wtoi(buf);
-    GetPrivateProfileStringW(L"Window", L"H",         L"600",   buf, 16, m_iniPath); m_windowH        = _wtoi(buf);
-    GetPrivateProfileStringW(L"Window", L"Maximized", L"0",     buf, 16, m_iniPath); m_windowMaximized = _wtoi(buf) != 0;
-    GetPrivateProfileStringW(L"Window", L"Splitter",  L"220",   buf, 16, m_iniPath); m_splitterPos    = _wtoi(buf);
-    GetPrivateProfileStringW(L"Window", L"TreeVisible", L"1",   buf, 16, m_iniPath); m_treeVisible    = _wtoi(buf) != 0;
-    GetPrivateProfileStringW(L"Window", L"ToolbarVisible", L"1", buf, 16, m_iniPath); m_toolbarVisible = _wtoi(buf) != 0;
-    GetPrivateProfileStringW(L"Window", L"IconsVisible", L"1",  buf, 16, m_iniPath); m_iconsVisible   = _wtoi(buf) != 0;
-    GetPrivateProfileStringW(L"Window", L"MenubarVisible", L"1", buf, 16, m_iniPath); m_menubarVisible = _wtoi(buf) != 0;
+    GetPrivateProfileStringW(L"Window", L"X",         L"-1",    buf, 16, m_iniPath.c_str()); m_windowX        = _wtoi(buf);
+    GetPrivateProfileStringW(L"Window", L"Y",         L"-1",    buf, 16, m_iniPath.c_str()); m_windowY        = _wtoi(buf);
+    GetPrivateProfileStringW(L"Window", L"W",         L"900",   buf, 16, m_iniPath.c_str()); m_windowW        = _wtoi(buf);
+    GetPrivateProfileStringW(L"Window", L"H",         L"600",   buf, 16, m_iniPath.c_str()); m_windowH        = _wtoi(buf);
+    GetPrivateProfileStringW(L"Window", L"Maximized", L"0",     buf, 16, m_iniPath.c_str()); m_windowMaximized = _wtoi(buf) != 0;
+    GetPrivateProfileStringW(L"Window", L"Splitter",  L"220",   buf, 16, m_iniPath.c_str()); m_splitterPos    = _wtoi(buf);
+    GetPrivateProfileStringW(L"Window", L"TreeVisible", L"1",   buf, 16, m_iniPath.c_str()); m_treeVisible    = _wtoi(buf) != 0;
+    GetPrivateProfileStringW(L"Window", L"ToolbarVisible", L"1", buf, 16, m_iniPath.c_str()); m_toolbarVisible = _wtoi(buf) != 0;
+    GetPrivateProfileStringW(L"Window", L"IconsVisible", L"1",  buf, 16, m_iniPath.c_str()); m_iconsVisible   = _wtoi(buf) != 0;
+    GetPrivateProfileStringW(L"Window", L"MenubarVisible", L"1", buf, 16, m_iniPath.c_str()); m_menubarVisible = _wtoi(buf) != 0;
     if (m_windowW < 400) m_windowW = 400;
     if (m_windowH < 300) m_windowH = 300;
     if (m_splitterPos < 80) m_splitterPos = 80;
 
     // Phase 1+2 settings
-    GetPrivateProfileStringW(L"General", L"ExtStripMode", L"0", buf, 16, m_iniPath);
+    GetPrivateProfileStringW(L"General", L"ExtStripMode", L"0", buf, 16, m_iniPath.c_str());
     m_extStripMode = _wtoi(buf);
     if (m_extStripMode < 0 || m_extStripMode > 2) m_extStripMode = 0;
 
-    GetPrivateProfileStringW(L"General", L"StripTrailingNumber", L"0", buf, 16, m_iniPath);
+    GetPrivateProfileStringW(L"General", L"StripTrailingNumber", L"0", buf, 16, m_iniPath.c_str());
     m_stripTrailingNumber = _wtoi(buf) != 0;
 
-    GetPrivateProfileStringW(L"General", L"BreakDDir", L"0", buf, 16, m_iniPath);
+    GetPrivateProfileStringW(L"General", L"BreakDDir", L"0", buf, 16, m_iniPath.c_str());
     m_breakDDir = _wtoi(buf) != 0;
 
-    GetPrivateProfileStringW(L"General", L"OpenFolderAfterExtract", L"0", buf, 16, m_iniPath);
+    GetPrivateProfileStringW(L"General", L"OpenFolderAfterExtract", L"0", buf, 16, m_iniPath.c_str());
     m_openFolderAfterExtract = _wtoi(buf) != 0;
 
     m_openFolderCommand = ReadStr(L"General", L"OpenFolderCommand", L"");
 
-    GetPrivateProfileStringW(L"General", L"ConcurrentLimit", L"4", buf, 16, m_iniPath);
+    GetPrivateProfileStringW(L"General", L"ConcurrentLimit", L"4", buf, 16, m_iniPath.c_str());
     m_concurrentLimit = _wtoi(buf);
     if (m_concurrentLimit < 0) m_concurrentLimit = 0;
     if (m_concurrentLimit > 64) m_concurrentLimit = 64;
@@ -96,7 +103,7 @@ void Settings::Load() {
 
 void Settings::Save() const {
     // Guard against writing to an empty path if Save() is called before Load()
-    if (!m_iniPath[0]) BuildIniPath();
+    if (m_iniPath.empty()) BuildIniPath();
     WriteStr(L"General", L"DefaultOutputDir", m_defaultOutputDir.c_str());
     WriteStr(L"General", L"OutputDirMode",    m_outputDirModeFixed ? L"fixed" : L"source");
     WriteStr(L"General", L"DefaultFormat",    m_defaultFormat.c_str());
@@ -156,7 +163,7 @@ void Settings::Save() const {
         wchar_t key[16];
         swprintf_s(key, L"Path%zu", i);
         const wchar_t* val = (i < m_mruPaths.size()) ? m_mruPaths[i].c_str() : nullptr;
-        WritePrivateProfileStringW(L"Mru", key, val, m_iniPath);
+        WritePrivateProfileStringW(L"Mru", key, val, m_iniPath.c_str());
     }
 }
 
@@ -179,11 +186,11 @@ void Settings::RemoveMru(const std::wstring& path) {
 }
 
 std::wstring Settings::ReadStr(const wchar_t* section, const wchar_t* key, const wchar_t* def) const {
-    wchar_t buf[MAX_PATH * 2] = {};
-    GetPrivateProfileStringW(section, key, def, buf, MAX_PATH * 2, m_iniPath);
-    return buf;
+    std::vector<wchar_t> buf(32768, L'\0');
+    GetPrivateProfileStringW(section, key, def, buf.data(), (DWORD)buf.size(), m_iniPath.c_str());
+    return buf.data();
 }
 
 void Settings::WriteStr(const wchar_t* section, const wchar_t* key, const wchar_t* val) const {
-    WritePrivateProfileStringW(section, key, val, m_iniPath);
+    WritePrivateProfileStringW(section, key, val, m_iniPath.c_str());
 }

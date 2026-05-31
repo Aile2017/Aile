@@ -117,7 +117,7 @@ public:
     void RemoveMru(const std::wstring& path);
 
 private:
-    mutable wchar_t m_iniPath[MAX_PATH] = {};
+    mutable std::wstring m_iniPath;
 
     // All members are initialized by Load() before use
     std::wstring m_defaultOutputDir;

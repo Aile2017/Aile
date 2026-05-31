@@ -4,6 +4,10 @@ This document records bugs found in the B2E compression path and their fixes, so
 issues can be identified and corrected in Noah (the original B2E-based archive manager) and any
 other projects that share the B2E engine.
 
+> **Note**: Bug 2 (redundant progress dialog during compression) was addressed in AileFlow by
+> removing `ProgressDlg` from all compression paths. See the implementation in
+> `App::RunCompressMode()` and `MainWindow::OnCompress()` for reference.
+
 ---
 
 ## Bug 1 — Wrong B2E encode: branch selected when compression method is not explicitly matched
@@ -84,7 +88,7 @@ if (method && method[0] && outPath) {
         for (const auto& fi : formats) {
             if (fi.ext == ext) {
                 bool found = false;
-                int defaultIdx = 1;
+                int defaultIdx = fi.methods.empty() ? -1 : 0;
                 for (int i = 0; i < (int)fi.methods.size(); ++i) {
                     if (fi.methods[i].isDefault) defaultIdx = i;
                     if (!found && _wcsicmp(fi.methods[i].name.c_str(), method) == 0) {
@@ -92,7 +96,10 @@ if (method && method[0] && outPath) {
                         found = true;
                     }
                 }
-                if (!found) effectiveLevel = defaultIdx;
+                if (!found) {
+                    if (defaultIdx < 0) return E_FAIL;
+                    effectiveLevel = defaultIdx;
+                }
                 break;
             }
         }
@@ -119,59 +126,6 @@ or a UI path that does not populate the index from the actual B2E type list) is 
   format.
 - For CLI paths that accept a method name string (e.g. `-mStore`), perform the same
   name→index lookup described above.
-
----
-
-## Bug 2 — Redundant AileFlow progress dialog during compression
-
-### Symptom
-
-When compressing via B2E (e.g. `aileflow -a -trar folder`), **two** progress windows appear:
-
-1. The AileFlow `IDD_PROGRESS` dialog ("Compressing…").
-2. The external tool's own progress window (WinRAR GUI, 7zG.exe, etc.).
-
-### Root cause
-
-AileFlow's `App::RunCompressMode` and `MainWindow::OnCompress` unconditionally create a
-`ProgressDlg` for all compression operations.  The B2E `encode:` scripts invoke external GUI
-tools (`Rar.exe`, `7zG.exe`) that already display their own progress windows.  Furthermore,
-the `IExtractProgressSink` passed to `B2e_Compress` is ignored (`/*sink*/`) — the external
-tools do not call back into AileFlow for progress updates — so the AileFlow progress bar never
-moves.
-
-### Fix (AileFlow)
-
-Remove the `ProgressDlg` and `ProgressPostSink` from all compression paths.  Replace
-`progDlg.RunMessageLoop()` with a minimal `GetMessageW` pump that waits for `WM_APP_DONE`
-(posted by `WorkerThread` when the task lambda returns).  Pass `nullptr` as the sink to
-`SevenZip::Compress` since B2E does not use it.
-
-```cpp
-WorkerThread worker;
-worker.Start([&sz, params]() -> HRESULT {
-    // ... build adv, call sz.Compress(..., nullptr, ...) ...
-}, wnd.Hwnd(), WM_APP_DONE);
-
-MSG msg;
-while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
-    if (msg.message == WM_APP_DONE) break;
-    TranslateMessage(&msg);
-    DispatchMessageW(&msg);
-}
-worker.Wait();
-```
-
-The extraction `ProgressDlg` is **not** affected — the B2E decode scripts typically use
-CLI-only tools (`Rar.exe x`, `7z.exe x`) that produce no visible window, so AileFlow's
-progress dialog is the only feedback the user receives during extraction.
-
-### Porting to Noah
-
-If Noah shows its own progress dialog during compression and the selected B2E script invokes a
-GUI tool, the same double-dialog problem occurs.  Check whether the `encode:` command uses the
-CLI variant (no window) or the GUI variant (e.g. `7zG.exe`, `WinRAR.exe`) and suppress Noah's
-own dialog for the GUI-tool case.
 
 ---
 

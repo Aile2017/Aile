@@ -32,11 +32,11 @@ void ProgressPostSink::OnProgress(UINT64 done, const wchar_t* currentFile) {
 }
 
 bool ProgressPostSink::IsCancelled() const {
-    return m_cancelled;
+    return m_cancelled.load(std::memory_order_acquire);
 }
 
 void ProgressPostSink::SetCancelled(bool v) {
-    m_cancelled = v;
+    m_cancelled.store(v, std::memory_order_release);
 }
 
 // ---- WorkerThread ----
@@ -49,6 +49,10 @@ void WorkerThread::Start(Task task, HWND hwndNotify, UINT doneMsg) {
     Wait();
     auto* ctx = new Ctx{std::move(task), hwndNotify, doneMsg};
     m_hThread = CreateThread(nullptr, 0, ThreadProc, ctx, 0, nullptr);
+    if (!m_hThread) {
+        delete ctx;
+        m_hThread = INVALID_HANDLE_VALUE;
+    }
 }
 
 void WorkerThread::RequestCancel() {

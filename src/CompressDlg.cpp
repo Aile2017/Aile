@@ -224,8 +224,7 @@ void CompressDlg::OnInit(HWND hwnd) {
 }
 
 void CompressDlg::UpdateOutputExt(HWND hwnd, const wchar_t* fmtId, const wchar_t* sfxMode) {
-    wchar_t outPath[MAX_PATH] = {};
-    GetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, outPath, MAX_PATH);
+    std::wstring outPath = GetDlgItemTextString(hwnd, IDC_OUTPUT_PATH);
     if (!outPath[0] || !fmtId) return;
 
     bool isStream = (wcscmp(fmtId, L"gz")  == 0 ||
@@ -255,18 +254,17 @@ void CompressDlg::UpdateOutputExt(HWND hwnd, const wchar_t* fmtId, const wchar_t
     }
 
     // Strip existing archive extension from the path, including any .tar/.exe prefix
-    wchar_t* dot = wcsrchr(outPath, L'.');
-    if (dot && !wcschr(dot, L'\\') && !wcschr(dot, L'/')) {
-        *dot = L'\0';  // remove last extension
+    std::wstring::size_type dot = outPath.find_last_of(L'.');
+    std::wstring::size_type slash = outPath.find_last_of(L"\\/");
+    if (dot != std::wstring::npos &&
+        (slash == std::wstring::npos || dot > slash)) {
+        outPath.erase(dot);  // remove last extension
     }
-    size_t blen = wcslen(outPath);
-    if (blen >= 4 && _wcsicmp(outPath + blen - 4, L".tar") == 0) {
-        outPath[blen - 4] = L'\0';
+    if (outPath.size() >= 4 && _wcsicmp(outPath.c_str() + outPath.size() - 4, L".tar") == 0) {
+        outPath.erase(outPath.size() - 4);
     }
-    std::wstring newPath(outPath);
-    newPath += ext;
-    wcsncpy_s(outPath, newPath.c_str(), MAX_PATH - 1);
-    SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, outPath);
+    outPath += ext;
+    SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, outPath.c_str());
 }
 
 void CompressDlg::OnSfxChange(HWND hwnd) {
@@ -304,19 +302,19 @@ void CompressDlg::OnB2eMethodChange(HWND hwnd)
     }
 
     // Update the output path extension.
-    wchar_t path[MAX_PATH] = {};
-    GetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, path, MAX_PATH);
+    std::wstring path = GetDlgItemTextString(hwnd, IDC_OUTPUT_PATH);
     if (!path[0]) return;
 
     // Strip everything from the first dot in the filename portion.
-    wchar_t* base = path;
-    for (wchar_t* p = path; *p; ++p) if (*p == L'\\' || *p == L'/') base = p + 1;
-    wchar_t* dot = wcschr(base, L'.');
-    if (dot) *dot = L'\0';
+    std::wstring::size_type base = path.find_last_of(L"\\/");
+    base = (base == std::wstring::npos) ? 0 : base + 1;
+    std::wstring::size_type dot = path.find(L'.', base);
+    if (dot != std::wstring::npos)
+        path.erase(dot);
 
-    std::wstring newPath = path;
-    newPath += L'.'; newPath += outExt;
-    SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, newPath.c_str());
+    path += L'.';
+    path += outExt;
+    SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, path.c_str());
 }
 
 struct B2eHideParams {
@@ -517,11 +515,10 @@ void CompressDlg::OnFormatChange(HWND hwnd) {
 }
 
 void CompressDlg::OnBrowseOutput(HWND hwnd) {
-    wchar_t path[MAX_PATH] = {};
-    GetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, path, MAX_PATH);
+    std::wstring path = GetDlgItemTextString(hwnd, IDC_OUTPUT_PATH);
     if (BrowseForFile(hwnd, IDS_TITLE_SELECT_OUTPUT, IDS_FILTER_ALL_FILES,
-                      OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST, path, MAX_PATH, true))
-        SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, path);
+                      OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST, &path, true))
+        SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, path.c_str());
 }
 
 void CompressDlg::OnAdvanced(HWND hwnd) {
@@ -577,8 +574,7 @@ void CompressDlg::OnAdvanced(HWND hwnd) {
 
 bool CompressDlg::OnOK(HWND hwnd) {
     // Read output path
-    wchar_t path[MAX_PATH] = {};
-    GetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, path, MAX_PATH);
+    std::wstring path = GetDlgItemTextString(hwnd, IDC_OUTPUT_PATH);
     if (!path[0]) {
         MessageBoxW(hwnd, I18n::Tr(IDS_INFO_SPECIFY_OUTPUT).c_str(),
                     I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONWARNING);
@@ -628,9 +624,7 @@ bool CompressDlg::OnOK(HWND hwnd) {
     }
 
     // Read password
-    wchar_t pw[256] = {};
-    GetDlgItemTextW(hwnd, IDC_PASSWORD, pw, 256);
-    m_params.password = pw;
+    m_params.password = GetDlgItemTextString(hwnd, IDC_PASSWORD);
 
     m_params.encryptHeaders = (IsDlgButtonChecked(hwnd, IDC_ENCRYPT_HDR) == BST_CHECKED);
 

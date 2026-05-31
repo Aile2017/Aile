@@ -29,8 +29,28 @@ struct AileFlowCnf {
 
 struct AileFlowApp {
     void get_tempdir(kiPath& tmp) {
-        char buf[MAX_PATH];
-        ::GetTempPathA(MAX_PATH, buf);
+        wchar_t wbuf[32768] = {};
+        DWORD len = ::GetTempPathW(_countof(wbuf), wbuf);
+        if (!len || len >= _countof(wbuf)) {
+            tmp = "";
+            return;
+        }
+
+        wchar_t shortBuf[32768] = {};
+        DWORD shortLen = ::GetShortPathNameW(wbuf, shortBuf, _countof(shortBuf));
+        const wchar_t* source = (shortLen && shortLen < _countof(shortBuf)) ? shortBuf : wbuf;
+
+        int needed = ::WideCharToMultiByte(CP_ACP, 0, source, -1, nullptr, 0, NULL, NULL);
+        if (needed <= 0 || needed > MAX_PATH) {
+            tmp = "";
+            return;
+        }
+
+        char buf[MAX_PATH] = {};
+        if (!::WideCharToMultiByte(CP_ACP, 0, source, -1, buf, MAX_PATH, NULL, NULL)) {
+            tmp = "";
+            return;
+        }
         tmp = buf;
     }
     AileFlowCnf& cnf() { return m_cnf; }

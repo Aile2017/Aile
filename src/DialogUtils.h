@@ -127,8 +127,22 @@ inline std::vector<std::wstring> BrowseMultipleFiles(HWND hwnd, UINT titleId) {
     return files;
 }
 
-inline bool BrowseFolderDialog(HWND hwnd, UINT titleId,
-                               wchar_t* inOutPath, size_t maxPath) {
+inline std::wstring GetWindowTextString(HWND hwnd) {
+    if (!hwnd) return {};
+    int len = GetWindowTextLengthW(hwnd);
+    if (len <= 0) return {};
+    std::wstring text(len, L'\0');
+    int written = GetWindowTextW(hwnd, text.data(), len + 1);
+    if (written <= 0) return {};
+    text.resize(written);
+    return text;
+}
+
+inline std::wstring GetDlgItemTextString(HWND hwnd, int id) {
+    return GetWindowTextString(GetDlgItem(hwnd, id));
+}
+
+inline bool BrowseFolderDialog(HWND hwnd, UINT titleId, std::wstring* inOutPath) {
     IFileOpenDialog* pfd = nullptr;
     if (!SUCCEEDED(CoCreateInstance(CLSID_FileOpenDialog, nullptr,
                                     CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pfd))))
@@ -137,9 +151,9 @@ inline bool BrowseFolderDialog(HWND hwnd, UINT titleId,
     pfd->GetOptions(&opts);
     pfd->SetOptions(opts | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM);
     pfd->SetTitle(I18n::Tr(titleId).c_str());
-    if (inOutPath && inOutPath[0]) {
+    if (inOutPath && !inOutPath->empty()) {
         IShellItem* psi = nullptr;
-        if (SUCCEEDED(SHCreateItemFromParsingName(inOutPath, nullptr, IID_PPV_ARGS(&psi)))) {
+        if (SUCCEEDED(SHCreateItemFromParsingName(inOutPath->c_str(), nullptr, IID_PPV_ARGS(&psi)))) {
             pfd->SetFolder(psi);
             psi->Release();
         }
@@ -151,7 +165,7 @@ inline bool BrowseFolderDialog(HWND hwnd, UINT titleId,
             PWSTR psz = nullptr;
             psi->GetDisplayName(SIGDN_FILESYSPATH, &psz);
             if (psz) {
-                wcsncpy_s(inOutPath, maxPath, psz, maxPath - 1);
+                if (inOutPath) *inOutPath = psz;
                 CoTaskMemFree(psz);
                 ok = true;
             }
@@ -179,16 +193,22 @@ INT_PTR CALLBACK StandardDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 // Pass OFN_FILEMUSTEXIST for open, OFN_OVERWRITEPROMPT|OFN_PATHMUSTEXIST for save.
 // Set saveDialog=true to call GetSaveFileNameW instead of GetOpenFileNameW.
 inline bool BrowseForFile(HWND hwnd, UINT titleId, UINT filterId, DWORD flags,
-                          wchar_t* inOutPath, size_t maxPath, bool saveDialog = false) {
+                          std::wstring* inOutPath, bool saveDialog = false) {
     std::wstring filter = I18n::TrFilter(filterId);
     std::wstring title  = I18n::Tr(titleId);
+    std::vector<wchar_t> buf(32768, L'\0');
+    if (inOutPath && !inOutPath->empty())
+        wcsncpy_s(buf.data(), buf.size(), inOutPath->c_str(), _TRUNCATE);
     OPENFILENAMEW ofn = {};
     ofn.lStructSize = sizeof(ofn);
     ofn.hwndOwner   = hwnd;
     ofn.lpstrFilter = filter.c_str();
-    ofn.lpstrFile   = inOutPath;
-    ofn.nMaxFile    = (DWORD)maxPath;
+    ofn.lpstrFile   = buf.data();
+    ofn.nMaxFile    = (DWORD)buf.size();
     ofn.Flags       = flags;
     ofn.lpstrTitle  = title.c_str();
-    return (saveDialog ? GetSaveFileNameW(&ofn) : GetOpenFileNameW(&ofn)) != FALSE;
+    if (!(saveDialog ? GetSaveFileNameW(&ofn) : GetOpenFileNameW(&ofn)))
+        return false;
+    if (inOutPath) *inOutPath = buf.data();
+    return true;
 }

@@ -818,6 +818,7 @@ void CArcB2e::CB2eCore::resp( bool needq, const char* opt, const CharArray& a, c
 struct B2eInputData {
 	wchar_t result[512];
 	const wchar_t* title;   // optional window title; null = keep default
+	const wchar_t* initialValue;
 };
 
 static INT_PTR CALLBACK B2eInputDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
@@ -827,6 +828,8 @@ static INT_PTR CALLBACK B2eInputDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
 		auto* d = reinterpret_cast<B2eInputData*>(lp);
 		if (d && d->title && d->title[0])
 			SetWindowTextW(hwnd, d->title);
+		if (d && d->initialValue && d->initialValue[0])
+			SetDlgItemTextW(hwnd, IDC_PASSWORD_INPUT, d->initialValue);
 		return TRUE;
 	}
 	auto* d = reinterpret_cast<B2eInputData*>(GetWindowLongPtrW(hwnd, DWLP_USER));
@@ -844,12 +847,33 @@ static INT_PTR CALLBACK B2eInputDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
 void CArcB2e::CB2eCore::input( const char* msg, const char* defval, kiVar* r )
 {
 	// Convert the script prompt to a dialog title.
-	wchar_t title[256] = {};
-	if (msg && msg[0])
-		MultiByteToWideChar(CP_ACP, 0, msg, -1, title, 256);
+	wchar_t* title = NULL;
+	if (msg && msg[0]) {
+		int needed = MultiByteToWideChar(CP_ACP, 0, msg, -1, nullptr, 0);
+		if (needed > 0) {
+			title = new wchar_t[needed];
+			if (!title || !MultiByteToWideChar(CP_ACP, 0, msg, -1, title, needed)) {
+				delete [] title;
+				title = NULL;
+			}
+		}
+	}
+
+	wchar_t* initialValue = NULL;
+	if (defval && defval[0]) {
+		int needed = MultiByteToWideChar(CP_ACP, 0, defval, -1, nullptr, 0);
+		if (needed > 0) {
+			initialValue = new wchar_t[needed];
+			if (!initialValue || !MultiByteToWideChar(CP_ACP, 0, defval, -1, initialValue, needed)) {
+				delete [] initialValue;
+				initialValue = NULL;
+			}
+		}
+	}
 
 	B2eInputData data = {};
-	data.title = title[0] ? title : nullptr;
+	data.title = (title && title[0]) ? title : nullptr;
+	data.initialValue = (initialValue && initialValue[0]) ? initialValue : nullptr;
 
 	INT_PTR res = DialogBoxParamW(
 		GetModuleHandleW(NULL),
@@ -857,10 +881,21 @@ void CArcB2e::CB2eCore::input( const char* msg, const char* defval, kiVar* r )
 		GetActiveWindow(), B2eInputDlgProc, (LPARAM)&data);
 
 	if (res == IDOK) {
-		char ansi[512] = {};
-		WideCharToMultiByte(CP_ACP, 0, data.result, -1, ansi, sizeof(ansi), NULL, NULL);
-		*r = ansi;
+		int needed = WideCharToMultiByte(CP_ACP, 0, data.result, -1, nullptr, 0, NULL, NULL);
+		if (needed > 0) {
+			char* ansi = new char[needed];
+			if (ansi && WideCharToMultiByte(CP_ACP, 0, data.result, -1, ansi, needed, NULL, NULL))
+				*r = ansi;
+			else
+				*r = "";
+			delete [] ansi;
+		} else {
+			*r = "";
+		}
 	} else {
 		*r = defval ? defval : "";
 	}
+
+	delete [] title;
+	delete [] initialValue;
 }

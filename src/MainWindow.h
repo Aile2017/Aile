@@ -82,6 +82,7 @@ private:
     void ApplyFontToControls();
     // Refresh the "Extract to:" edit box to reflect the current archive + settings state.
     void UpdateExtractDestEdit();
+    bool EnsureTempViewDir(const wchar_t* errorMsg);
 
     HWND        m_hwnd         = nullptr;
     HWND        m_hToolbar     = nullptr;

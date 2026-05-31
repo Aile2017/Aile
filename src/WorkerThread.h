@@ -1,5 +1,6 @@
 #pragma once
 #include <windows.h>
+#include <atomic>
 #include <functional>
 #include <string>
 
@@ -28,7 +29,7 @@ private:
     UINT         m_progressMsg;
     UINT         m_doneMsg;
     UINT64       m_total       = 0;
-    volatile bool m_cancelled  = false;
+    std::atomic<bool> m_cancelled{false};
     // ~50 ms throttle on PostMessage to prevent WM_APP_PROGRESS flooding
     // at thousands per second, which would overflow the message queue and
     // delay/drop WM_LBUTTONDOWN on the cancel button (making it appear unresponsive).

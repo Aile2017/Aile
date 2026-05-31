@@ -97,7 +97,7 @@ HRESULT SevenZip::Compress(const std::vector<std::wstring>& srcPaths,
             for (const auto& fi : formats) {
                 if (fi.ext == ext) {
                     bool found = false;
-                    int defaultIdx = 1;
+                    int defaultIdx = fi.methods.empty() ? -1 : 0;
                     for (int i = 0; i < (int)fi.methods.size(); ++i) {
                         if (fi.methods[i].isDefault) defaultIdx = i;
                         if (!found && _wcsicmp(fi.methods[i].name.c_str(), method) == 0) {
@@ -105,7 +105,10 @@ HRESULT SevenZip::Compress(const std::vector<std::wstring>& srcPaths,
                             found = true;
                         }
                     }
-                    if (!found) effectiveLevel = defaultIdx;
+                    if (!found) {
+                        if (defaultIdx < 0) return E_FAIL;
+                        effectiveLevel = defaultIdx;
+                    }
                     break;
                 }
             }
