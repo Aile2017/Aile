@@ -1235,11 +1235,20 @@ void MainWindow::RunExtraction(std::vector<UINT32> indices, std::set<std::wstrin
             return;
     }
 
-    // Evaluate MkDir policy based on full archive structure
+    // Evaluate MkDir policy: use selected items when extracting a subset, full list otherwise.
     std::wstring finalDest = destDir;
     {
         int mkDir = app.GetSettings().GetMkDir();
-        if (ShouldCreateSubfolder(mkDir, m_items))
+        bool makeSubfolder = false;
+        if (!indices.empty()) {
+            std::vector<ArchiveItem> sel;
+            sel.reserve(indices.size());
+            for (UINT32 i : indices) sel.push_back(m_items[i]);
+            makeSubfolder = ShouldCreateSubfolder(mkDir, sel);
+        } else {
+            makeSubfolder = ShouldCreateSubfolder(mkDir, m_items);
+        }
+        if (makeSubfolder)
             finalDest = std::wstring(destDir) + L"\\" + ArchiveBaseName(m_archivePath);
     }
 
