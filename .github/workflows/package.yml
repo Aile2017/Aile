@@ -1,0 +1,88 @@
+﻿name: Package Build
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install Ninja
+        run: choco install ninja --no-progress -y
+
+      - name: Configure (Release)
+        run: >
+          cmake -B build_release -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_C_COMPILER=cl
+          -DCMAKE_CXX_COMPILER=cl
+
+      - name: Build
+        run: cmake --build build_release
+
+      - name: Get short SHA
+        id: sha
+        shell: pwsh
+        run: |
+          $short = (git rev-parse --short HEAD)
+          echo "short=$short" >> $env:GITHUB_OUTPUT
+
+      - name: Stage package
+        shell: pwsh
+        run: |
+          $pkg = "dist\AileFlow-${{ steps.sha.outputs.short }}"
+          New-Item -ItemType Directory -Force $pkg | Out-Null
+          Copy-Item build_release\AileFlow.exe $pkg\
+          Copy-Item -Recurse Release\b2e $pkg\b2e
+
+      - name: Create ZIP
+        shell: pwsh
+        run: |
+          $name = "AileFlow-${{ steps.sha.outputs.short }}"
+          Compress-Archive -Path "dist\$name\*" -DestinationPath "dist\$name.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AileFlow-${{ steps.sha.outputs.short }}
+          path: dist\AileFlow-${{ steps.sha.outputs.short }}.zip
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Get short SHA
+        id: sha
+        run: echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AileFlow-${{ steps.sha.outputs.short }}
+          path: dist
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/AileFlow-${{ steps.sha.outputs.short }}.zip
+          generate_release_notes: true
