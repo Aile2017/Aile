@@ -1172,7 +1172,7 @@ void MainWindow::OnExtractSelected(const std::wstring& presetDest) {
                 folder = m_folderPaths[fpIdx];
         }
         if (!folder.empty()) {
-            std::wstring prefix = folder + L"\\";
+            std::wstring prefix = folder + L"/";
             for (UINT32 j = 0; j < (UINT32)m_items.size(); ++j) {
                 if (m_items[j].path.size() >= prefix.size() &&
                     m_items[j].path.compare(0, prefix.size(), prefix) == 0)
@@ -1979,7 +1979,7 @@ void MainWindow::OnDelete() {
 
         if (!folder.empty()) {
             folderPaths.insert(folder);
-            std::wstring prefix = folder + L"\\";
+            std::wstring prefix = folder + L"/";
             for (UINT32 j = 0; j < (UINT32)m_items.size(); ++j) {
                 if (m_items[j].path.size() > prefix.size() &&
                     m_items[j].path.compare(0, prefix.size(), prefix) == 0) {
