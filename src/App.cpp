@@ -106,25 +106,12 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
     CompressDlg::Params params;
     params.inputFiles = filePaths;
     params.LoadFromSettings(m_settings);
-    {
-        std::wstring outDir;
-        if (!destDir.empty()) {
-            outDir = destDir;
-        } else if (m_settings.GetOutputDirModeFixed()) {
-            outDir = m_settings.GetDefaultOutputDir();
-        } else if (!filePaths.empty()) {
-            auto sl = filePaths[0].find_last_of(L"\\/");
-            outDir = (sl != std::wstring::npos) ? filePaths[0].substr(0, sl) : L"";
-        }
-        if (!filePaths.empty()) {
-            auto sl   = filePaths[0].find_last_of(L"\\/");
-            std::wstring name = (sl != std::wstring::npos) ? filePaths[0].substr(sl + 1) : filePaths[0];
-            auto dot  = name.rfind(L'.');
-            std::wstring stem = (dot != std::wstring::npos) ? name.substr(0, dot) : name;
-            params.outputPath = outDir.empty() ? stem : outDir + L"\\" + stem;
-        } else {
-            params.outputPath = outDir;
-        }
+    if (!filePaths.empty()) {
+        params.outputPath = DeriveOutputPath(m_settings, filePaths[0], destDir);
+    } else if (!destDir.empty()) {
+        params.outputPath = destDir;
+    } else if (m_settings.GetOutputDirModeFixed()) {
+        params.outputPath = m_settings.GetDefaultOutputDir();
     }
 
     // Apply -t/-m CLI overrides (skip dialog); otherwise show CompressDlg.

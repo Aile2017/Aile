@@ -1,4 +1,4 @@
-// Archiver.cpp
+﻿// Archiver.cpp
 //-- CArchiver -- common interface in 'Noah' for archiving routine --
 
 #include "stdafx.h"
@@ -239,8 +239,6 @@ bool CArcModule::lst_exe( const char* lstcmd, aflArray& files,
 							af.rawline[rn++] = *p++;
 						af.rawline[rn] = '\0';
 					}
-//					ki_memzero( &files[ct].inf, sizeof(files[ct].inf) );
-//					files[ct].inf.dwOriginalSize = 0xffffffff;
 
 					int i=0;
 					bool prev_is_space=false;
@@ -258,17 +256,11 @@ bool CArcModule::lst_exe( const char* lstcmd, aflArray& files,
 							prev_is_space = false;
 
 						af.inf.szFileName[i++] = *ls++;
-//						files[ct].inf.szFileName[i++] = *ls++;
 					}
 					if( prev_is_space )
 						--i;
 					if( i )
 					{
-/*
-						files[ct].inf.szFileName[i] = '\0';
-						files[ct].isfile = true;
-						files.forcelen( 1+(++ct) );
-*/
 						af.inf.szFileName[i] = '\0';
 						af.isfile = true;
 						files.add(af);
