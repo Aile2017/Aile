@@ -22,6 +22,10 @@ Makefile
 # Copilot session
 .claude/
 
+# AI assistant instructions (local only)
+CLAUDE.md
+.github/copilot-instructions.md
+
 # Unrelated tools in workspace root
 Noah.exe
 Noah.html
