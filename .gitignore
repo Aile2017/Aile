@@ -1,4 +1,4 @@
-# Build outputs
+﻿# Build outputs
 build/
 build_release/
 out/
@@ -26,3 +26,7 @@ install_manifest.txt
 *.tmp
 *.bak
 Thumbs.db
+
+# AI assistant instructions (local only)
+CLAUDE.md
+.github/copilot-instructions.md
