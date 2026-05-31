@@ -58,6 +58,13 @@ void ProgressDlg::Dismiss() {
 HRESULT ProgressDlg::RunMessageLoop(std::function<void()> onCancel) {
     HRESULT hr = S_OK;
     MSG msg;
+    bool cancelIssued = false;
+    auto triggerCancel = [&]() {
+        if (!cancelIssued && onCancel && m_sink && m_sink->IsCancelled()) {
+            onCancel();
+            cancelIssued = true;
+        }
+    };
     while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
         if (msg.message == WM_APP_DONE) {
             hr = (HRESULT)msg.wParam;
@@ -66,16 +73,16 @@ HRESULT ProgressDlg::RunMessageLoop(std::function<void()> onCancel) {
             break;
         }
         if (msg.message == WM_APP_PROGRESS) {
-            if (onCancel && m_sink && m_sink->IsCancelled())
-                onCancel();
             SetProgress((int)msg.wParam, (wchar_t*)msg.lParam);
             free((wchar_t*)msg.lParam);
+            triggerCancel();
             continue;
         }
         if (!IsDialogMessageW(m_hwnd, &msg)) {
             TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }
+        triggerCancel();
     }
     return hr;
 }

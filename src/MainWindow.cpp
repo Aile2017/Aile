@@ -821,19 +821,13 @@ void MainWindow::OnDropFiles(HDROP hDrop) {
         std::wstring path(len, L'\0');
         DragQueryFileW(hDrop, i, path.data(), len + 1);
 
-        const wchar_t* dot = wcsrchr(path.c_str(), L'.');
-        bool isArchive = false;
-        if (dot) {
-            auto& sz7 = App::Instance().Get7z();
-            isArchive = sz7.IsLoaded() && sz7.IsArchiveExt(dot + 1);
-        }
+        auto& sz7 = App::Instance().Get7z();
+        bool isArchive = sz7.IsArchivePath(path.c_str());
         (isArchive ? archives : regular).push_back(std::move(path));
     }
     DragFinish(hDrop);
 
-    if (!archives.empty()) {
-        OpenArchive(archives[0].c_str()); // open first archive
-    } else if (!regular.empty()) {
+    if (!regular.empty()) {
         // If archive currently open and writable, let user choose add vs. create new
         bool canAdd = !m_archivePath.empty() && !m_isReadOnly;
         bool addToCurrent = false;
@@ -880,6 +874,8 @@ void MainWindow::OnDropFiles(HDROP hDrop) {
                 OnCompress(params, /*openAfterCompress=*/true);
             }
         }
+    } else if (!archives.empty()) {
+        OpenArchive(archives[0].c_str()); // open first archive
     }
 }
 
@@ -1860,7 +1856,8 @@ void MainWindow::OnArchiveProperties() {
     // Try anyway; if it fails, fall back to displaying info from items.
     auto& sz7 = App::Instance().Get7z();
     if (sz7.IsLoaded()) {
-        HRESULT hr = sz7.GetArchiveProperties(target.c_str(), nullptr, props);
+        const wchar_t* pw = m_password.empty() ? nullptr : m_password.c_str();
+        HRESULT hr = sz7.GetArchiveProperties(target.c_str(), pw, props);
         if (SUCCEEDED(hr)) haveProps = true;
     }
 
@@ -1884,7 +1881,8 @@ void MainWindow::OnArchiveComment() {
         app.GetUnrar().GetArchiveComment(target.c_str(), comment);
     }
     if (comment.empty() && app.Get7z().IsLoaded()) {
-        app.Get7z().GetArchiveComment(target.c_str(), nullptr, comment);
+        const wchar_t* pw = m_password.empty() ? nullptr : m_password.c_str();
+        app.Get7z().GetArchiveComment(target.c_str(), pw, comment);
     }
 
     // Editability check: temp files from split auto-unwrap are read-only.
@@ -2029,7 +2027,7 @@ void MainWindow::OnDelete() {
             delete sink; m_pSink = nullptr;
             return;
         }
-        hrDone = progDlg.RunMessageLoop();
+        hrDone = progDlg.RunMessageLoop([&]{ proc.Cancel(); });
         // proc destructor waits for reader/process handles and releases them
     } else {
         if (!app.Get7z().IsLoaded()) {

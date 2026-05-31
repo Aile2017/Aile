@@ -88,9 +88,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
         }
         if (forceExtract && !positional.empty()) {
             auto& sz7 = app.Get7z();
-            const wchar_t* dot = wcsrchr(positional[0].c_str(), L'.');
-            // IsArchiveExt has a static fallback, so IsLoaded() guard is not needed here.
-            bool isArc = dot && sz7.IsArchiveExt(dot + 1);
+            bool isArc = sz7.IsArchivePath(positional[0].c_str());
             if (!isArc) {
                 MessageBoxW(nullptr, I18n::Tr(IDS_ERR_OPEN_ARCHIVE).c_str(),
                             L"AileEx", MB_ICONERROR);
@@ -114,8 +112,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
     std::vector<std::wstring> archiveFiles, regularFiles;
     auto& sz7 = app.Get7z();
     for (int i = 1; i < argc; ++i) {
-        const wchar_t* dot = wcsrchr(argv[i], L'.');
-        bool isArc = dot && sz7.IsLoaded() && sz7.IsArchiveExt(dot + 1);
+        bool isArc = sz7.IsArchivePath(argv[i]);
         if (isArc)
             archiveFiles.push_back(argv[i]);
         else
@@ -123,10 +120,10 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
     }
     if (argv) LocalFree(argv);
 
-    if (!archiveFiles.empty()) {
-        result = app.RunBrowseMode(archiveFiles, nCmdShow);
-    } else if (!regularFiles.empty()) {
+    if (!regularFiles.empty()) {
         result = app.RunCompressMode(regularFiles, nCmdShow);
+    } else if (!archiveFiles.empty()) {
+        result = app.RunBrowseMode(archiveFiles, nCmdShow);
     } else {
         result = app.RunEmpty(nCmdShow);
     }

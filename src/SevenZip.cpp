@@ -437,6 +437,31 @@ bool SevenZip::IsArchiveExt(const wchar_t* ext) const {
     return false;
 }
 
+bool SevenZip::IsArchivePath(const wchar_t* path) const {
+    if (!path || !path[0]) return false;
+
+    std::wstring ext = ExtOfPath(path);
+    if (ext.empty()) return false;
+    if (IsArchiveExt(ext.c_str())) return true;
+
+    bool allDigits = true;
+    for (auto c : ext) {
+        if (!iswdigit(c)) {
+            allDigits = false;
+            break;
+        }
+    }
+    if (!allDigits) return false;
+
+    std::wstring base(path);
+    size_t lastDot = base.rfind(L'.');
+    if (lastDot == std::wstring::npos) return false;
+    base.resize(lastDot);
+
+    std::wstring baseExt = ExtOfPath(base.c_str());
+    return !baseExt.empty() && IsArchiveExt(baseExt.c_str());
+}
+
 
 
 std::wstring SevenZip::ExtOfPath(const wchar_t* path) {
@@ -610,7 +635,8 @@ HRESULT SevenZip::OpenArchive(const wchar_t* path, std::vector<ArchiveItem>& ite
                                std::wstring* effectivePath) {
     if (!IsLoaded()) return E_FAIL;
     items.clear();
-    if (effectivePath) *effectivePath = path;
+    std::wstring resolvedPath = path;
+    if (effectivePath) *effectivePath = resolvedPath;
 
     // Open file stream
     CInFileStream* fileSpec = new CInFileStream();
@@ -672,6 +698,7 @@ HRESULT SevenZip::OpenArchive(const wchar_t* path, std::vector<ArchiveItem>& ite
         auto cacheIt = m_itemsCache.find(cacheKey);
         if (cacheIt != m_itemsCache.end()) {
             items = cacheIt->second.items;
+            if (effectivePath) *effectivePath = path;
             archive->Release();
             return S_OK;
         }
@@ -827,7 +854,8 @@ HRESULT SevenZip::OpenArchive(const wchar_t* path, std::vector<ArchiveItem>& ite
                             items = std::move(tarItems);
                             // Keep temp .tar so Extract() can later address items by index.
                             // Caller (MainWindow) cleans it up via effectivePath on close.
-                            if (effectivePath) *effectivePath = tmpTar;
+                            resolvedPath = tmpTar;
+                            if (effectivePath) *effectivePath = resolvedPath;
                             keepTmp = true;
                         }
                     }
@@ -925,7 +953,7 @@ HRESULT SevenZip::OpenArchive(const wchar_t* path, std::vector<ArchiveItem>& ite
     }
 
     // Cache the enumerated items (after all potential tar/split unwrapping)
-    {
+    if (_wcsicmp(resolvedPath.c_str(), path) == 0) {
         // Re-verify cache key in case tar/split operations changed things
         std::wstring cacheKey;
         GUID actualFormat = primaryGuid;

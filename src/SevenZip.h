@@ -147,6 +147,9 @@ public:
 
     // ext: extension only (no dot, e.g. L"7z"). Case-insensitive.
     bool IsArchiveExt(const wchar_t* ext) const;
+    // Path-based archive detection used by startup/drop auto-routing.
+    // Recognizes normal archive extensions and split volume 1 names like *.7z.001.
+    bool IsArchivePath(const wchar_t* path) const;
 
     // Writable formats supported by the loaded 7z.dll (RAR not included).
     const std::vector<WritableFormat>& GetWritableFormats() const { return m_writableFormats; }

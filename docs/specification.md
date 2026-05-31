@@ -33,7 +33,7 @@ The operating mode is determined by command-line arguments to `AileEx.exe`.
 
 Both `-x` and `-a` suppress the main window (`SW_HIDE`). The `-x` / `-a` flags take priority over auto-detection.
 
-Recognized extensions (treated as archives): `7z`, `zip`, `rar`, `tar`, `gz`, `bz2`, `xz`, `cab`, `iso`, `jar`, `wim`, `lzma`, `lzh`, `arj` and other formats dynamically enumerated by 7z.dll.
+Recognized extensions (treated as archives): `7z`, `zip`, `rar`, `tar`, `gz`, `bz2`, `xz`, `cab`, `iso`, `jar`, `wim`, `lzma`, `lzh`, `arj` and other formats dynamically enumerated by 7z.dll. Split volume 1 names such as `archive.7z.001` are also treated as archives when the preceding extension is recognized.
 
 ### Main Window
 
@@ -109,7 +109,7 @@ Dynamically updated via `WM_INITMENUPOPUP` based on archive state (open / read-o
 - If one backend fails, automatically fallback to the other
 - Selective file extraction (multi-select in ListView → extract only selected)
   - **Valid only with 7z.dll backend**. If nothing selected, extract all files
-  - **With unrar.dll backend, always extracts all files regardless of selection**
+  - **With unrar.dll backend, selected extraction is supported** by matching normalized entry paths against the current selection.
 - Full extraction (F5/Ctrl+E with no selection)
 - **Subfolder creation policy** (`MkDir` setting):
   - `0` = Do not create
@@ -208,7 +208,7 @@ Opened via **File → Archive properties** (`Alt+Enter`). Displays archive-wide 
 
 Opened via **Actions → Archive comment...**. Displays and optionally edits the whole-archive comment.
 - **ZIP**: read via `SevenZip::GetArchiveComment`, write via `SevenZip::SetZipArchiveComment` (direct EOCD rewrite). ZIP comments are encoded in OEM code page (CP_OEMCP) to match 7-Zip's ZIP handler interpretation.
-- **RAR**: read via `UnrarDll::GetArchiveComment`, write via `RarProcess::SetComment` (`rar.exe c -z<tempfile>`). RAR5 = UTF-8, RAR4 = OEM code page auto-fallback.
+- **RAR**: read via `UnrarDll::GetArchiveComment`, write via `RarProcess::SetComment` (`rar.exe c -z<tempfile>`). Non-ASCII write behavior depends on the installed `rar.exe` comment-file interpretation and is currently treated as implementation-defined.
 - **7z format**: no archive-wide comment in spec; write path not available.
 - The dialog is **read-only** for formats that do not support comment writing. Class: `CommentDlg`.
 

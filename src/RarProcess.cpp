@@ -395,8 +395,8 @@ DWORD WINAPI RarProcess::StdoutReaderThread(LPVOID param) {
 
 // ---- Delete (rar d) ----
 // Set archive-wide comment via `rar.exe c -z<tempfile> archive`.
-// Comment written to temp file in OEM code page (rar.exe's default comment encoding).
-// Avoid -sc<charset>c flag (version-dependent, low compatibility).
+// Comment file currently follows rar.exe's default interpretation; keep this path conservative
+// until real RAR4/RAR5 comment samples validate an explicit charset flag.
 // Pass empty comment file to delete existing comment.
 bool RarProcess::SetComment(const wchar_t* archivePath,
                             const std::wstring& comment,
@@ -416,7 +416,7 @@ bool RarProcess::SetComment(const wchar_t* archivePath,
         return false;
     }
 
-    // Write comment to temp file in UTF-8 (no BOM)
+    // Write comment in the legacy OEM code page expected by the current save path.
     wchar_t tempDir[MAX_PATH];
     GetTempPathW(MAX_PATH, tempDir);
     wchar_t tempFile[MAX_PATH];
