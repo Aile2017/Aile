@@ -31,10 +31,6 @@ void ProgressDlg::Show(HWND hwndParent, const wchar_t* title) {
     if (m_hwndCancel) SetFocus(m_hwndCancel);
 }
 
-void ProgressDlg::SetTotal(UINT64 total) {
-    m_total = total;
-}
-
 void ProgressDlg::SetProgress(int pct, const wchar_t* filename) {
     if (!m_hwnd) return;
     if (pct < 0) pct = 0;

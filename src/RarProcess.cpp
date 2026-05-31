@@ -329,11 +329,6 @@ void RarProcess::Cancel() {
         TerminateProcess(m_hProcess, 1);
 }
 
-bool RarProcess::IsRunning() const {
-    if (m_hProcess == INVALID_HANDLE_VALUE) return false;
-    return WaitForSingleObject(m_hProcess, 0) == WAIT_TIMEOUT;
-}
-
 int RarProcess::ParsePercent(const std::string& line) {
     size_t i = 0;
     while (i < line.size() && line[i] == ' ') ++i;

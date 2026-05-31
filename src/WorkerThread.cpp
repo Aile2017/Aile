@@ -4,8 +4,8 @@
 
 // ---- ProgressPostSink ----
 
-ProgressPostSink::ProgressPostSink(HWND hwnd, UINT progressMsg, UINT doneMsg)
-    : m_hwnd(hwnd), m_progressMsg(progressMsg), m_doneMsg(doneMsg)
+ProgressPostSink::ProgressPostSink(HWND hwnd, UINT progressMsg)
+    : m_hwnd(hwnd), m_progressMsg(progressMsg)
 {}
 
 void ProgressPostSink::OnSetTotal(UINT64 total) {
@@ -49,16 +49,6 @@ void WorkerThread::Start(Task task, HWND hwndNotify, UINT doneMsg) {
     Wait();
     auto* ctx = new Ctx{std::move(task), hwndNotify, doneMsg};
     m_hThread = CreateThread(nullptr, 0, ThreadProc, ctx, 0, nullptr);
-}
-
-void WorkerThread::RequestCancel() {
-    // Cancellation is handled via the ProgressPostSink::SetCancelled flag.
-    // WorkerThread itself has no direct cancel — the task lambda checks the sink.
-}
-
-bool WorkerThread::IsRunning() const {
-    if (m_hThread == INVALID_HANDLE_VALUE) return false;
-    return WaitForSingleObject(m_hThread, 0) == WAIT_TIMEOUT;
 }
 
 void WorkerThread::Wait() {

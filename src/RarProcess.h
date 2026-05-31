@@ -77,7 +77,6 @@ public:
                 UINT doneMsg);
 
     void Cancel();
-    bool IsRunning() const;
 
 private:
     // Returns the WinRAR install directory from registry (empty if not found).

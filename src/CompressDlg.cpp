@@ -5,9 +5,7 @@
 #include "RarAdvancedDlg.h"
 #include "Settings.h"
 #include "resource.h"
-#include <shlobj.h>
 #include <commctrl.h>
-#include <commdlg.h>
 
 void CompressDlg::Params::LoadFromSettings(const Settings& s) {
     format         = s.GetDefaultFormat();

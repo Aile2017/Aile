@@ -59,7 +59,6 @@
 #define IDC_PROGRESS_BAR    2001
 #define IDC_PROGRESS_FILE   2002
 #define IDC_CANCEL          2003
-#define IDC_ELAPSED         2004
 
 // Settings dialog controls
 #define IDC_RAR_EXTRACTOR   3001

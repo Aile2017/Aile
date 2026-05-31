@@ -1255,7 +1255,7 @@ void MainWindow::RunExtraction(std::vector<UINT32> indices, std::set<std::wstrin
     ProgressDlg progDlg;
     progDlg.Show(m_hwnd, I18n::Tr(IDS_PROGRESS_EXTRACTING).c_str());
 
-    auto* sink = new ProgressPostSink(m_hwnd, WM_APP_PROGRESS, WM_APP_DONE);
+    auto* sink = new ProgressPostSink(m_hwnd, WM_APP_PROGRESS);
     m_pSink    = sink;
     progDlg.SetSink(sink);
 
@@ -1353,7 +1353,7 @@ void MainWindow::OnTest() {
     ProgressDlg progDlg;
     progDlg.Show(m_hwnd, I18n::Tr(IDS_PROGRESS_TESTING).c_str());
 
-    auto* sink = new ProgressPostSink(m_hwnd, WM_APP_PROGRESS, WM_APP_DONE);
+    auto* sink = new ProgressPostSink(m_hwnd, WM_APP_PROGRESS);
     m_pSink    = sink;
     progDlg.SetSink(sink);
 
@@ -1770,7 +1770,7 @@ void MainWindow::AddFilesToCurrentArchive(std::vector<std::wstring> srcPaths) {
     ProgressDlg progDlg;
     progDlg.Show(m_hwnd, I18n::Tr(IDS_PROGRESS_ADDING).c_str());
 
-    auto* sink = new ProgressPostSink(m_hwnd, WM_APP_PROGRESS, WM_APP_DONE);
+    auto* sink = new ProgressPostSink(m_hwnd, WM_APP_PROGRESS);
     m_pSink = sink;
     progDlg.SetSink(sink);
 
@@ -1919,7 +1919,7 @@ void MainWindow::OnArchiveComment() {
         // RAR: apply via rar.exe c -z. Wait for completion via WM_APP_DONE.
         ProgressDlg progDlg;
         progDlg.Show(m_hwnd, I18n::Tr(IDS_PROGRESS_SAVING_COMMENT).c_str());
-        auto* sink = new ProgressPostSink(m_hwnd, WM_APP_PROGRESS, WM_APP_DONE);
+        auto* sink = new ProgressPostSink(m_hwnd, WM_APP_PROGRESS);
         m_pSink = sink;
         progDlg.SetSink(sink);
 
@@ -2004,7 +2004,7 @@ void MainWindow::OnDelete() {
     ProgressDlg progDlg;
     progDlg.Show(m_hwnd, I18n::Tr(IDS_PROGRESS_DELETING).c_str());
 
-    auto* sink = new ProgressPostSink(m_hwnd, WM_APP_PROGRESS, WM_APP_DONE);
+    auto* sink = new ProgressPostSink(m_hwnd, WM_APP_PROGRESS);
     m_pSink = sink;
     progDlg.SetSink(sink);
 
@@ -2073,7 +2073,7 @@ void MainWindow::OnCompress(CompressDlg::Params& params, bool openAfterCompress)
     ProgressDlg progDlg;
     progDlg.Show(m_hwnd, I18n::Tr(IDS_PROGRESS_COMPRESSING).c_str());
 
-    auto* sink = new ProgressPostSink(m_hwnd, WM_APP_PROGRESS, WM_APP_DONE);
+    auto* sink = new ProgressPostSink(m_hwnd, WM_APP_PROGRESS);
     m_pSink = sink;
     progDlg.SetSink(sink);
 

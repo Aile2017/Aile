@@ -16,7 +16,7 @@ public:
 // WM_APP_PROGRESS: wParam = 0-100 percent, lParam = wchar_t* (caller must free())
 class ProgressPostSink : public IExtractProgressSink {
 public:
-    ProgressPostSink(HWND hwnd, UINT progressMsg, UINT doneMsg);
+    ProgressPostSink(HWND hwnd, UINT progressMsg);
 
     void OnSetTotal(UINT64 total) override;
     void OnProgress(UINT64 done, const wchar_t* currentFile) override;
@@ -26,7 +26,6 @@ public:
 private:
     HWND         m_hwnd;
     UINT         m_progressMsg;
-    UINT         m_doneMsg;
     UINT64       m_total       = 0;
     volatile bool m_cancelled  = false;
     // ~50 ms throttle on PostMessage to prevent WM_APP_PROGRESS flooding
@@ -44,8 +43,6 @@ public:
     ~WorkerThread();
 
     void Start(Task task, HWND hwndNotify, UINT doneMsg);
-    void RequestCancel();
-    bool IsRunning() const;
     void Wait();
 
 private:

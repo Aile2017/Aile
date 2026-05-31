@@ -151,7 +151,7 @@ BEGIN
     PUSHBUTTON      "Cancel",            IDCANCEL,      233, 195,  50,  14
 END
 
-IDD_PROGRESS DIALOGEX 0, 0, 300, 76
+IDD_PROGRESS DIALOGEX 0, 0, 300, 64
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION
 CAPTION "Working..."
 FONT 9, "Segoe UI", 400, 0, 0x1
@@ -159,8 +159,7 @@ BEGIN
     LTEXT           "",                IDC_PROGRESS_FILE,  7,  7, 286, 12, SS_ENDELLIPSIS | SS_NOPREFIX
     CONTROL         "",                IDC_PROGRESS_BAR, "msctls_progress32",
                     WS_CHILD | WS_VISIBLE, 7, 24, 286, 14
-    LTEXT           "",                IDC_ELAPSED,     7,  44,  160,  8
-    PUSHBUTTON      "Cancel",          IDC_CANCEL,     116,  54,   68, 14
+    PUSHBUTTON      "Cancel",          IDC_CANCEL,     116,  42,   68, 14
 END
 
 IDD_SETTINGS DIALOGEX 0, 0, 280, 310
@@ -610,7 +609,7 @@ BEGIN
     PUSHBUTTON      "キャンセル",       IDCANCEL,      233, 195,  50,  14
 END
 
-IDD_PROGRESS DIALOGEX 0, 0, 300, 76
+IDD_PROGRESS DIALOGEX 0, 0, 300, 64
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION
 CAPTION "処理中..."
 FONT 9, "Segoe UI", 400, 0, 0x1
@@ -618,8 +617,7 @@ BEGIN
     LTEXT           "",                IDC_PROGRESS_FILE,  7,  7, 286, 12, SS_ENDELLIPSIS | SS_NOPREFIX
     CONTROL         "",                IDC_PROGRESS_BAR, "msctls_progress32",
                     WS_CHILD | WS_VISIBLE, 7, 24, 286, 14
-    LTEXT           "",                IDC_ELAPSED,     7,  44,  160,  8
-    PUSHBUTTON      "キャンセル",       IDC_CANCEL,     116,  54,   68, 14
+    PUSHBUTTON      "キャンセル",       IDC_CANCEL,     116,  42,   68, 14
 END
 
 IDD_SETTINGS DIALOGEX 0, 0, 280, 310
