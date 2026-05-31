@@ -1440,9 +1440,10 @@ void MainWindow::RunExtraction(std::vector<UINT32> indices, std::wstring presetD
             return;
     }
 
-    // Evaluate MkDir policy based on full archive structure
+    // Evaluate MkDir policy. Skip for selective extraction: the user chose specific
+    // entries, so no wrapping folder is created; archive-internal paths are preserved.
     std::wstring finalDest = destDir;
-    {
+    if (indices.empty()) {
         auto& s   = app.GetSettings();
         int mkDir = s.GetMkDir();
         if (ShouldCreateSubfolder(mkDir, m_items))
