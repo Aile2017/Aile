@@ -972,6 +972,10 @@ void MainWindow::ApplyFontToControls() {
 
 void MainWindow::UpdateExtractDestEdit() {
     if (!m_hExtractEdit) return;
+    if (!m_extractDestOverride.empty()) {
+        SetWindowTextW(m_hExtractEdit, m_extractDestOverride.c_str());
+        return;
+    }
     const auto& st = App::Instance().GetSettings();
     if (st.GetOutputDirModeFixed()) {
         SetWindowTextW(m_hExtractEdit, st.GetDefaultOutputDir().c_str());
@@ -979,8 +983,15 @@ void MainWindow::UpdateExtractDestEdit() {
         // Same-as-source mode: show the archive's parent directory, or empty if none open.
         std::wstring dir;
         if (!m_archivePath.empty()) {
-            auto sl = m_archivePath.find_last_of(L"\\/");
-            dir = (sl != std::wstring::npos) ? m_archivePath.substr(0, sl) : L"";
+            // Normalize to absolute path so relative-path args (e.g. "test.zip") resolve correctly.
+            wchar_t full[MAX_PATH] = {};
+            std::wstring abs;
+            if (GetFullPathNameW(m_archivePath.c_str(), MAX_PATH, full, nullptr) != 0)
+                abs = full;
+            else
+                abs = m_archivePath;
+            auto sl = abs.find_last_of(L"\\/");
+            dir = (sl != std::wstring::npos) ? abs.substr(0, sl) : L"";
         }
         SetWindowTextW(m_hExtractEdit, dir.c_str());
     }
@@ -1119,8 +1130,10 @@ void MainWindow::OnCommand(WORD id) {
         break;
     case ID_TOOLBAR_BROWSE_DEST: {
         std::wstring path = GetWindowTextString(m_hExtractEdit);
-        if (BrowseFolderDialog(m_hwnd, IDS_TITLE_SELECT_DEST_FOLDER, &path))
+        if (BrowseFolderDialog(m_hwnd, IDS_TITLE_SELECT_DEST_FOLDER, &path)) {
+            m_extractDestOverride = path;
             SetWindowTextW(m_hExtractEdit, path.c_str());
+        }
         break;
     }
     default:
@@ -1433,19 +1446,29 @@ void MainWindow::RunExtraction(std::vector<UINT32> indices, std::wstring presetD
     if (!presetDest.empty()) {
         destDir = presetDest;
     } else {
-        const Settings& st = app.GetSettings();
-        if (st.GetOutputDirModeFixed()) {
-            const auto& d = st.GetDefaultOutputDir();
-            if (!d.empty()) destDir = d;
+        if (!m_extractDestOverride.empty()) {
+            destDir = m_extractDestOverride;
         } else {
-            // Use the directory that contains the archive
-            auto sl = m_archivePath.find_last_of(L"\\/");
-            std::wstring archDir = (sl != std::wstring::npos)
-                                   ? m_archivePath.substr(0, sl) : m_archivePath;
-            destDir = archDir;
+            const Settings& st = app.GetSettings();
+            if (st.GetOutputDirModeFixed()) {
+                const auto& d = st.GetDefaultOutputDir();
+                if (!d.empty()) destDir = d;
+            } else {
+                wchar_t full[MAX_PATH] = {};
+                std::wstring abs;
+                if (GetFullPathNameW(m_archivePath.c_str(), MAX_PATH, full, nullptr) != 0)
+                    abs = full;
+                else
+                    abs = m_archivePath;
+                auto sl = abs.find_last_of(L"\\/");
+                destDir = (sl != std::wstring::npos) ? abs.substr(0, sl) : abs;
+            }
         }
         if (!BrowseFolderDialog(m_hwnd, IDS_TITLE_SELECT_DEST_FOLDER, &destDir))
             return;
+        // Keep edit box and override in sync with the user's folder picker choice.
+        m_extractDestOverride = destDir;
+        UpdateExtractDestEdit();
     }
 
     // Evaluate MkDir policy. Skip for selective extraction: the user chose specific

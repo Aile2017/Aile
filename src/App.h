@@ -17,7 +17,8 @@ public:
     SevenZip& Get7z()             { return m_sevenZip; }
 
     // Called from WinMain after arg parsing.
-    int RunBrowseMode(const std::vector<std::wstring>& archivePaths, int nCmdShow);
+    int RunBrowseMode(const std::vector<std::wstring>& archivePaths, int nCmdShow,
+                      const std::wstring& destDir = L"");
     int RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdShow,
                         const std::wstring& destDir = L"",
                         const std::wstring& typeOverride = L"",

@@ -21,6 +21,9 @@ public:
     // Call before TranslateAccelerator / IsDialogMessage in the message loop.
     // Returns true if the message was consumed.
     bool PreTranslateMessage(const MSG& msg);
+    // Set a session-level destination override (from -d option or [...] browse button).
+    // Takes priority over settings and archive parent dir until cleared.
+    void SetExtractDestOverride(const std::wstring& path) { m_extractDestOverride = path; }
 
     static const wchar_t* ClassName() { return L"AileEx_MainWnd"; }
     static bool RegisterClass(HINSTANCE hInst);
@@ -96,6 +99,7 @@ private:
     HIMAGELIST  m_hToolbarImages = nullptr;  // down-scaled toolbar icons
     HFONT       m_hFont        = nullptr;
 
+    std::wstring             m_extractDestOverride;  // Set by -d option or [...] browse; overrides settings
     std::wstring             m_archivePath;          // Display path (e.g. xx.001)
     std::wstring             m_effectiveArchivePath; // Operative path (differs from m_archivePath only when a split archive is auto-unwrapped)
     std::wstring             m_password;             // Password used to open the current archive (empty if none)
