@@ -73,14 +73,14 @@ static const MethodEntry kMethods7z[] = {
     {L"FastLZMA2",     L"flzma2"},
 };
 static const MethodEntry kMethodsZip[] = {
-    {L"Deflate",        L"deflate"},  // default
+    {L"Deflate",        L"deflate"},   // default
+    {L"Deflate64",      L"deflate64"},
     {L"BZip2",          L"bzip2"},
     {L"LZMA",           L"lzma"},
-    // 7-Zip Zstandard extension
+    {L"PPMd",           L"ppmd"},
+    {L"Copy",           L"copy"},
+    // 7-Zip Zstandard extension (shown only when DLL supports it)
     {L"Zstandard",      L"zstd"},
-    {L"Brotli",         L"brotli"},
-    {L"LZ4",            L"lz4"},
-    {L"Store",          L"store"},
 };
 // rar.exe -m0..-m5
 static const MethodEntry kMethodsRar[] = {
@@ -318,9 +318,14 @@ void CompressDlg::OnFormatChange(HWND hwnd) {
     if (SendMessageW(hLevel, CB_GETCURSEL, 0, 0) == CB_ERR)
         SendMessageW(hLevel, CB_SETCURSEL, 3, 0);  // default = 5 (index 3)
     EnableWindow(hLevel, TRUE);
-    EnableWindow(hMethod, TRUE);
     EnableWindow(GetDlgItem(hwnd, IDC_PASSWORD), TRUE);
     EnableWindow(GetDlgItem(hwnd, IDC_ENCRYPT_HDR), is7z);
+
+    if (!is7z && !isZip) {
+        EnableWindow(hMethod, FALSE);
+        return;
+    }
+    EnableWindow(hMethod, TRUE);
 
     const MethodEntry* methods = is7z ? kMethods7z : kMethodsZip;
     int count = is7z ? (int)_countof(kMethods7z) : (int)_countof(kMethodsZip);
@@ -333,8 +338,6 @@ void CompressDlg::OnFormatChange(HWND hwnd) {
         for (auto& c : lower) c = (wchar_t)towlower((wchar_t)c);
         for (const auto& name : *m_encoderNames) {
             if (name == lower) return true;
-            // ZIP's "store" is registered as "copy" inside the DLL
-            if (lower == L"store" && name == L"copy") return true;
             // Safety: "zstd" ↔ "zstandard" (variant spelling may differ across DLL versions)
             if ((lower == L"zstd" || lower == L"zstandard") &&
                 (name == L"zstd" || name == L"zstandard")) return true;
@@ -454,6 +457,8 @@ bool CompressDlg::OnOK(HWND hwnd) {
     if (m_params.format == L"rar") {
         m_params.rarLevel = m_params.level;
         m_params.method   = std::to_wstring(m_params.level);
+    } else if (m_params.format != L"7z" && m_params.format != L"zip") {
+        m_params.method.clear();
     }
 
     // Read password

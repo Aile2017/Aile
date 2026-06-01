@@ -12,7 +12,7 @@ public:
         std::vector<std::wstring> inputFiles;
         std::wstring outputPath;
         std::wstring format   = L"7z";   // "7z","zip","tar","gz","bz2","xz","rar"
-        std::wstring method   = L"lzma";
+        std::wstring method   = L"lzma2";
         int          level    = 5;
         int          rarLevel = 3;       // RAR compression level 0-5 (-m0..-m5)
         std::wstring password;
