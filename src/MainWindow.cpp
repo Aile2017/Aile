@@ -796,6 +796,10 @@ void MainWindow::ApplyFontToControls() {
 
 void MainWindow::UpdateExtractDestEdit() {
     if (!m_hExtractEdit) return;
+    if (!m_extractDestOverride.empty()) {
+        SetWindowTextW(m_hExtractEdit, m_extractDestOverride.c_str());
+        return;
+    }
     const auto& st = App::Instance().GetSettings();
     if (st.GetOutputDirModeFixed()) {
         SetWindowTextW(m_hExtractEdit, st.GetDefaultOutputDir().c_str());
@@ -803,8 +807,15 @@ void MainWindow::UpdateExtractDestEdit() {
         // Same-as-source mode: show the archive's parent directory, or empty if none open.
         std::wstring dir;
         if (!m_archivePath.empty()) {
-            auto sl = m_archivePath.find_last_of(L"\\/");
-            dir = (sl != std::wstring::npos) ? m_archivePath.substr(0, sl) : L"";
+            // Normalize to absolute path so relative-path args (e.g. "test.zip") resolve correctly.
+            wchar_t full[MAX_PATH] = {};
+            std::wstring abs;
+            if (GetFullPathNameW(m_archivePath.c_str(), MAX_PATH, full, nullptr) != 0)
+                abs = full;
+            else
+                abs = m_archivePath;
+            auto sl = abs.find_last_of(L"\\/");
+            dir = (sl != std::wstring::npos) ? abs.substr(0, sl) : L"";
         }
         SetWindowTextW(m_hExtractEdit, dir.c_str());
     }
@@ -949,8 +960,10 @@ void MainWindow::OnCommand(WORD id) {
     case ID_TOOLBAR_BROWSE_DEST: {
         wchar_t path[MAX_PATH] = {};
         GetWindowTextW(m_hExtractEdit, path, MAX_PATH);
-        if (BrowseFolderDialog(m_hwnd, IDS_TITLE_SELECT_DEST_FOLDER, path, MAX_PATH))
+        if (BrowseFolderDialog(m_hwnd, IDS_TITLE_SELECT_DEST_FOLDER, path, MAX_PATH)) {
+            m_extractDestOverride = path;
             SetWindowTextW(m_hExtractEdit, path);
+        }
         break;
     }
     default:
@@ -1216,19 +1229,30 @@ void MainWindow::RunExtraction(std::vector<UINT32> indices, std::set<std::wstrin
     if (!presetDest.empty()) {
         wcsncpy_s(destDir, presetDest.c_str(), MAX_PATH - 1);
     } else {
-        const Settings& st = app.GetSettings();
-        if (st.GetOutputDirModeFixed()) {
-            const auto& d = st.GetDefaultOutputDir();
-            if (!d.empty()) wcsncpy_s(destDir, d.c_str(), MAX_PATH - 1);
+        if (!m_extractDestOverride.empty()) {
+            wcsncpy_s(destDir, m_extractDestOverride.c_str(), MAX_PATH - 1);
         } else {
-            // Use the directory that contains the archive
-            auto sl = m_archivePath.find_last_of(L"\\/");
-            std::wstring archDir = (sl != std::wstring::npos)
-                                   ? m_archivePath.substr(0, sl) : m_archivePath;
-            wcsncpy_s(destDir, archDir.c_str(), MAX_PATH - 1);
+            const Settings& st = app.GetSettings();
+            if (st.GetOutputDirModeFixed()) {
+                const auto& d = st.GetDefaultOutputDir();
+                if (!d.empty()) wcsncpy_s(destDir, d.c_str(), MAX_PATH - 1);
+            } else {
+                wchar_t full[MAX_PATH] = {};
+                std::wstring abs;
+                if (GetFullPathNameW(m_archivePath.c_str(), MAX_PATH, full, nullptr) != 0)
+                    abs = full;
+                else
+                    abs = m_archivePath;
+                auto sl = abs.find_last_of(L"\\/");
+                std::wstring archDir = (sl != std::wstring::npos) ? abs.substr(0, sl) : abs;
+                wcsncpy_s(destDir, archDir.c_str(), MAX_PATH - 1);
+            }
         }
         if (!BrowseFolderDialog(m_hwnd, IDS_TITLE_SELECT_DEST_FOLDER, destDir, MAX_PATH))
             return;
+        // Keep edit box and override in sync with the user's folder picker choice.
+        m_extractDestOverride = destDir;
+        UpdateExtractDestEdit();
     }
 
     // Evaluate MkDir policy: use selected items when extracting a subset, full list otherwise.

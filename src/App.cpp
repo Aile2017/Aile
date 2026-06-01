@@ -56,9 +56,13 @@ void App::ReloadDlls() {
                  ? nullptr : m_settings.GetUnrarDllPath().c_str());
 }
 
-int App::RunBrowseMode(const std::vector<std::wstring>& archivePaths, int nCmdShow) {
+int App::RunBrowseMode(const std::vector<std::wstring>& archivePaths, int nCmdShow,
+                       const std::wstring& destDir) {
     MainWindow wnd;
     if (!wnd.Create(m_hInst, nCmdShow)) return 1;
+
+    if (!destDir.empty())
+        wnd.SetExtractDestOverride(destDir);
 
     for (auto& p : archivePaths)
         wnd.OpenArchive(p.c_str());

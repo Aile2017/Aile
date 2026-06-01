@@ -119,7 +119,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
     if (!regularFiles.empty()) {
         result = app.RunCompressMode(regularFiles, nCmdShow);
     } else if (!archiveFiles.empty()) {
-        result = app.RunBrowseMode(archiveFiles, nCmdShow);
+        result = app.RunBrowseMode(archiveFiles, nCmdShow, destDir);
     } else {
         result = app.RunEmpty(nCmdShow);
     }

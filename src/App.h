@@ -22,7 +22,8 @@ public:
     void ReloadDlls();
 
     // Called from WinMain after arg parsing.
-    int RunBrowseMode(const std::vector<std::wstring>& archivePaths, int nCmdShow);
+    int RunBrowseMode(const std::vector<std::wstring>& archivePaths, int nCmdShow,
+                      const std::wstring& destDir = L"");
     int RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdShow,
                         const std::wstring& destDir = L"");
     int RunExtractDialogMode(const std::wstring& archivePath, int nCmdShow,
