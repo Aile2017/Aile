@@ -43,9 +43,12 @@ bool B2e_IsArchiveExt(const wchar_t* ext);
 // Returns E_FAIL if the archive could not be opened or listed.
 // columnHeader (optional): receives the header line that appears before the
 // first separator in the listing output (e.g. "   Date      Time ...  Name").
+// toolName (optional): receives the tool executable name from the .b2e load: (name X)
+// directive (e.g. L"7zG.exe", L"WinRAR.exe").
 HRESULT B2e_List(const wchar_t* archivePath,
                  std::vector<ArchiveItem>& items,
-                 std::wstring* columnHeader = nullptr);
+                 std::wstring* columnHeader = nullptr,
+                 std::wstring* toolName = nullptr);
 
 // Extract entries from an archive.
 // indices: positions into allItems (as returned by B2e_List). Empty = extract all.

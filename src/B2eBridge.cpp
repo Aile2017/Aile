@@ -420,7 +420,7 @@ bool B2e_IsArchiveExt(const wchar_t* ext)
 }
 
 HRESULT B2e_List(const wchar_t* archivePath, std::vector<ArchiveItem>& items,
-                 std::wstring* columnHeader)
+                 std::wstring* columnHeader, std::wstring* toolName)
 {
     std::string path;
     HRESULT hr = WideFsPathToAnsiPath(archivePath, false, &path);
@@ -498,6 +498,11 @@ HRESULT B2e_List(const wchar_t* archivePath, std::vector<ArchiveItem>& items,
                 }
             }
         }
+    }
+
+    if (toolName) {
+        kiStr nameStr = b2e.arctype_name("");
+        *toolName = AToWString((const char*)nameStr);
     }
 
     return S_OK;
