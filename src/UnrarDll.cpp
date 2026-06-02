@@ -12,6 +12,16 @@ static std::wstring NormalizePath(std::wstring path) {
 
 // Auto-detect UnRAR64.dll / UnRAR.dll from known install paths.
 std::wstring UnrarDll::FindUnrarDll() {
+    // First: same directory as AileEx.exe (allows bundled DLL to take priority)
+    {
+        wchar_t buf[MAX_PATH] = {};
+        GetModuleFileNameW(nullptr, buf, MAX_PATH);
+        wchar_t* p = wcsrchr(buf, L'\\');
+        if (p) {
+            wcscpy_s(p + 1, MAX_PATH - (DWORD)(p + 1 - buf), L"unrar.dll");
+            if (PathFileExistsW(buf)) return buf;
+        }
+    }
     struct { const wchar_t* env; const wchar_t* suffix; } candidates[] = {
         { L"ProgramFiles(x86)", L"\\UnrarDLL\\x64\\UnRAR64.dll" },
         { L"ProgramFiles",      L"\\UnrarDLL\\x64\\UnRAR64.dll" },
@@ -32,13 +42,8 @@ bool UnrarDll::Load(const wchar_t* dllPath) {
     wchar_t buf[MAX_PATH] = {};
     if (!dllPath || !dllPath[0]) {
         std::wstring found = FindUnrarDll();
-        if (!found.empty()) {
+        if (!found.empty())
             wcsncpy_s(buf, found.c_str(), MAX_PATH - 1);
-        } else {
-            GetModuleFileNameW(nullptr, buf, MAX_PATH);
-            wchar_t* p = wcsrchr(buf, L'\\');
-            if (p) wcscpy_s(p + 1, MAX_PATH - (DWORD)(p + 1 - buf), L"unrar.dll");
-        }
         dllPath = buf;
     }
     m_hDll = LoadLibraryW(dllPath);

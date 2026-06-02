@@ -48,6 +48,17 @@ static std::wstring FindInDir(const std::wstring& dir) {
 }
 
 std::wstring RarProcess::FindRarExe() {
+    // First: same directory as AileEx.exe (allows bundled Rar.exe to take priority)
+    {
+        wchar_t buf[MAX_PATH] = {};
+        GetModuleFileNameW(nullptr, buf, MAX_PATH);
+        wchar_t* p = wcsrchr(buf, L'\\');
+        if (p) {
+            *(p + 1) = L'\0';
+            auto found = FindInDir(buf);
+            if (!found.empty()) return found;
+        }
+    }
     // Try registry (returns install dir)
     for (HKEY hRoot : {HKEY_LOCAL_MACHINE, HKEY_CURRENT_USER}) {
         std::wstring dir = QueryRegistryRarPath(hRoot);
