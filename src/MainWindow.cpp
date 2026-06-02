@@ -1056,11 +1056,7 @@ void MainWindow::OnDropFiles(HDROP hDrop) {
             params.outputPath  = DefaultOutputPath(App::Instance().GetSettings(), params.inputFiles);
 
             CompressDlg dlg;
-            auto& sz7 = App::Instance().Get7z();
-            const auto* enc  = sz7.IsLoaded() ? &sz7.GetEncoderNames()    : nullptr;
-            const auto* wf   = sz7.IsLoaded() ? &sz7.GetWritableFormats() : nullptr;
-            bool isB2e = sz7.IsLoaded() && sz7.GetLoadedPath().empty();
-            if (dlg.Show(m_hwnd, params, enc, wf, isB2e)) {
+            if (dlg.Show(m_hwnd, params)) {
                 auto& s = App::Instance().GetSettings();
                 params.SaveToSettings(s);
                 s.Save();
@@ -1822,11 +1818,7 @@ void MainWindow::OnAddFiles() {
     params.outputPath  = DefaultOutputPath(App::Instance().GetSettings(), params.inputFiles);
 
     CompressDlg dlg;
-    auto& sz7 = App::Instance().Get7z();
-    const auto* enc  = sz7.IsLoaded() ? &sz7.GetEncoderNames()    : nullptr;
-    const auto* wf   = sz7.IsLoaded() ? &sz7.GetWritableFormats() : nullptr;
-    bool isB2e = sz7.IsLoaded() && sz7.GetLoadedPath().empty();
-    if (dlg.Show(m_hwnd, params, enc, wf, isB2e)) {
+    if (dlg.Show(m_hwnd, params)) {
         auto& s = App::Instance().GetSettings();
         params.SaveToSettings(s);
         s.Save();
@@ -1970,29 +1962,11 @@ void MainWindow::OnCompress(CompressDlg::Params& params, bool openAfterCompress)
     auto  format  = params.format;
     int   level   = params.level;
     auto  method  = params.method;
-    auto  pw      = params.password;
 
     auto& sz = App::Instance().Get7z();
-    auto advDict    = params.dictSize;
-    auto advWord    = params.wordSize;
-    auto advSolid   = params.solidBlock;
-    auto advThreads = params.threads;
-    auto advExtra   = params.extra;
-    auto advVolume  = params.volumeSize;
-    bool encHdr     = params.encryptHeaders;
-    m_worker.Start([&sz, inputs, outPath, format, level, method, pw,
-                    advDict, advWord, advSolid, advThreads, advExtra, advVolume,
-                    encHdr]() -> HRESULT {
-        CompressAdvanced adv;
-        adv.dictSize   = advDict;
-        adv.wordSize   = advWord;
-        adv.solidBlock = advSolid;
-        adv.threads    = advThreads;
-        adv.extra      = advExtra;
-        adv.volumeSize = advVolume;
+    m_worker.Start([&sz, inputs, outPath, format, level, method]() -> HRESULT {
         return sz.Compress(inputs, outPath.c_str(), format.c_str(),
-                           level, method.c_str(), pw.empty() ? nullptr : pw.c_str(),
-                           nullptr, &adv, encHdr);
+                           level, method.c_str(), nullptr, nullptr);
     }, m_hwnd, WM_APP_DONE);
 
     HRESULT hrDone = S_OK;
@@ -2009,10 +1983,7 @@ void MainWindow::OnCompress(CompressDlg::Params& params, bool openAfterCompress)
     if (FAILED(hrDone) && hrDone != E_ABORT) {
         ShowError(I18n::Tr(IDS_ERR_COMPRESS_FAILED).c_str(), hrDone);
     } else if (SUCCEEDED(hrDone) && openAfterCompress) {
-        std::wstring pathToOpen = params.outputPath;
-        if (!params.volumeSize.empty())
-            pathToOpen += L".001";
-        OpenArchive(pathToOpen.c_str());
+        OpenArchive(params.outputPath.c_str());
     }
 }
 

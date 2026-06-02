@@ -13,8 +13,6 @@ set(AILEFLOW_UI_SOURCES
     src/App.cpp
     src/MainWindow.cpp
     src/CompressDlg.cpp
-    src/AdvancedCompressDlg.cpp
-    src/RarAdvancedDlg.cpp
     src/ProgressDlg.cpp
     src/SettingsDlg.cpp
     src/Settings.cpp

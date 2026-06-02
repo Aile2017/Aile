@@ -1,8 +1,6 @@
 ﻿#include "CompressDlg.h"
-#include "AdvancedCompressDlg.h"
 #include "DialogUtils.h"
 #include "I18n.h"
-#include "RarAdvancedDlg.h"
 #include "Settings.h"
 #include "resource.h"
 #include <shlobj.h>
@@ -10,122 +8,19 @@
 #include <commdlg.h>
 
 void CompressDlg::Params::LoadFromSettings(const Settings& s) {
-    format         = s.GetDefaultFormat();
-    level          = s.GetCompressionLevel();
-    rarLevel       = s.GetRarLevel();
-    dictSize       = s.GetAdvDictSize();
-    wordSize       = s.GetAdvWordSize();
-    solidBlock     = s.GetAdvSolidBlock();
-    threads        = s.GetAdvThreads();
-    extra          = s.GetAdvExtra();
-    volumeSize     = s.GetAdvVolume();
-    rarDictSize    = s.GetRarAdvDictSize();
-    rarSolid       = s.GetRarAdvSolid();
-    rarThreads     = s.GetRarAdvThreads();
-    rarRecoveryPct = s.GetRarAdvRecovery();
-    rarSplitVolume = s.GetRarAdvVolume();
-    rarExtra       = s.GetRarAdvExtra();
-    sfxMode        = s.GetDefaultSfxMode();
+    format = s.GetDefaultFormat();
+    level  = s.GetCompressionLevel();
 }
 
 void CompressDlg::Params::SaveToSettings(Settings& s) const {
     s.SetDefaultFormat(format.c_str());
     s.SetCompressionLevel(level);
-    s.SetRarLevel(rarLevel);
-    s.SetAdvDictSize(dictSize.c_str());
-    s.SetAdvWordSize(wordSize.c_str());
-    s.SetAdvSolidBlock(solidBlock.c_str());
-    s.SetAdvThreads(threads.c_str());
-    s.SetAdvExtra(extra.c_str());
-    s.SetAdvVolume(volumeSize.c_str());
-    s.SetRarAdvDictSize(rarDictSize.c_str());
-    s.SetRarAdvSolid(rarSolid);
-    s.SetRarAdvThreads(rarThreads);
-    s.SetRarAdvRecovery(rarRecoveryPct);
-    s.SetRarAdvVolume(rarSplitVolume.c_str());
-    s.SetRarAdvExtra(rarExtra.c_str());
-    s.SetDefaultSfxMode(sfxMode.c_str());
 }
 
-struct MethodEntry { const wchar_t* label; const wchar_t* id; };
+bool CompressDlg::Show(HWND hwndParent, Params& params) {
+    m_params     = params;
+    m_b2eFormats = B2e_GetWritableFormats();
 
-// Static fallback (used when 7z.dll cannot be loaded)
-static const WritableFormat kFallbackFormats[] = {
-    {L"7-Zip (.7z)",  L"7z"},
-    {L"ZIP (.zip)",   L"zip"},
-    {L"TAR (.tar)",   L"tar"},
-    {L"GZip (.gz)",   L"gz"},
-    {L"BZip2 (.bz2)", L"bz2"},
-    {L"XZ (.xz)",     L"xz"},
-};
-
-// label is the display base name. The default entry gets IDS_DEFAULT_SUFFIX appended at populate time.
-static const MethodEntry kMethods7z[] = {
-    {L"LZMA2",         L"lzma2"},   // default
-    {L"LZMA",          L"lzma"},
-    {L"PPMd",          L"ppmd"},
-    {L"BZip2",         L"bzip2"},
-    {L"Deflate",       L"deflate"},
-    // 7-Zip Zstandard extended codecs (shown only when the DLL supports them)
-    {L"Zstandard",     L"zstd"},
-    {L"Brotli",        L"brotli"},
-    {L"LZ4",           L"lz4"},
-    {L"LZ5",           L"lz5"},
-    {L"Lizard",        L"lizard"},
-    {L"FastLZMA2",     L"flzma2"},
-};
-static const MethodEntry kMethodsZip[] = {
-    {L"Deflate",        L"deflate"},  // default
-    {L"BZip2",          L"bzip2"},
-    {L"LZMA",           L"lzma"},
-    // 7-Zip Zstandard extension
-    {L"Zstandard",      L"zstd"},
-    {L"Brotli",         L"brotli"},
-    {L"LZ4",            L"lz4"},
-    {L"Store",          L"store"},
-};
-// rar.exe -m0..-m5
-static const MethodEntry kMethodsRar[] = {
-    {L"Store",          L"0"},
-    {L"Fastest",        L"1"},
-    {L"Fast",           L"2"},
-    {L"Normal",         L"3"},
-    {L"Good",           L"4"},
-    {L"Best",           L"5"},
-};
-
-// B2E method lists are now read dynamically from .b2e files; see m_b2eFormats.
-
-bool CompressDlg::Show(HWND hwndParent, Params& params,
-                       const std::vector<std::wstring>* encoderNames,
-                       const std::vector<WritableFormat>* writableFormats,
-                       bool isB2e) {
-    m_isB2e        = isB2e;
-    m_params       = params;
-    m_encoderNames = encoderNames;
-
-    // Build format list.
-    m_writableFormats.clear();
-    if (isB2e) {
-        // Dynamically scan b2e/ directory for writable formats and their method lists.
-        m_b2eFormats = B2e_GetWritableFormats();
-        for (const auto& fi : m_b2eFormats) {
-            WritableFormat wf;
-            wf.label = fi.label;
-            wf.ext   = fi.ext;
-            m_writableFormats.push_back(wf);
-        }
-    } else {
-        m_b2eFormats.clear();
-        if (writableFormats && !writableFormats->empty()) {
-            m_writableFormats = *writableFormats;
-        } else {
-            for (const auto& f : kFallbackFormats)
-                m_writableFormats.push_back(f);
-        }
-        // RAR is handled via rar.exe and must be appended manually in 7z.dll mode.
-        m_writableFormats.push_back({L"RAR (.rar)", L"rar"});
-    }
     INT_PTR result = DialogBoxParamW(
         GetModuleHandleW(nullptr),
         MAKEINTRESOURCEW(IDD_COMPRESS),
@@ -154,16 +49,10 @@ INT_PTR CompressDlg::HandleMsg(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (HIWORD(wp) == CBN_SELCHANGE) OnFormatChange(hwnd);
             break;
         case IDC_METHOD:
-            if (HIWORD(wp) == CBN_SELCHANGE && m_isB2e) OnB2eMethodChange(hwnd);
-            break;
-        case IDC_SFX_MODE:
-            if (HIWORD(wp) == CBN_SELCHANGE) OnSfxChange(hwnd);
+            if (HIWORD(wp) == CBN_SELCHANGE) OnB2eMethodChange(hwnd);
             break;
         case IDC_BROWSE:
             OnBrowseOutput(hwnd);
-            break;
-        case IDC_ADV_BUTTON:
-            OnAdvanced(hwnd);
             break;
         case IDOK:
             if (OnOK(hwnd)) EndDialog(hwnd, IDOK);
@@ -177,62 +66,30 @@ INT_PTR CompressDlg::HandleMsg(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     return FALSE;
 }
 
-// SFX choice labels are localized at display time; data id pointers live in static storage.
-struct SfxEntry { UINT labelId; const wchar_t* id; };
-static const SfxEntry kSfxModes[] = {
-    {IDS_SFX_NONE,    L""},
-    {IDS_SFX_GUI,     L"gui"},
-    {IDS_SFX_CONSOLE, L"console"},
-};
-
 void CompressDlg::OnInit(HWND hwnd) {
-    // Populate format combo from m_writableFormats
     HWND hFmt = GetDlgItem(hwnd, IDC_FORMAT);
-    for (const auto& f : m_writableFormats) {
-        int idx = (int)SendMessageW(hFmt, CB_ADDSTRING, 0, (LPARAM)f.label.c_str());
-        // f.ext.c_str() is a stable pointer as long as m_writableFormats doesn't change
-        SendMessageW(hFmt, CB_SETITEMDATA, idx, (LPARAM)f.ext.c_str());
-        if (m_params.format == f.ext) SendMessageW(hFmt, CB_SETCURSEL, idx, 0);
+    for (const auto& fi : m_b2eFormats) {
+        int idx = (int)SendMessageW(hFmt, CB_ADDSTRING, 0, (LPARAM)fi.label.c_str());
+        // fi.ext.c_str() is stable for the lifetime of m_b2eFormats
+        SendMessageW(hFmt, CB_SETITEMDATA, idx, (LPARAM)fi.ext.c_str());
+        if (m_params.format == fi.ext) SendMessageW(hFmt, CB_SETCURSEL, idx, 0);
     }
     if (SendMessageW(hFmt, CB_GETCURSEL, 0, 0) == CB_ERR)
         SendMessageW(hFmt, CB_SETCURSEL, 0, 0);
 
-    // Populate SFX combo
-    HWND hSfx = GetDlgItem(hwnd, IDC_SFX_MODE);
-    for (const auto& m : kSfxModes) {
-        std::wstring label = I18n::Tr(m.labelId);
-        int idx = (int)SendMessageW(hSfx, CB_ADDSTRING, 0, (LPARAM)label.c_str());
-        SendMessageW(hSfx, CB_SETITEMDATA, idx, (LPARAM)m.id);
-        if (m_params.sfxMode == m.id) SendMessageW(hSfx, CB_SETCURSEL, idx, 0);
-    }
-    if (SendMessageW(hSfx, CB_GETCURSEL, 0, 0) == CB_ERR)
-        SendMessageW(hSfx, CB_SETCURSEL, 0, 0);
-
     // Output path
     SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, m_params.outputPath.c_str());
 
-    // Password
-    SetDlgItemTextW(hwnd, IDC_PASSWORD, m_params.password.c_str());
-
-    // Encrypt header checkbox
-    CheckDlgButton(hwnd, IDC_ENCRYPT_HDR,
-                   m_params.encryptHeaders ? BST_CHECKED : BST_UNCHECKED);
-
     OnFormatChange(hwnd);
-
-    if (m_isB2e) ApplyB2eLayout(hwnd);
 }
 
-void CompressDlg::UpdateOutputExt(HWND hwnd, const wchar_t* fmtId, const wchar_t* sfxMode) {
+void CompressDlg::UpdateOutputExt(HWND hwnd, const wchar_t* fmtId) {
     std::wstring outPath = GetDlgItemTextString(hwnd, IDC_OUTPUT_PATH);
     if (!outPath[0] || !fmtId) return;
 
     bool isStream = (wcscmp(fmtId, L"gz")  == 0 ||
                      wcscmp(fmtId, L"bz2") == 0 ||
                      wcscmp(fmtId, L"xz")  == 0);
-    bool is7z  = (wcscmp(fmtId, L"7z")  == 0);
-    bool isRar = (wcscmp(fmtId, L"rar") == 0);
-    bool sfxOn = (sfxMode && sfxMode[0] && (is7z || isRar));
 
     bool needsTar = false;
     if (isStream) {
@@ -245,9 +102,7 @@ void CompressDlg::UpdateOutputExt(HWND hwnd, const wchar_t* fmtId, const wchar_t
     }
 
     std::wstring ext;
-    if (sfxOn) {
-        ext = L".exe";
-    } else if (needsTar) {
+    if (needsTar) {
         ext = std::wstring(L".tar.") + fmtId;
     } else {
         ext = std::wstring(L".") + fmtId;
@@ -265,17 +120,6 @@ void CompressDlg::UpdateOutputExt(HWND hwnd, const wchar_t* fmtId, const wchar_t
     }
     outPath += ext;
     SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, outPath.c_str());
-}
-
-void CompressDlg::OnSfxChange(HWND hwnd) {
-    HWND hFmt = GetDlgItem(hwnd, IDC_FORMAT);
-    HWND hSfx = GetDlgItem(hwnd, IDC_SFX_MODE);
-    int  fsel = (int)SendMessageW(hFmt, CB_GETCURSEL, 0, 0);
-    int  ssel = (int)SendMessageW(hSfx, CB_GETCURSEL, 0, 0);
-    if (fsel == CB_ERR || ssel == CB_ERR) return;
-    const wchar_t* fmtId = (const wchar_t*)SendMessageW(hFmt, CB_GETITEMDATA, fsel, 0);
-    const wchar_t* sfxId = (const wchar_t*)SendMessageW(hSfx, CB_GETITEMDATA, ssel, 0);
-    UpdateOutputExt(hwnd, fmtId, sfxId);
 }
 
 void CompressDlg::OnB2eMethodChange(HWND hwnd)
@@ -317,201 +161,34 @@ void CompressDlg::OnB2eMethodChange(HWND hwnd)
     SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, path.c_str());
 }
 
-struct B2eHideParams {
-    HWND hwndDlg;
-    LONG encryptTopPx;     // pixel Y: controls at or below this are in the Encryption/SFX area
-    LONG levelLabelLeftPx; // pixel X: Level label is uniquely to the right of this
-    LONG levelLabelTopMin; // pixel Y range of the Level label row
-    LONG levelLabelTopMax;
-};
-
-static BOOL CALLBACK HideB2eStatics(HWND hChild, LPARAM lp)
-{
-    if (GetDlgCtrlID(hChild) != IDC_STATIC) return TRUE;
-    const auto* p = reinterpret_cast<const B2eHideParams*>(lp);
-    RECT rc; GetWindowRect(hChild, &rc);
-    MapWindowPoints(HWND_DESKTOP, p->hwndDlg, (LPPOINT)&rc, 2);
-    // Encryption/SFX groupboxes and labels (y >= Encryption group top)
-    if (rc.top >= p->encryptTopPx) { ShowWindow(hChild, SW_HIDE); return TRUE; }
-    // "Level:" label: uniquely far-right in the Compression group row
-    if (rc.left >= p->levelLabelLeftPx &&
-        rc.top  >= p->levelLabelTopMin &&
-        rc.top  <= p->levelLabelTopMax)
-        ShowWindow(hChild, SW_HIDE);
-    return TRUE;
-}
-
-void CompressDlg::ApplyB2eLayout(HWND hwnd)
-{
-    static const int toHide[] = {
-        IDC_LEVEL, IDC_PASSWORD, IDC_ENCRYPT_HDR, IDC_SFX_MODE, IDC_ADV_BUTTON
-    };
-    for (int id : toHide)
-        ShowWindow(GetDlgItem(hwnd, id), SW_HIDE);
-
-    // Convert DLU thresholds to pixels for HideB2eStatics.
-    // Encryption group starts at y=104 DLU; Level label is at x=142, y≈52 DLU.
-    RECT rcEnc   = { 0, 104, 0, 104 };  // Encryption group top
-    RECT rcLvlX  = { 130,  0, 130,  0 }; // Level label left edge (~x=142 DLU)
-    RECT rcLvlY  = { 0,   45,   0, 65 }; // Level label vertical range
-    MapDialogRect(hwnd, &rcEnc);
-    MapDialogRect(hwnd, &rcLvlX);
-    MapDialogRect(hwnd, &rcLvlY);
-    B2eHideParams hp = { hwnd, rcEnc.top, rcLvlX.left, rcLvlY.top, rcLvlY.bottom };
-    EnumChildWindows(hwnd, HideB2eStatics, (LPARAM)&hp);
-
-    // Move OK / Cancel from y=188 DLU to y=106 DLU (just below Compression group).
-    // Convert the 82-DLU delta to pixels via MapDialogRect so DPI scaling is respected.
-    RECT rcDlu = { 0, 0, 0, 82 };  // 188 - 106 = 82 DLU vertical move
-    MapDialogRect(hwnd, &rcDlu);
-    int delta = rcDlu.bottom;      // pixel equivalent of 82 DLU
-
-    HWND hOK = GetDlgItem(hwnd, IDOK);
-    HWND hCancel = GetDlgItem(hwnd, IDCANCEL);
-    auto moveUp = [&](HWND h) {
-        RECT rc; GetWindowRect(h, &rc);
-        MapWindowPoints(HWND_DESKTOP, hwnd, (LPPOINT)&rc, 2);
-        SetWindowPos(h, nullptr, rc.left, rc.top - delta, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
-    };
-    moveUp(hOK);
-    moveUp(hCancel);
-
-    // Shrink dialog by the same pixel delta (keeps non-client area intact)
-    RECT rcDlg; GetWindowRect(hwnd, &rcDlg);
-    SetWindowPos(hwnd, nullptr, 0, 0,
-                 rcDlg.right  - rcDlg.left,
-                 rcDlg.bottom - rcDlg.top - delta,
-                 SWP_NOMOVE | SWP_NOZORDER);
-}
-
 void CompressDlg::OnFormatChange(HWND hwnd) {
     HWND hFmt    = GetDlgItem(hwnd, IDC_FORMAT);
     HWND hMethod = GetDlgItem(hwnd, IDC_METHOD);
-    HWND hSfx    = GetDlgItem(hwnd, IDC_SFX_MODE);
     int  sel     = (int)SendMessageW(hFmt, CB_GETCURSEL, 0, 0);
     if (sel == CB_ERR) return;
 
     const wchar_t* fmtId = (const wchar_t*)SendMessageW(hFmt, CB_GETITEMDATA, sel, 0);
-    bool is7z  = (fmtId && wcscmp(fmtId, L"7z")  == 0);
-    bool isZip = (fmtId && wcscmp(fmtId, L"zip") == 0);
-    bool isRar = (fmtId && wcscmp(fmtId, L"rar") == 0);
-
-    if (m_isB2e) {
-        // B2E mode: populate Method from the dynamically loaded type list.
-        SendMessageW(hMethod, CB_RESETCONTENT, 0, 0);
-
-        // Find the matching B2eFormatInfo by extension.
-        const B2eFormatInfo* info = nullptr;
-        for (const auto& fi : m_b2eFormats)
-            if (fmtId && fi.ext == fmtId) { info = &fi; break; }
-
-        int defaultIdx = 0;
-        if (info && !info->methods.empty()) {
-            std::wstring defaultSuffix = I18n::Tr(IDS_DEFAULT_SUFFIX);
-            for (int i = 0; i < (int)info->methods.size(); ++i) {
-                const auto& m = info->methods[i];
-                std::wstring label = m.name;
-                if (m.isDefault) { label += defaultSuffix; defaultIdx = i; }
-                int idx = (int)SendMessageW(hMethod, CB_ADDSTRING, 0, (LPARAM)label.c_str());
-                SendMessageW(hMethod, CB_SETITEMDATA, idx, i);
-            }
-            int savedLevel = m_params.level;
-            int cnt = (int)info->methods.size();
-            SendMessageW(hMethod, CB_SETCURSEL,
-                         (savedLevel >= 0 && savedLevel < cnt) ? savedLevel : defaultIdx, 0);
-        }
-        EnableWindow(hMethod, info != nullptr && !info->methods.empty());
-        OnB2eMethodChange(hwnd);
-        return;
-    }
-
-    // SFX is supported only for 7z / RAR; reset to "none" for other formats.
-    bool sfxAvailable = (is7z || isRar);
-    EnableWindow(hSfx, sfxAvailable);
-    if (!sfxAvailable) SendMessageW(hSfx, CB_SETCURSEL, 0, 0);  // index 0 = "none"
-
-    // Update output path extension to match the selected format.
-    // For gz/bz2/xz, use .tar.X when multiple inputs or a directory are selected
-    // (SevenZip::Compress will auto-wrap in tar at compression time).
-    int  ssel = (int)SendMessageW(hSfx, CB_GETCURSEL, 0, 0);
-    const wchar_t* sfxId = (ssel != CB_ERR)
-        ? (const wchar_t*)SendMessageW(hSfx, CB_GETITEMDATA, ssel, 0)
-        : L"";
-    UpdateOutputExt(hwnd, fmtId, sfxId);
 
     SendMessageW(hMethod, CB_RESETCONTENT, 0, 0);
 
-    HWND hLevel = GetDlgItem(hwnd, IDC_LEVEL);
-    SendMessageW(hLevel, CB_RESETCONTENT, 0, 0);
+    const B2eFormatInfo* info = nullptr;
+    for (const auto& fi : m_b2eFormats)
+        if (fmtId && fi.ext == fmtId) { info = &fi; break; }
 
-    if (isRar) {
-        // RAR uses -m0..-m5 compression levels; populate level combo with RAR-specific options
-        for (int i = 0; i < (int)_countof(kMethodsRar); ++i) {
-            int idx = (int)SendMessageW(hLevel, CB_ADDSTRING, 0, (LPARAM)kMethodsRar[i].label);
-            SendMessageW(hLevel, CB_SETITEMDATA, idx, i);
-            if (m_params.rarLevel == i)
-                SendMessageW(hLevel, CB_SETCURSEL, idx, 0);
+    int defaultIdx = 0;
+    if (info && !info->methods.empty()) {
+        std::wstring defaultSuffix = I18n::Tr(IDS_DEFAULT_SUFFIX);
+        for (int i = 0; i < (int)info->methods.size(); ++i) {
+            const auto& m = info->methods[i];
+            std::wstring label = m.name;
+            if (m.isDefault) { label += defaultSuffix; defaultIdx = i; }
+            int idx = (int)SendMessageW(hMethod, CB_ADDSTRING, 0, (LPARAM)label.c_str());
+            SendMessageW(hMethod, CB_SETITEMDATA, idx, i);
         }
-        if (SendMessageW(hLevel, CB_GETCURSEL, 0, 0) == CB_ERR)
-            SendMessageW(hLevel, CB_SETCURSEL, 3, 0);  // default = Normal (index 3)
-        EnableWindow(hLevel, TRUE);
-        EnableWindow(hMethod, FALSE);
-        EnableWindow(GetDlgItem(hwnd, IDC_PASSWORD), TRUE);
-        EnableWindow(GetDlgItem(hwnd, IDC_ENCRYPT_HDR), TRUE);  // RAR supports header encryption via -hp
-        return;
+        SendMessageW(hMethod, CB_SETCURSEL, defaultIdx, 0);
     }
-
-    // Non-RAR: populate level combo with 7z/zip levels (0-9 scale)
-    const UINT levelIds[]  = { IDS_LEVEL_0, IDS_LEVEL_1, IDS_LEVEL_3,
-                               IDS_LEVEL_5, IDS_LEVEL_7, IDS_LEVEL_9 };
-    const int  levelVals[] = {0, 1, 3, 5, 7, 9};
-    for (int i = 0; i < 6; ++i) {
-        std::wstring label = I18n::Tr(levelIds[i]);
-        int idx = (int)SendMessageW(hLevel, CB_ADDSTRING, 0, (LPARAM)label.c_str());
-        SendMessageW(hLevel, CB_SETITEMDATA, idx, levelVals[i]);
-        if (m_params.level == levelVals[i]) SendMessageW(hLevel, CB_SETCURSEL, idx, 0);
-    }
-    if (SendMessageW(hLevel, CB_GETCURSEL, 0, 0) == CB_ERR)
-        SendMessageW(hLevel, CB_SETCURSEL, 3, 0);  // default = 5 (index 3)
-    EnableWindow(hLevel, TRUE);
-    EnableWindow(hMethod, TRUE);
-    EnableWindow(GetDlgItem(hwnd, IDC_PASSWORD), TRUE);
-    EnableWindow(GetDlgItem(hwnd, IDC_ENCRYPT_HDR), is7z);
-
-    const MethodEntry* methods = is7z ? kMethods7z : kMethodsZip;
-    int count = is7z ? (int)_countof(kMethods7z) : (int)_countof(kMethodsZip);
-
-    // When encoderNames is non-empty, show only encoders supported by the DLL.
-    // Empty or null means no filter (show all codecs).
-    auto supportsEncoder = [&](const wchar_t* id) -> bool {
-        if (!m_encoderNames || m_encoderNames->empty()) return true;
-        std::wstring lower = id;
-        for (auto& c : lower) c = (wchar_t)towlower((wchar_t)c);
-        for (const auto& name : *m_encoderNames) {
-            if (name == lower) return true;
-            // ZIP's "store" is registered as "copy" inside the DLL
-            if (lower == L"store" && name == L"copy") return true;
-            // Safety: "zstd" ↔ "zstandard" (variant spelling may differ across DLL versions)
-            if ((lower == L"zstd" || lower == L"zstandard") &&
-                (name == L"zstd" || name == L"zstandard")) return true;
-        }
-        return false;
-    };
-
-    // Append "(default)" suffix only to the default method.
-    // LZMA2 is the default for 7z; Deflate is the default for ZIP.
-    const wchar_t* defaultId = is7z ? L"lzma2" : L"deflate";
-    std::wstring defaultSuffix = I18n::Tr(IDS_DEFAULT_SUFFIX);
-    for (int i = 0; i < count; ++i) {
-        if (!supportsEncoder(methods[i].id)) continue;
-        std::wstring label = methods[i].label;
-        if (wcscmp(methods[i].id, defaultId) == 0) label += defaultSuffix;
-        int idx = (int)SendMessageW(hMethod, CB_ADDSTRING, 0, (LPARAM)label.c_str());
-        SendMessageW(hMethod, CB_SETITEMDATA, idx, (LPARAM)methods[i].id);
-        if (m_params.method == methods[i].id) SendMessageW(hMethod, CB_SETCURSEL, idx, 0);
-    }
-    if (SendMessageW(hMethod, CB_GETCURSEL, 0, 0) == CB_ERR)
-        SendMessageW(hMethod, CB_SETCURSEL, 0, 0);
+    EnableWindow(hMethod, info != nullptr && !info->methods.empty());
+    OnB2eMethodChange(hwnd);
 }
 
 void CompressDlg::OnBrowseOutput(HWND hwnd) {
@@ -519,57 +196,6 @@ void CompressDlg::OnBrowseOutput(HWND hwnd) {
     if (BrowseForFile(hwnd, IDS_TITLE_SELECT_OUTPUT, IDS_FILTER_ALL_FILES,
                       OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST, &path, true))
         SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, path.c_str());
-}
-
-void CompressDlg::OnAdvanced(HWND hwnd) {
-    // Get the currently selected format
-    std::wstring fmt = m_params.format;
-    HWND hFmt = GetDlgItem(hwnd, IDC_FORMAT);
-    int fsel = (int)SendMessageW(hFmt, CB_GETCURSEL, 0, 0);
-    if (fsel != CB_ERR) {
-        const wchar_t* fmtId = (const wchar_t*)SendMessageW(hFmt, CB_GETITEMDATA, fsel, 0);
-        if (fmtId) fmt = fmtId;
-    }
-
-    if (fmt == L"rar") {
-        // RAR-specific advanced settings
-        RarAdvancedDlg::Params rp;
-        rp.dictSize    = m_params.rarDictSize;
-        rp.solid       = m_params.rarSolid;
-        rp.threads     = m_params.rarThreads;
-        rp.recoveryPct = m_params.rarRecoveryPct;
-        rp.splitVolume = m_params.rarSplitVolume;
-        rp.extra       = m_params.rarExtra;
-
-        RarAdvancedDlg rarDlg;
-        if (rarDlg.Show(hwnd, rp)) {
-            m_params.rarDictSize    = rp.dictSize;
-            m_params.rarSolid       = rp.solid;
-            m_params.rarThreads     = rp.threads;
-            m_params.rarRecoveryPct = rp.recoveryPct;
-            m_params.rarSplitVolume = rp.splitVolume;
-            m_params.rarExtra       = rp.extra;
-        }
-    } else {
-        // Advanced settings for 7z/zip/etc.
-        AdvancedCompressDlg::Params advParams;
-        advParams.dictSize   = m_params.dictSize;
-        advParams.wordSize   = m_params.wordSize;
-        advParams.solidBlock = m_params.solidBlock;
-        advParams.threads    = m_params.threads;
-        advParams.extra      = m_params.extra;
-        advParams.volumeSize = m_params.volumeSize;
-
-        AdvancedCompressDlg advDlg;
-        if (advDlg.Show(hwnd, fmt.c_str(), advParams)) {
-            m_params.dictSize   = advParams.dictSize;
-            m_params.wordSize   = advParams.wordSize;
-            m_params.solidBlock = advParams.solidBlock;
-            m_params.threads    = advParams.threads;
-            m_params.extra      = advParams.extra;
-            m_params.volumeSize = advParams.volumeSize;
-        }
-    }
 }
 
 bool CompressDlg::OnOK(HWND hwnd) {
@@ -590,55 +216,17 @@ bool CompressDlg::OnOK(HWND hwnd) {
         if (fmtId) m_params.format = fmtId;
     }
 
-    if (m_isB2e) {
-        // B2E: method combo selection IS the level index; no password/SFX/advanced.
-        HWND hMethod = GetDlgItem(hwnd, IDC_METHOD);
-        int  msel    = (int)SendMessageW(hMethod, CB_GETCURSEL, 0, 0);
-        m_params.level = (msel != CB_ERR)
-            ? (int)SendMessageW(hMethod, CB_GETITEMDATA, msel, 0)
-            : 1;  // default (LZMA2 / Deflate / lh6 / gzip / Best)
-        m_params.method.clear();
-        m_params.password.clear();
-        m_params.sfxMode.clear();
-        return true;
-    }
-
-    // Read level
-    HWND hLevel = GetDlgItem(hwnd, IDC_LEVEL);
-    int  lsel   = (int)SendMessageW(hLevel, CB_GETCURSEL, 0, 0);
-    if (lsel != CB_ERR) {
-        m_params.level = (int)SendMessageW(hLevel, CB_GETITEMDATA, lsel, 0);
-    }
-
-    // Read method
     HWND hMethod = GetDlgItem(hwnd, IDC_METHOD);
     int  msel    = (int)SendMessageW(hMethod, CB_GETCURSEL, 0, 0);
-    if (msel != CB_ERR) {
-        const wchar_t* mId = (const wchar_t*)SendMessageW(hMethod, CB_GETITEMDATA, msel, 0);
-        if (mId) m_params.method = mId;
+    int  idx     = (msel != CB_ERR) ? (int)SendMessageW(hMethod, CB_GETITEMDATA, msel, 0) : 0;
+    m_params.level = idx;  // persist selected index so Settings can restore format default later
+    m_params.method.clear();
+    for (const auto& fi : m_b2eFormats) {
+        if (fi.ext == m_params.format) {
+            if (idx >= 0 && idx < (int)fi.methods.size())
+                m_params.method = fi.methods[idx].name;
+            break;
+        }
     }
-    // For RAR, the compression level is passed as the method digit (-m0..-m5)
-    if (m_params.format == L"rar") {
-        m_params.rarLevel = m_params.level;
-        m_params.method   = std::to_wstring(m_params.level);
-    }
-
-    // Read password
-    m_params.password = GetDlgItemTextString(hwnd, IDC_PASSWORD);
-
-    m_params.encryptHeaders = (IsDlgButtonChecked(hwnd, IDC_ENCRYPT_HDR) == BST_CHECKED);
-
-    // Read SFX mode (forced to "" for formats other than 7z / RAR)
-    HWND hSfx = GetDlgItem(hwnd, IDC_SFX_MODE);
-    int  ssel = (int)SendMessageW(hSfx, CB_GETCURSEL, 0, 0);
-    if (ssel != CB_ERR) {
-        const wchar_t* sId = (const wchar_t*)SendMessageW(hSfx, CB_GETITEMDATA, ssel, 0);
-        m_params.sfxMode = sId ? sId : L"";
-    } else {
-        m_params.sfxMode.clear();
-    }
-    if (m_params.format != L"7z" && m_params.format != L"rar")
-        m_params.sfxMode.clear();
-
     return true;
 }
