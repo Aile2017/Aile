@@ -4,9 +4,11 @@
 #include "CompressHelper.h"
 #include "I18n.h"
 #include "ProgressDlg.h"
+#include "RarProcess.h"
 #include "WorkerThread.h"
 #include "resource.h"
 #include <commctrl.h>
+#include <shlwapi.h>
 
 App& App::Instance() {
     static App inst;
@@ -134,7 +136,10 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
     CompressDlg dlg;
     const auto* enc = m_sevenZip.IsLoaded() ? &m_sevenZip.GetEncoderNames() : nullptr;
     const auto* wf  = m_sevenZip.IsLoaded() ? &m_sevenZip.GetWritableFormats() : nullptr;
-    if (!dlg.Show(wnd.Hwnd(), params, enc, wf)) {
+    const bool rarAvailable = !m_settings.GetRarExePath().empty()
+        ? (PathFileExistsW(m_settings.GetRarExePath().c_str()) == TRUE)
+        : !RarProcess::FindRarExe().empty();
+    if (!dlg.Show(wnd.Hwnd(), params, enc, wf, rarAvailable)) {
         return 0;
     }
     params.SaveToSettings(m_settings);

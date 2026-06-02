@@ -94,7 +94,8 @@ static const MethodEntry kMethodsRar[] = {
 
 bool CompressDlg::Show(HWND hwndParent, Params& params,
                        const std::vector<std::wstring>* encoderNames,
-                       const std::vector<WritableFormat>* writableFormats) {
+                       const std::vector<WritableFormat>* writableFormats,
+                       bool includeRar) {
     m_params       = params;
     m_encoderNames = encoderNames;
 
@@ -106,8 +107,13 @@ bool CompressDlg::Show(HWND hwndParent, Params& params,
         for (const auto& f : kFallbackFormats)
             m_writableFormats.push_back(f);
     }
-    // RAR is handled via rar.exe, so always append at the end
-    m_writableFormats.push_back({L"RAR (.rar)", L"rar"});
+    // RAR is handled via rar.exe; only include when rar.exe is found
+    if (includeRar) {
+        m_writableFormats.push_back({L"RAR (.rar)", L"rar"});
+    } else if (m_params.format == L"rar") {
+        // Fall back to 7z if the previously saved format was RAR but rar.exe is gone
+        m_params.format = L"7z";
+    }
     INT_PTR result = DialogBoxParamW(
         GetModuleHandleW(nullptr),
         MAKEINTRESOURCEW(IDD_COMPRESS),
@@ -318,7 +324,8 @@ void CompressDlg::OnFormatChange(HWND hwnd) {
     if (SendMessageW(hLevel, CB_GETCURSEL, 0, 0) == CB_ERR)
         SendMessageW(hLevel, CB_SETCURSEL, 3, 0);  // default = 5 (index 3)
     EnableWindow(hLevel, TRUE);
-    EnableWindow(GetDlgItem(hwnd, IDC_PASSWORD), TRUE);
+    // Password is only supported for 7z and zip (tar/gz/bz2/xz have no encryption)
+    EnableWindow(GetDlgItem(hwnd, IDC_PASSWORD), is7z || isZip);
     EnableWindow(GetDlgItem(hwnd, IDC_ENCRYPT_HDR), is7z);
 
     if (!is7z && !isZip) {

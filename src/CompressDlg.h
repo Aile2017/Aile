@@ -45,9 +45,11 @@ public:
     // encoderNames: lowercased encoder names from SevenZip::GetEncoderNames().
     // writableFormats: writable formats from SevenZip::GetWritableFormats().
     //                 nullptr or empty = use static fallback list.
+    // includeRar: if false, RAR is omitted from the format list (rar.exe not found).
     bool Show(HWND hwndParent, Params& params,
               const std::vector<std::wstring>* encoderNames = nullptr,
-              const std::vector<WritableFormat>* writableFormats = nullptr);
+              const std::vector<WritableFormat>* writableFormats = nullptr,
+              bool includeRar = true);
 
     static INT_PTR CALLBACK DlgProc(HWND, UINT, WPARAM, LPARAM);
     INT_PTR HandleMsg(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
