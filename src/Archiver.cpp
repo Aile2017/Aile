@@ -20,7 +20,12 @@ CArcModule::CArcModule( const char* name )
 	else
 	{
 		ki_strcpy( m_name, name );
-		m_type = SHLCMD;
+		// A name with a file extension (e.g. "WinRAR.exe") is expected to be an
+		// on-disk executable; not finding it means it is absent.  A name without
+		// an extension (e.g. "copy") may be a shell built-in, so keep SHLCMD.
+		const char* dot = ::strrchr(name, '.');
+		const char* sep = ::strpbrk(name, "/\\");
+		m_type = (dot && (!sep || dot > sep)) ? NOTEXIST : SHLCMD;
 	}
 
 	::SetCurrentDirectory(prev_cur);
