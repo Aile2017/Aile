@@ -46,10 +46,11 @@ HRESULT SevenZip::OpenArchive(const wchar_t* path,
                                const wchar_t* /*password*/,
                                std::wstring* effectivePath)
 {
-    std::wstring colHeader;
-    HRESULT hr = B2e_List(path, items, &colHeader);
+    std::wstring colHeader, toolName;
+    HRESULT hr = B2e_List(path, items, &colHeader, &toolName);
     if (SUCCEEDED(hr)) {
         m_listColumnLabel = colHeader;
+        if (!toolName.empty()) m_loadedName = toolName;
         if (effectivePath) *effectivePath = path;
     }
     return hr;

@@ -28,42 +28,6 @@ public:
     int  GetMkDir() const                           { return m_mkDir; }
     void SetMkDir(int v)                            { m_mkDir = v; }
 
-    int  GetRarLevel() const                        { return m_rarLevel; }
-    void SetRarLevel(int v)                         { m_rarLevel = v; }
-
-    // Self-extraction (SFX) mode — remembers the last selection in the compress dialog.
-    // Values: "" (none) / "gui" / "console".
-    const std::wstring& GetDefaultSfxMode() const   { return m_defaultSfxMode; }
-    void SetDefaultSfxMode(const wchar_t* v)        { m_defaultSfxMode = v; }
-
-    // Advanced compress options (last-used values)
-    const std::wstring& GetAdvDictSize() const      { return m_advDictSize; }
-    const std::wstring& GetAdvWordSize() const      { return m_advWordSize; }
-    const std::wstring& GetAdvSolidBlock() const    { return m_advSolidBlock; }
-    const std::wstring& GetAdvThreads() const       { return m_advThreads; }
-    const std::wstring& GetAdvExtra() const         { return m_advExtra; }
-    const std::wstring& GetAdvVolume() const        { return m_advVolume; }
-    void SetAdvDictSize(const wchar_t* v)           { m_advDictSize   = v; }
-    void SetAdvWordSize(const wchar_t* v)           { m_advWordSize   = v; }
-    void SetAdvSolidBlock(const wchar_t* v)         { m_advSolidBlock = v; }
-    void SetAdvThreads(const wchar_t* v)            { m_advThreads    = v; }
-    void SetAdvExtra(const wchar_t* v)              { m_advExtra      = v; }
-    void SetAdvVolume(const wchar_t* v)             { m_advVolume     = v; }
-
-    // RAR advanced options (last-used values)
-    const std::wstring& GetRarAdvDictSize() const   { return m_rarAdvDictSize; }
-    bool                GetRarAdvSolid() const      { return m_rarAdvSolid; }
-    int                 GetRarAdvThreads() const    { return m_rarAdvThreads; }
-    int                 GetRarAdvRecovery() const   { return m_rarAdvRecovery; }
-    const std::wstring& GetRarAdvVolume() const     { return m_rarAdvVolume; }
-    const std::wstring& GetRarAdvExtra() const      { return m_rarAdvExtra; }
-    void SetRarAdvDictSize(const wchar_t* v)        { m_rarAdvDictSize  = v; }
-    void SetRarAdvSolid(bool v)                     { m_rarAdvSolid     = v; }
-    void SetRarAdvThreads(int v)                    { m_rarAdvThreads   = v; }
-    void SetRarAdvRecovery(int v)                   { m_rarAdvRecovery  = v; }
-    void SetRarAdvVolume(const wchar_t* v)          { m_rarAdvVolume    = v; }
-    void SetRarAdvExtra(const wchar_t* v)           { m_rarAdvExtra     = v; }
-
     // Window placement
     int  GetWindowX() const          { return m_windowX; }
     int  GetWindowY() const          { return m_windowY; }
@@ -124,21 +88,7 @@ private:
     bool         m_outputDirModeFixed;
     std::wstring m_defaultFormat;
     int          m_compressionLevel;
-    int          m_rarLevel;
     int          m_mkDir;
-    std::wstring m_defaultSfxMode;
-    std::wstring m_advDictSize;
-    std::wstring m_advWordSize;
-    std::wstring m_advSolidBlock;
-    std::wstring m_advThreads;
-    std::wstring m_advExtra;
-    std::wstring m_advVolume;
-    std::wstring m_rarAdvDictSize;
-    bool         m_rarAdvSolid;
-    int          m_rarAdvThreads;
-    int          m_rarAdvRecovery;
-    std::wstring m_rarAdvVolume;
-    std::wstring m_rarAdvExtra;
     int          m_windowX;
     int          m_windowY;
     int          m_windowW;

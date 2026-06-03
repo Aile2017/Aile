@@ -27,28 +27,7 @@
 #define IDC_OUTPUT_PATH     1001
 #define IDC_BROWSE          1002
 #define IDC_FORMAT          1003
-#define IDC_LEVEL           1004
 #define IDC_METHOD          1005
-#define IDC_PASSWORD        1006
-#define IDC_ENCRYPT_HDR     1007
-#define IDC_ADV_BUTTON      1009
-#define IDC_SFX_MODE        1010
-
-// Advanced compress dialog controls
-#define IDC_ADV_DICT        6001
-#define IDC_ADV_WORD        6002
-#define IDC_ADV_SOLID       6003
-#define IDC_ADV_THREADS     6004
-#define IDC_ADV_PARAMS      6005
-#define IDC_ADV_VOLUME      6006
-
-// RAR Advanced compress dialog controls
-#define IDC_RAR_ADV_DICT      7001
-#define IDC_RAR_ADV_SOLID     7002
-#define IDC_RAR_ADV_THREADS   7003
-#define IDC_RAR_ADV_RECOVERY  7004
-#define IDC_RAR_ADV_VOLUME    7005
-#define IDC_RAR_ADV_PARAMS    7006
 
 // Progress dialog controls
 #define IDC_PROGRESS_BAR    2001

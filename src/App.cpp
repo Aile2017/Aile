@@ -126,9 +126,7 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
             params.outputPath += L"." + params.format;
     } else {
         CompressDlg dlg;
-        const auto* enc = m_sevenZip.IsLoaded() ? &m_sevenZip.GetEncoderNames() : nullptr;
-        const auto* wf  = m_sevenZip.IsLoaded() ? &m_sevenZip.GetWritableFormats() : nullptr;
-        if (!dlg.Show(wnd.Hwnd(), params, enc, wf)) {
+        if (!dlg.Show(wnd.Hwnd(), params)) {
             return 0;
         }
         params.SaveToSettings(m_settings);
@@ -139,18 +137,9 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
         auto& sz = m_sevenZip;
         WorkerThread worker;
         worker.Start([&sz, params]() -> HRESULT {
-            const wchar_t* pw = params.password.empty() ? nullptr : params.password.c_str();
-            CompressAdvanced adv;
-            adv.dictSize   = params.dictSize;
-            adv.wordSize   = params.wordSize;
-            adv.solidBlock = params.solidBlock;
-            adv.threads    = params.threads;
-            adv.extra      = params.extra;
-            adv.volumeSize = params.volumeSize;
             return sz.Compress(params.inputFiles, params.outputPath.c_str(),
                                params.format.c_str(), params.level,
-                               params.method.c_str(), pw, nullptr, &adv,
-                               params.encryptHeaders);
+                               params.method.c_str(), nullptr, nullptr);
         }, wnd.Hwnd(), WM_APP_DONE);
 
         MSG msg;
@@ -186,9 +175,7 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
             baseParams.outputPath += L"." + baseParams.format;
     } else {
         CompressDlg dlg;
-        const auto* enc = m_sevenZip.IsLoaded() ? &m_sevenZip.GetEncoderNames()    : nullptr;
-        const auto* wf  = m_sevenZip.IsLoaded() ? &m_sevenZip.GetWritableFormats() : nullptr;
-        if (!dlg.Show(wnd.Hwnd(), baseParams, enc, wf)) return 0;
+        if (!dlg.Show(wnd.Hwnd(), baseParams)) return 0;
         baseParams.SaveToSettings(m_settings);
         m_settings.Save();
     }
@@ -205,17 +192,9 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
             auto& sz = m_sevenZip;
             WorkerThread worker;
             worker.Start([&sz, params]() -> HRESULT {
-                const wchar_t* pw = params.password.empty() ? nullptr : params.password.c_str();
-                CompressAdvanced adv;
-                adv.dictSize   = params.dictSize;
-                adv.wordSize   = params.wordSize;
-                adv.solidBlock = params.solidBlock;
-                adv.threads    = params.threads;
-                adv.extra      = params.extra;
-                adv.volumeSize = params.volumeSize;
                 return sz.Compress(params.inputFiles, params.outputPath.c_str(),
                                    params.format.c_str(), params.level,
-                                   params.method.c_str(), pw, nullptr, &adv, params.encryptHeaders);
+                                   params.method.c_str(), nullptr, nullptr);
             }, wnd.Hwnd(), WM_APP_DONE);
             MSG msg;
             while (GetMessageW(&msg, nullptr, 0, 0) > 0) {

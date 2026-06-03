@@ -64,7 +64,7 @@ BEGIN
     END
 END
 
-IDD_COMPRESS DIALOGEX 0, 0, 360, 210
+IDD_COMPRESS DIALOGEX 0, 0, 360, 98
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Compress"
 FONT 9, "Segoe UI", 400, 0, 0x1
@@ -74,76 +74,14 @@ BEGIN
     EDITTEXT        IDC_OUTPUT_PATH,     58,  14, 240,  14, ES_AUTOHSCROLL
     PUSHBUTTON      "Browse...",         IDC_BROWSE,   302,  13,  44,  15
 
-    GROUPBOX        "Compression",       IDC_STATIC,     7,  38, 346,  60
+    GROUPBOX        "Compression",       IDC_STATIC,     7,  38, 346,  30
     LTEXT           "Format:",           IDC_STATIC,    14,  52,  28,   8
     COMBOBOX        IDC_FORMAT,          44,  50,  90, 100, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "Level:",            IDC_STATIC,   142,  52,  30,   8
-    COMBOBOX        IDC_LEVEL,          174,  50,  80, 100, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "Method:",           IDC_STATIC,    14,  70,  30,   8
-    COMBOBOX        IDC_METHOD,          46,  68, 110, 100, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Method:",           IDC_STATIC,   142,  52,  40,   8
+    COMBOBOX        IDC_METHOD,         184,  50, 158, 100, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
 
-    GROUPBOX        "Encryption",        IDC_STATIC,     7, 104, 346,  38
-    LTEXT           "Password:",         IDC_STATIC,    14, 118,  46,   8
-    EDITTEXT        IDC_PASSWORD,        62, 116, 150,  14, ES_AUTOHSCROLL | ES_PASSWORD
-    AUTOCHECKBOX    "Encrypt headers",   IDC_ENCRYPT_HDR, 220, 118, 100, 10
-
-    GROUPBOX        "Self-extracting (SFX)", IDC_STATIC, 7, 148, 346,  30
-    LTEXT           "Type:",             IDC_STATIC,    14, 162,  28,   8
-    COMBOBOX        IDC_SFX_MODE,        44, 160, 130,  80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-
-    PUSHBUTTON      "Advanced...",       IDC_ADV_BUTTON, 185, 188,  50,  14
-    DEFPUSHBUTTON   "OK",                IDOK,          248, 188,  50,  14
-    PUSHBUTTON      "Cancel",            IDCANCEL,      302, 188,  50,  14
-END
-
-IDD_COMPRESS_ADV DIALOGEX 0, 0, 290, 215
-STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "Advanced compression settings"
-FONT 9, "Segoe UI", 400, 0, 0x1
-BEGIN
-    GROUPBOX        "Compression options",   IDC_STATIC,     7,   4, 276, 170
-    LTEXT           "Dictionary size:",      IDC_STATIC,    14,  20,  58,   8
-    COMBOBOX        IDC_ADV_DICT,            76,  18, 110, 130, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "Word size:",            IDC_STATIC,    14,  38,  58,   8
-    COMBOBOX        IDC_ADV_WORD,            76,  36, 110, 130, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "Solid block:",          IDC_STATIC,    14,  56,  58,   8
-    COMBOBOX        IDC_ADV_SOLID,           76,  54, 110, 130, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "Threads:",              IDC_STATIC,    14,  74,  58,   8
-    COMBOBOX        IDC_ADV_THREADS,         76,  72, 110, 130, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "Volume size:",          IDC_STATIC,    14,  92,  58,   8
-    COMBOBOX        IDC_ADV_VOLUME,          76,  90, 110, 130, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "Extra parameters:",     IDC_STATIC,    14, 112,  68,   8
-    LTEXT           "(e.g. mf=bt4 mpass=2)", IDC_STATIC,    14, 122,  90,   8
-    EDITTEXT        IDC_ADV_PARAMS,          14, 134, 256,  14, ES_AUTOHSCROLL
-    LTEXT           "* Solid block applies only to 7z format.",            IDC_STATIC, 14, 154, 260, 8
-    LTEXT           "* Volume splitting is not applied to gz/bz2/xz/tar.", IDC_STATIC, 14, 162, 260, 8
-
-    DEFPUSHBUTTON   "OK",                IDOK,          176, 195,  50,  14
-    PUSHBUTTON      "Cancel",            IDCANCEL,      233, 195,  50,  14
-END
-
-IDD_RAR_COMPRESS_ADV DIALOGEX 0, 0, 290, 215
-STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "RAR advanced settings"
-FONT 9, "Segoe UI", 400, 0, 0x1
-BEGIN
-    GROUPBOX        "RAR options",            IDC_STATIC,     7,   4, 276, 185
-    LTEXT           "Dictionary size:",       IDC_STATIC,    14,  20,  58,   8
-    COMBOBOX        IDC_RAR_ADV_DICT,         76,  18, 110, 130, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "Threads:",               IDC_STATIC,    14,  38,  58,   8
-    COMBOBOX        IDC_RAR_ADV_THREADS,      76,  36, 110, 130, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    CONTROL         "Solid archive",          IDC_RAR_ADV_SOLID, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 14, 58, 120, 10
-    LTEXT           "Recovery record:",       IDC_STATIC,    14,  74,  62,   8
-    COMBOBOX        IDC_RAR_ADV_RECOVERY,     80,  72, 106, 130, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "Volume size:",           IDC_STATIC,    14,  92,  62,   8
-    COMBOBOX        IDC_RAR_ADV_VOLUME,       80,  90, 106, 130, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "Extra parameters:",      IDC_STATIC,    14, 114,  68,   8
-    LTEXT           "(e.g. -htb -oi)",        IDC_STATIC,    14, 124,  80,   8
-    EDITTEXT        IDC_RAR_ADV_PARAMS,       14, 136, 256,  14, ES_AUTOHSCROLL
-    LTEXT           "* When WinRAR.exe (GUI) is used, WinRAR's own progress dialog is shown.", IDC_STATIC, 14, 158, 260, 8
-
-    DEFPUSHBUTTON   "OK",                IDOK,          176, 195,  50,  14
-    PUSHBUTTON      "Cancel",            IDCANCEL,      233, 195,  50,  14
+    DEFPUSHBUTTON   "OK",                IDOK,          248,  76,  50,  14
+    PUSHBUTTON      "Cancel",            IDCANCEL,      302,  76,  50,  14
 END
 
 IDD_PROGRESS DIALOGEX 0, 0, 300, 76
@@ -367,7 +305,7 @@ BEGIN
     END
 END
 
-IDD_COMPRESS DIALOGEX 0, 0, 360, 210
+IDD_COMPRESS DIALOGEX 0, 0, 360, 98
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "圧縮"
 FONT 9, "Segoe UI", 400, 0, 0x1
@@ -377,77 +315,16 @@ BEGIN
     EDITTEXT        IDC_OUTPUT_PATH,   58,  14, 240,  14, ES_AUTOHSCROLL
     PUSHBUTTON      "参照...",          IDC_BROWSE,   302,  13,  44,  15
 
-    GROUPBOX        "圧縮設定",         IDC_STATIC,     7,  38, 346,  60
+    GROUPBOX        "圧縮設定",         IDC_STATIC,     7,  38, 346,  30
     LTEXT           "形式:",            IDC_STATIC,    14,  52,  28,   8
     COMBOBOX        IDC_FORMAT,        44,  50,  90, 100, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "レベル:",          IDC_STATIC,   142,  52,  30,   8
-    COMBOBOX        IDC_LEVEL,        174,  50,  80, 100, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "メソッド:",        IDC_STATIC,    14,  70,  30,   8
-    COMBOBOX        IDC_METHOD,        46,  68, 110, 100, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "メソッド:",        IDC_STATIC,   142,  52,  40,   8
+    COMBOBOX        IDC_METHOD,       184,  50, 158, 100, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
 
-    GROUPBOX        "暗号化",           IDC_STATIC,     7, 104, 346,  38
-    LTEXT           "パスワード:",       IDC_STATIC,    14, 118,  46,   8
-    EDITTEXT        IDC_PASSWORD,       62, 116, 150,  14, ES_AUTOHSCROLL | ES_PASSWORD
-    AUTOCHECKBOX    "ヘッダを暗号化",   IDC_ENCRYPT_HDR, 220, 118, 100, 10
-
-    GROUPBOX        "自己展開 (SFX)",   IDC_STATIC,     7, 148, 346,  30
-    LTEXT           "形式:",            IDC_STATIC,    14, 162,  28,   8
-    COMBOBOX        IDC_SFX_MODE,       44, 160, 130,  80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-
-    PUSHBUTTON      "詳細...",          IDC_ADV_BUTTON, 185, 188,  50,  14
-    DEFPUSHBUTTON   "OK",              IDOK,          248, 188,  50,  14
-    PUSHBUTTON      "キャンセル",       IDCANCEL,      302, 188,  50,  14
+    DEFPUSHBUTTON   "OK",              IDOK,          248,  76,  50,  14
+    PUSHBUTTON      "キャンセル",       IDCANCEL,      302,  76,  50,  14
 END
 
-IDD_COMPRESS_ADV DIALOGEX 0, 0, 290, 215
-STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "詳細圧縮設定"
-FONT 9, "Segoe UI", 400, 0, 0x1
-BEGIN
-    GROUPBOX        "圧縮オプション",        IDC_STATIC,     7,   4, 276, 170
-    LTEXT           "辞書サイズ:",           IDC_STATIC,    14,  20,  58,   8
-    COMBOBOX        IDC_ADV_DICT,           76,  18, 110, 130, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "ワードサイズ:",         IDC_STATIC,    14,  38,  58,   8
-    COMBOBOX        IDC_ADV_WORD,           76,  36, 110, 130, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "ソリッドブロック:",     IDC_STATIC,    14,  56,  58,   8
-    COMBOBOX        IDC_ADV_SOLID,          76,  54, 110, 130, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "スレッド数:",           IDC_STATIC,    14,  74,  58,   8
-    COMBOBOX        IDC_ADV_THREADS,        76,  72, 110, 130, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "分割ボリューム:",       IDC_STATIC,    14,  92,  58,   8
-    COMBOBOX        IDC_ADV_VOLUME,         76,  90, 110, 130, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "追加パラメーター:",     IDC_STATIC,    14, 112,  68,   8
-    LTEXT           "(例: mf=bt4 mpass=2)", IDC_STATIC,    14, 122,  90,   8
-    EDITTEXT        IDC_ADV_PARAMS,         14, 134, 256,  14, ES_AUTOHSCROLL
-    LTEXT           "※ 7z形式以外ではソリッドブロックは無効です。",     IDC_STATIC, 14, 154, 260, 8
-    LTEXT           "※ 分割ボリュームは gz/bz2/xz/tar では適用されません。", IDC_STATIC, 14, 162, 260, 8
-
-    DEFPUSHBUTTON   "OK",              IDOK,          176, 195,  50,  14
-    PUSHBUTTON      "キャンセル",       IDCANCEL,      233, 195,  50,  14
-END
-
-IDD_RAR_COMPRESS_ADV DIALOGEX 0, 0, 290, 215
-STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "RAR詳細設定"
-FONT 9, "Segoe UI", 400, 0, 0x1
-BEGIN
-    GROUPBOX        "RARオプション",          IDC_STATIC,     7,   4, 276, 185
-    LTEXT           "辞書サイズ:",             IDC_STATIC,    14,  20,  58,   8
-    COMBOBOX        IDC_RAR_ADV_DICT,         76,  18, 110, 130, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "スレッド数:",             IDC_STATIC,    14,  38,  58,   8
-    COMBOBOX        IDC_RAR_ADV_THREADS,      76,  36, 110, 130, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    CONTROL         "ソリッドアーカイブ",      IDC_RAR_ADV_SOLID, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 14, 58, 120, 10
-    LTEXT           "リカバリレコード:",        IDC_STATIC,    14,  74,  62,   8
-    COMBOBOX        IDC_RAR_ADV_RECOVERY,     80,  72, 106, 130, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "分割ボリューム:",          IDC_STATIC,    14,  92,  62,   8
-    COMBOBOX        IDC_RAR_ADV_VOLUME,       80,  90, 106, 130, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "追加パラメーター:",        IDC_STATIC,    14, 114,  68,   8
-    LTEXT           "(例: -htb -oi)",          IDC_STATIC,    14, 124,  80,   8
-    EDITTEXT        IDC_RAR_ADV_PARAMS,       14, 136, 256,  14, ES_AUTOHSCROLL
-    LTEXT           "※ WinRAR.exe (GUI) 使用時は WinRAR 側の進捗ダイアログが表示されます", IDC_STATIC, 14, 158, 260, 8
-
-    DEFPUSHBUTTON   "OK",              IDOK,          176, 195,  50,  14
-    PUSHBUTTON      "キャンセル",       IDCANCEL,      233, 195,  50,  14
-END
 
 IDD_PROGRESS DIALOGEX 0, 0, 300, 76
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION
