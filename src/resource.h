@@ -22,6 +22,7 @@
 #define IDD_RAR_COMPRESS_ADV  206
 #define IDD_PASSWORD        207
 #define IDD_ABOUT           208
+#define IDD_TEST_RESULT     209
 
 // Compress dialog controls
 #define IDC_OUTPUT_PATH     1001
@@ -58,6 +59,10 @@
 #define IDC_STRIP_TRAILING_NUM  3020  // Strip trailing digits/-/_/. from stem
 #define IDC_COLLAPSE_SINGLE_DIR 3021  // Collapse single-subfolder output (break_ddir)
 #define IDC_OPEN_FOLDER_AFTER   3023  // Open output folder after extraction
+
+// Test result dialog controls
+#define IDC_TEST_STATUS     9001
+#define IDC_TEST_OUTPUT     9002
 
 #define IDC_PASSWORD_INPUT  8001
 
@@ -177,6 +182,9 @@
 #define IDS_ERR_DELETE_FAILED           11102
 #define IDS_ERR_COMPRESS_FAILED         11103
 #define IDS_ERR_OP_NOT_SUPPORTED        11107
+#define IDS_TITLE_TEST_RESULT           11112
+#define IDS_TEST_PASSED                 11113
+#define IDS_TEST_FAILED                 11114
 
 // --- Drag & Drop ---
 #define IDS_FMT_DND_PROMPT              11110

@@ -1554,15 +1554,51 @@ void MainWindow::OnContextMenu(HWND /*hwndFrom*/, int x, int y) {
 }
 
 
-void MainWindow::OnTest() {
-    if (m_archivePath.empty()) {
-        MessageBoxW(m_hwnd, I18n::Tr(IDS_INFO_NO_ARCHIVE_TO_TEST).c_str(),
-                    I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONINFORMATION);
-        return;
+struct TestResultDlgData {
+    std::wstring status;
+    std::wstring output;
+};
+
+static INT_PTR CALLBACK TestResultDlgProc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
+{
+    if (msg == WM_INITDIALOG) {
+        SetWindowLongPtrW(h, DWLP_USER, lp);
+        auto* d = reinterpret_cast<TestResultDlgData*>(lp);
+        SetDlgItemTextW(h, IDC_TEST_STATUS, d->status.c_str());
+        SetDlgItemTextW(h, IDC_TEST_OUTPUT, d->output.c_str());
+        return TRUE;
     }
-    // B2E backend: integrity test not supported.
-    MessageBoxW(m_hwnd, I18n::Tr(IDS_ERR_OP_NOT_SUPPORTED).c_str(),
-                I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONINFORMATION);
+    if (msg == WM_COMMAND && LOWORD(wp) == IDOK) {
+        EndDialog(h, IDOK);
+        return TRUE;
+    }
+    return FALSE;
+}
+
+void MainWindow::OnTest() {
+    if (m_archivePath.empty() || !App::Instance().Get7z().CanTest()) return;
+
+    std::wstring output;
+    HRESULT hr = App::Instance().Get7z().Test(
+        m_effectiveArchivePath.c_str(), nullptr, nullptr, &output);
+
+    // Normalize line endings for the edit control
+    std::wstring normalized;
+    normalized.reserve(output.size() + 64);
+    for (size_t i = 0; i < output.size(); ++i) {
+        if (output[i] == L'\n' && (i == 0 || output[i-1] != L'\r'))
+            normalized += L'\r';
+        normalized += output[i];
+    }
+
+    TestResultDlgData data;
+    data.status = SUCCEEDED(hr) ? I18n::Tr(IDS_TEST_PASSED) : I18n::Tr(IDS_TEST_FAILED);
+    data.output = std::move(normalized);
+
+    DialogBoxParamW(GetModuleHandleW(nullptr),
+                    MAKEINTRESOURCEW(IDD_TEST_RESULT),
+                    m_hwnd, TestResultDlgProc,
+                    reinterpret_cast<LPARAM>(&data));
 }
 
 
@@ -1756,10 +1792,11 @@ void MainWindow::OnInitMenuPopup(HMENU hMenu) {
     setEnabled(ID_CLOSE,      hasArchive);
     setEnabled(ID_EXTRACT,    hasArchive);
     setEnabled(ID_EXTRACT_SELECTED, hasArchive && selCount > 0);
-    setEnabled(ID_TEST,       hasArchive);
+    setEnabled(ID_TEST,       hasArchive && App::Instance().Get7z().CanTest());
     setEnabled(ID_OPEN_ASSOC, hasArchive);
-    setEnabled(ID_ADD_TO_CURRENT, hasArchive && !m_isReadOnly);
-    setEnabled(ID_DELETE,     hasArchive && !readOnly && selCount > 0);
+    setEnabled(ID_ADD_TO_CURRENT, hasArchive && App::Instance().Get7z().CanAddToCurrent());
+    setEnabled(ID_DELETE,     hasArchive && selCount > 0
+                              && App::Instance().Get7z().CanDelete());
 
     CheckMenuItem(hMenu, IDM_VIEW_TREE,
                   MF_BYCOMMAND | (m_treeVisible ? MF_CHECKED : MF_UNCHECKED));
@@ -1828,7 +1865,7 @@ void MainWindow::OnAddFiles() {
 
 // Open a file picker and add the selected files to the current archive.
 void MainWindow::OnAddFilesToCurrentArchive() {
-    if (m_archivePath.empty() || m_isReadOnly) return;
+    if (m_archivePath.empty() || !App::Instance().Get7z().CanAddToCurrent()) return;
 
     auto files = BrowseMultipleFiles(m_hwnd, IDS_TITLE_SELECT_ADD);
     if (files.empty()) return;
@@ -1836,9 +1873,8 @@ void MainWindow::OnAddFilesToCurrentArchive() {
     AddFilesToCurrentArchive(std::move(files));
 }
 
-// Add files to archive — not reachable with B2E backend (m_isReadOnly is always true).
 void MainWindow::AddFilesToCurrentArchive(std::vector<std::wstring> srcPaths) {
-    if (m_archivePath.empty() || m_isReadOnly || srcPaths.empty()) return;
+    if (m_archivePath.empty() || !App::Instance().Get7z().CanAddToCurrent() || srcPaths.empty()) return;
 
     App& app = App::Instance();
     const std::wstring archivePath = m_archivePath;
@@ -1879,7 +1915,7 @@ void MainWindow::AddFilesToCurrentArchive(std::vector<std::wstring> srcPaths) {
 
 
 void MainWindow::OnDelete() {
-    if (m_archivePath.empty() || m_isReadOnly) return;
+    if (m_archivePath.empty() || !App::Instance().Get7z().CanDelete()) return;
 
     std::set<UINT32> indexSet;
     std::set<std::wstring> folderPaths;
@@ -1935,8 +1971,9 @@ void MainWindow::OnDelete() {
     auto archivePath = m_effectiveArchivePath;
     std::vector<UINT32> deleteIndices(indexSet.begin(), indexSet.end());
     auto& sz = app.Get7z();
-    m_worker.Start([&sz, archivePath, deleteIndices, sink]() -> HRESULT {
-        return sz.DeleteItems(archivePath.c_str(), deleteIndices, nullptr, sink);
+    auto allItems = m_items;
+    m_worker.Start([&sz, archivePath, deleteIndices, allItems, sink]() -> HRESULT {
+        return sz.DeleteItems(archivePath.c_str(), deleteIndices, allItems, nullptr, sink);
     }, m_hwnd, WM_APP_DONE);
     HRESULT hrDone = progDlg.RunMessageLoop();
     m_worker.Wait();

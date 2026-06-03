@@ -420,7 +420,8 @@ bool B2e_IsArchiveExt(const wchar_t* ext)
 }
 
 HRESULT B2e_List(const wchar_t* archivePath, std::vector<ArchiveItem>& items,
-                 std::wstring* columnHeader, std::wstring* toolName)
+                 std::wstring* columnHeader, std::wstring* toolName,
+                 bool* canTest, bool* canDelete, bool* canAdd)
 {
     std::string path;
     HRESULT hr = WideFsPathToAnsiPath(archivePath, false, &path);
@@ -443,6 +444,10 @@ HRESULT B2e_List(const wchar_t* archivePath, std::vector<ArchiveItem>& items,
     CArcB2e b2e(entry->b2eFile);
     aflArray aflFiles;
     if (!b2e.list(aname, aflFiles)) return E_FAIL;
+
+    if (canTest)   *canTest   = (b2e.ability() & aTest)   != 0;
+    if (canDelete) *canDelete = (b2e.ability() & aDelete) != 0;
+    if (canAdd)    *canAdd    = entry->writable;
 
     items.clear();
     if (columnHeader) columnHeader->clear();
@@ -605,5 +610,66 @@ HRESULT B2e_Compress(const std::vector<std::wstring>& srcPaths,
     CArcB2e b2e(entry->b2eFile);
     // level 0 → store (method 1 in the .b2e script); level N → method N+1.
     int result = b2e.compress(base, wfd, outDir, level, /*sfx=*/false);
+    return (result < 0x8000) ? S_OK : E_FAIL;
+}
+
+HRESULT B2e_Test(const wchar_t* archivePath, std::wstring* output)
+{
+    std::string path;
+    HRESULT hr = WideFsPathToAnsiPath(archivePath, false, &path);
+    if (FAILED(hr)) return hr;
+
+    const B2eTableEntry* entry = FindEntry(path.c_str());
+    if (!entry) return E_NOTIMPL;
+
+    WIN32_FIND_DATA fd;
+    if (!GetWfd(path.c_str(), &fd)) return E_FAIL;
+
+    kiPath dir(path.c_str()); dir.beDirOnly();
+    const char* sname = fd.cAlternateFileName[0] ? fd.cAlternateFileName : fd.cFileName;
+    arcname aname(dir, sname, fd.cFileName);
+
+    CArcB2e b2e(entry->b2eFile);
+    kiStr cap;
+    int result = b2e.test(aname, cap);
+
+    if (output) *output = AToWString((const char*)cap);
+
+    if (result == 0xffff) return E_NOTIMPL;  // no test: section
+    return (result == 0) ? S_OK : E_FAIL;
+}
+
+HRESULT B2e_Delete(const wchar_t* archivePath,
+                   const std::vector<UINT32>& deleteIndices,
+                   const std::vector<ArchiveItem>& allItems)
+{
+    std::string path;
+    HRESULT hr = WideFsPathToAnsiPath(archivePath, false, &path);
+    if (FAILED(hr)) return hr;
+
+    const B2eTableEntry* entry = FindEntry(path.c_str());
+    if (!entry) return E_NOTIMPL;
+
+    WIN32_FIND_DATA fd;
+    if (!GetWfd(path.c_str(), &fd)) return E_FAIL;
+
+    kiPath dir(path.c_str()); dir.beDirOnly();
+    const char* sname = fd.cAlternateFileName[0] ? fd.cAlternateFileName : fd.cFileName;
+    arcname aname(dir, sname, fd.cFileName);
+
+    aflArray selected;
+    for (UINT32 idx : deleteIndices) {
+        if (idx >= (UINT32)allItems.size()) continue;
+        arcfile af;
+        ::ZeroMemory(&af, sizeof(af));
+        if (!WToA(allItems[idx].path.c_str(), af.inf.szFileName, FNAME_MAX32))
+            return HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE);
+        af.selected = true;
+        selected.add(af);
+    }
+    if (selected.len() == 0) return S_OK;
+
+    CArcB2e b2e(entry->b2eFile);
+    int result = b2e.delete_items(aname, selected);
     return (result < 0x8000) ? S_OK : E_FAIL;
 }

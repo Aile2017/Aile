@@ -156,6 +156,17 @@ BEGIN
     DEFPUSHBUTTON   "OK",           IDOK,              228, 150,  60,  14
 END
 
+IDD_TEST_RESULT DIALOGEX 0, 0, 360, 220
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Test Result"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "", IDC_TEST_STATUS, 7, 7, 346, 10
+    EDITTEXT        IDC_TEST_OUTPUT, 7, 21, 346, 178,
+                    ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | NOT WS_TABSTOP | WS_VSCROLL | WS_BORDER
+    DEFPUSHBUTTON   "OK", IDOK, 153, 203, 54, 14
+END
+
 STRINGTABLE
 BEGIN
     IDS_APP_TITLE                   "AileFlow"
@@ -225,6 +236,9 @@ BEGIN
     IDS_ERR_DELETE_FAILED           "Delete failed."
     IDS_ERR_COMPRESS_FAILED         "Compression failed."
     IDS_ERR_OP_NOT_SUPPORTED        "This operation is not supported by the B2E archive backend."
+    IDS_TITLE_TEST_RESULT           "Test Result"
+    IDS_TEST_PASSED                 "OK  — Archive integrity test passed."
+    IDS_TEST_FAILED                 "NG  — Archive integrity test failed."
 
     IDS_FMT_DND_PROMPT              "Dropped files:\n%s\nWhat would you like to do?\n\n[Yes]    Add to current archive ""%s""\n[No]     Create a new archive\n[Cancel] Do nothing"
     IDS_DND_ELLIPSIS                "  ...\n"
@@ -398,6 +412,17 @@ BEGIN
     DEFPUSHBUTTON   "OK",           IDOK,              228, 150,  60,  14
 END
 
+IDD_TEST_RESULT DIALOGEX 0, 0, 360, 220
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "テスト結果"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "", IDC_TEST_STATUS, 7, 7, 346, 10
+    EDITTEXT        IDC_TEST_OUTPUT, 7, 21, 346, 178,
+                    ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | NOT WS_TABSTOP | WS_VSCROLL | WS_BORDER
+    DEFPUSHBUTTON   "OK", IDOK, 153, 203, 54, 14
+END
+
 STRINGTABLE
 BEGIN
     IDS_APP_TITLE                   "AileFlow"
@@ -467,6 +492,9 @@ BEGIN
     IDS_ERR_DELETE_FAILED           "削除に失敗しました。"
     IDS_ERR_COMPRESS_FAILED         "圧縮に失敗しました。"
     IDS_ERR_OP_NOT_SUPPORTED        "この操作は B2E アーカイブバックエンドでは対応していません。"
+    IDS_TITLE_TEST_RESULT           "テスト結果"
+    IDS_TEST_PASSED                 "OK  — アーカイブの整合性テストに合格しました。"
+    IDS_TEST_FAILED                 "NG  — アーカイブの整合性テストに失敗しました。"
 
     IDS_FMT_DND_PROMPT              "ドロップされたファイル:\n%s\nどう処理しますか？\n\n[はい]  現在のアーカイブ「%s」に追加\n[いいえ] 新規アーカイブを作成\n[キャンセル] 何もしない"
     IDS_DND_ELLIPSIS                "  …\n"

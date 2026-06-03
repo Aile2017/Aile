@@ -47,11 +47,15 @@ HRESULT SevenZip::OpenArchive(const wchar_t* path,
                                std::wstring* effectivePath)
 {
     std::wstring colHeader, toolName;
-    HRESULT hr = B2e_List(path, items, &colHeader, &toolName);
+    bool canTest = false, canDelete = false, canAdd = false;
+    HRESULT hr = B2e_List(path, items, &colHeader, &toolName, &canTest, &canDelete, &canAdd);
     if (SUCCEEDED(hr)) {
         m_listColumnLabel = colHeader;
         if (!toolName.empty()) m_loadedName = toolName;
         if (effectivePath) *effectivePath = path;
+        m_canTest   = canTest;
+        m_canDelete = canDelete;
+        m_canAdd    = canAdd;
     }
     return hr;
 }
@@ -118,14 +122,33 @@ HRESULT SevenZip::Compress(const std::vector<std::wstring>& srcPaths,
     return B2e_Compress(srcPaths, outPath, effectiveLevel, sink);
 }
 
-HRESULT SevenZip::Test(const wchar_t*, const wchar_t*,
-                        IExtractProgressSink*) { return E_NOTIMPL; }
+HRESULT SevenZip::Test(const wchar_t* archivePath, const wchar_t* /*password*/,
+                        IExtractProgressSink* /*sink*/, std::wstring* output)
+{
+    return B2e_Test(archivePath, output);
+}
 
-HRESULT SevenZip::DeleteItems(const wchar_t*, const std::vector<UINT32>&,
-                               const wchar_t*, IExtractProgressSink*) { return E_NOTIMPL; }
+HRESULT SevenZip::DeleteItems(const wchar_t* archivePath,
+                               const std::vector<UINT32>& deleteIndices,
+                               const std::vector<ArchiveItem>& allItems,
+                               const wchar_t* /*password*/,
+                               IExtractProgressSink* /*sink*/)
+{
+    return B2e_Delete(archivePath, deleteIndices, allItems);
+}
 
-HRESULT SevenZip::AddToArchive(const wchar_t*, const std::vector<std::wstring>&,
-                                const wchar_t*, const wchar_t*, int, const wchar_t*,
-                                IExtractProgressSink*, const CompressAdvanced*) { return E_NOTIMPL; }
+HRESULT SevenZip::AddToArchive(const wchar_t* archivePath,
+                                const std::vector<std::wstring>& srcPaths,
+                                const wchar_t* /*archiveFolder*/,
+                                const wchar_t* /*password*/,
+                                int level,
+                                const wchar_t* /*method*/,
+                                IExtractProgressSink* sink,
+                                const CompressAdvanced* /*adv*/)
+{
+    // B2E: delegate to B2e_Compress with the existing archive as output path.
+    // archiveFolder is ignored — B2E encodes files relative to their base directory.
+    return B2e_Compress(srcPaths, archivePath, level, sink);
+}
 
 std::wstring SevenZip::Find7zDll() { return {}; }

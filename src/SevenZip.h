@@ -50,11 +50,12 @@ public:
                     const wchar_t* password,
                     IExtractProgressSink* sink);
 
-    // Integrity verification for all entries (passes testMode=1 to IInArchive::Extract).
-    // Returns E_FAIL if any entry fails verification.
+    // Integrity verification. output (optional) receives captured stdout from the test tool.
+    // Returns S_OK if the tool exits 0, E_FAIL on non-zero exit.
     HRESULT Test(const wchar_t* archivePath,
                  const wchar_t* password,
-                 IExtractProgressSink* sink);
+                 IExtractProgressSink* sink,
+                 std::wstring* output = nullptr);
 
     // Add or update files in an existing archive.
     // - srcPaths: files/folders on disk to add (folders are expanded recursively)
@@ -77,6 +78,7 @@ public:
     // and return E_NOTIMPL or similar.
     HRESULT DeleteItems(const wchar_t* archivePath,
                         const std::vector<UINT32>& deleteIndices,
+                        const std::vector<ArchiveItem>& allItems,
                         const wchar_t* password,
                         IExtractProgressSink* sink);
 
@@ -105,6 +107,11 @@ public:
     // ext: extension only (no dot, e.g. L"7z"). Case-insensitive.
     bool IsArchiveExt(const wchar_t* ext) const;
 
+    // True if the currently open archive's .b2e has a test: / delete: / encode: section.
+    bool CanTest()         const { return m_canTest; }
+    bool CanDelete()       const { return m_canDelete; }
+    bool CanAddToCurrent() const { return m_canAdd; }
+
     // Writable formats supported by the loaded 7z.dll (RAR not included).
     const std::vector<WritableFormat>& GetWritableFormats() const { return m_writableFormats; }
 
@@ -114,4 +121,7 @@ private:
     std::wstring                m_listColumnLabel;
     std::vector<std::wstring>   m_encoderNames;
     std::vector<WritableFormat> m_writableFormats;
+    bool                        m_canTest         = false;
+    bool                        m_canDelete       = false;
+    bool                        m_canAdd          = false;
 };

@@ -45,10 +45,16 @@ bool B2e_IsArchiveExt(const wchar_t* ext);
 // first separator in the listing output (e.g. "   Date      Time ...  Name").
 // toolName (optional): receives the tool executable name from the .b2e load: (name X)
 // directive (e.g. L"7zG.exe", L"WinRAR.exe").
+// canTest (optional): set to true if the .b2e has a test: section.
+// canDelete (optional): set to true if the .b2e has a delete: section.
+// canAdd (optional): set to true if the .b2e has an encode: section (format is writable).
 HRESULT B2e_List(const wchar_t* archivePath,
                  std::vector<ArchiveItem>& items,
                  std::wstring* columnHeader = nullptr,
-                 std::wstring* toolName = nullptr);
+                 std::wstring* toolName = nullptr,
+                 bool* canTest = nullptr,
+                 bool* canDelete = nullptr,
+                 bool* canAdd = nullptr);
 
 // Extract entries from an archive.
 // indices: positions into allItems (as returned by B2e_List). Empty = extract all.
@@ -71,3 +77,13 @@ HRESULT B2e_Compress(const std::vector<std::wstring>& srcPaths,
                      const wchar_t* outPath,
                      int level,
                      IExtractProgressSink* sink);
+
+// Run the test: section for the archive and capture stdout output.
+// output receives the full stdout/stderr text from the test tool.
+// Returns S_OK if the tool exits with code 0, E_FAIL on non-zero exit.
+HRESULT B2e_Test(const wchar_t* archivePath, std::wstring* output);
+
+// Delete the entries at deleteIndices (positions into allItems) from the archive.
+HRESULT B2e_Delete(const wchar_t* archivePath,
+                   const std::vector<UINT32>& deleteIndices,
+                   const std::vector<ArchiveItem>& allItems);

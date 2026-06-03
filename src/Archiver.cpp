@@ -286,6 +286,73 @@ bool CArcModule::lst_exe( const char* lstcmd, aflArray& files,
 	return true;
 }
 
+int CArcModule::tst_exe( const char* tstcmd, kiStr& output )
+{
+	output = "";
+
+	if( m_type != EXE )
+		return -1;
+
+	// Build command string
+	kiVar theCmd( m_name );
+	theCmd.quote();
+	theCmd += ' ';
+	theCmd += tstcmd;
+
+	// Create pipe
+	HANDLE rp, wp;
+	SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), NULL, TRUE};
+	::CreatePipe( &rp, &wp, &sa, 65536 );
+
+	// Start process (hidden — output captured via pipe)
+	PROCESS_INFORMATION pi;
+	STARTUPINFO si = {sizeof(STARTUPINFO)};
+	si.dwFlags     = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
+	si.wShowWindow = SW_HIDE;
+	si.hStdOutput  = si.hStdError = wp;
+	BOOL ok = ::CreateProcess( NULL, const_cast<char*>((const char*)theCmd),
+		NULL, NULL, TRUE, CREATE_NEW_PROCESS_GROUP | NORMAL_PRIORITY_CLASS,
+		NULL, NULL, &si, &pi );
+	::CloseHandle( wp );
+
+	if( !ok ) {
+		::CloseHandle( rp );
+		return -1;
+	}
+	::CloseHandle( pi.hThread );
+
+	// Read all stdout/stderr into output
+	char buf[4096];
+	bool endpr = false;
+	for(;;) {
+		if( !endpr ) {
+			endpr = (WAIT_OBJECT_0 == ::WaitForSingleObject( pi.hProcess, 50 ));
+			kiWindow::msg();
+		}
+		DWORD avail = 0;
+		::PeekNamedPipe( rp, NULL, 0, NULL, &avail, NULL );
+		if( avail == 0 ) {
+			if( endpr ) break;
+			continue;
+		}
+		if( avail > sizeof(buf) ) avail = sizeof(buf);
+		DWORD red = 0;
+		::ReadFile( rp, buf, avail, &red, NULL );
+		if( red > 0 ) {
+			char tmp[4097];
+			ki_memcpy( tmp, buf, red );
+			tmp[red] = '\0';
+			output += tmp;
+		}
+	}
+
+	int ex = -1;
+	::GetExitCodeProcess( pi.hProcess, (DWORD*)&ex );
+	::CloseHandle( pi.hProcess );
+	::CloseHandle( rp );
+	return ex;
+}
+
 /*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*/
 // Get version info resource
 

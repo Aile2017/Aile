@@ -6,6 +6,7 @@
 
 enum {
 	aMelt = 2, aList = 4, aMeltEach = 8, aCompress = 16, aArchive = 32, aSfx = 64,
+	aTest = 128, aDelete = 256,
 };
 
 struct arcname {
@@ -47,6 +48,8 @@ public: //--< action >--
 	int  melt( const arcname& aname, const kiPath& ddir, const aflArray* files=NULL );
 	bool list( const arcname& aname, aflArray& files );
 	int  compress( const kiPath& base, const wfdArray& files, const kiPath& ddir, int method, bool sfx );
+	int  test( const arcname& aname, kiStr& output );
+	int  delete_items( const arcname& aname, const aflArray& files );
 	kiStr arctype_name(const char* an) const { return v_name(an); }
 
 protected: //--< for child >--
@@ -60,6 +63,8 @@ protected: //--< for child >--
 	virtual int  v_melt( const arcname& aname, const kiPath& ddir, const aflArray* files ){return false;}
 	virtual bool v_list( const arcname& aname, aflArray& files ){return false;}
 	virtual int  v_compress( const kiPath& base, const wfdArray& files, const kiPath& ddir, int method, bool sfx ){return false;}
+	virtual int  v_test( const arcname& aname, kiStr& output ){(void)aname;(void)output;return 0xffff;}
+	virtual int  v_delete( const arcname& aname, const aflArray& files ){(void)aname;(void)files;return 0xffff;}
 	virtual kiStr v_name(const char*) const { return ""; }
 
 private: //--< private >--
@@ -113,6 +118,18 @@ inline int CArchiver::compress( const kiPath& base, const wfdArray& files, const
 {
 	ensure_loaded();
 	return (m_Able&aCompress)?v_compress(base,files,ddir,method,sfx):0xffff;
+}
+
+inline int CArchiver::test( const arcname& aname, kiStr& output )
+{
+	ensure_loaded();
+	return (m_Able&aTest)?v_test(aname,output):0xffff;
+}
+
+inline int CArchiver::delete_items( const arcname& aname, const aflArray& files )
+{
+	ensure_loaded();
+	return (m_Able&aDelete)?v_delete(aname,files):0xffff;
 }
 
 inline bool CArchiver::ver( kiStr& str )
@@ -208,6 +225,7 @@ public:
 
 	bool lst_exe( const char* lstcmd, aflArray& files,
 		const char* BL, int BSL, const char* EL, int SL, int dx );
+	int  tst_exe( const char* tstcmd, kiStr& output );
 
 private:
 	enum { NOTEXIST=0, EXE, SHLCMD } m_type;

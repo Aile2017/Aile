@@ -18,6 +18,8 @@ private: //--<CArchiver>--
 	int  v_melt( const arcname& aname, const kiPath& ddir, const aflArray* files );
 	bool v_list( const arcname& aname, aflArray& files );
 	int  v_compress( const kiPath& base, const wfdArray& files, const kiPath& ddir, int method, bool sfx );
+	int  v_test( const arcname& aname, kiStr& output );
+	int  v_delete( const arcname& aname, const aflArray& files );
 	kiStr v_name(const char*) const { return exe ? exe->name() : kiStr(""); }
 
 	bool arc2sfx( const kiPath& temp, const kiPath& dest );
@@ -33,9 +35,11 @@ private: //--<RythpScript>--
 	const char* m_SfxScr;
 	const char* m_DcEScr;
 	const char* m_LstScr;
+	const char* m_TstScr;
+	const char* m_DelScr;
 	bool        m_SfxDirect;
 
-	enum scr_mode { mLod, mEnc, mDec, mDc1, mSfx, mLst };
+	enum scr_mode { mLod, mEnc, mDec, mDc1, mSfx, mLst, mTst, mDel };
 	int exec_script( const char* scr, scr_mode mode );
 
 	// B2e Core
@@ -72,6 +76,7 @@ private: //--<RythpScript>--
 	const int*      m_psMhd;
 	const wfdArray* m_psList;
 	const aflArray* m_psAInfo;
+	kiStr*          m_psTstOutput;
 };
 
 #endif

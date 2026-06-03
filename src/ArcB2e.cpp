@@ -23,6 +23,8 @@ CArcB2e::CArcB2e( const char* scriptname ) : CArchiver( scriptname )
 	exe = NULL;
 	m_LstScr = m_DcEScr = m_EncScr =
 	m_DecScr = m_SfxScr = m_LoadScr= m_ScriptBuf = NULL;
+	m_TstScr = m_DelScr = NULL;
+	m_psTstOutput = NULL;
 }
 
 CArcB2e::~CArcB2e()
@@ -81,7 +83,7 @@ int CArcB2e::v_load()
 		{
 			switch( *p )
 			{
-			case 'c': case 'd': case 'e': case 'l': case 's':
+			case 'c': case 'd': case 'e': case 'l': case 's': case 't':
 				if( ki_memcmp(p,"load:",5) )
 					*p='\0', m_LoadScr = (p+=4)+1;
 				else if( ki_memcmp(p,"encode:",7) )
@@ -98,6 +100,10 @@ int CArcB2e::v_load()
 					*p='\0', m_DcEScr = (p+=7)+1;
 				else if( ki_memcmp(p,"list:",5) )
 					*p='\0', m_LstScr = (p+=4)+1;
+				else if( ki_memcmp(p,"test:",5) )
+					*p='\0', m_TstScr = (p+=4)+1;
+				else if( ki_memcmp(p,"delete:",7) )
+					*p='\0', m_DelScr = (p+=6)+1;
 			}
 			while( *p && *p!='\n' && *p!='\r' )
 				p++;
@@ -122,7 +128,9 @@ int CArcB2e::v_load()
 			//-- Result
 			if( m_Result==0 )
 				return (m_DecScr?aMelt|(m_DcEScr?aList|aMeltEach:0):0)
-					 | (m_EncScr?aCompress|(pack1?0:aArchive)|(m_SfxScr?aSfx:0):0);
+					 | (m_EncScr?aCompress|(pack1?0:aArchive)|(m_SfxScr?aSfx:0):0)
+					 | (m_TstScr?aTest:0)
+					 | (m_DelScr?aDelete:0);
 		}
 	}
 	return 0;
@@ -187,6 +195,27 @@ int CArcB2e::v_melt( const arcname& aname, const kiPath& ddir, const aflArray* f
 
 	return exec_script( files ? m_DcEScr : m_DecScr,
 						files ? mDc1     : mDec );
+}
+
+//-------------------- Integrity test eval( test: ) -----------------------
+
+int CArcB2e::v_test( const arcname& aname, kiStr& output )
+{
+	m_psArc       = &aname;
+	m_psTstOutput = &output;
+	output        = "";
+	int result    = exec_script( m_TstScr, mTst );
+	m_psTstOutput = NULL;
+	return result;
+}
+
+//-------------------- Entry deletion eval( delete: ) -----------------------
+
+int CArcB2e::v_delete( const arcname& aname, const aflArray& files )
+{
+	m_psArc   = &aname;
+	m_psAInfo = &files;
+	return exec_script( m_DelScr, mDel );
 }
 
 //-------------------- Compression processing eval( encode: sfx: ) -----------------------
@@ -441,8 +470,16 @@ bool CArcB2e::CB2eCore::exec_function( const kiVar& name, const CharArray& a, co
 				for( ; i<c; i++ )
 					getarg( a[i],b[i],&t ), cmd+=t, cmd+=' ';
 
-				bool m = (mycnf().miniboot() || m_mode==mDc1);
-				x->m_Result = xxx->cmd( cmd, m );
+				if( m_mode == mTst ) {
+					// Capture stdout for test result display
+					kiStr cap;
+					x->m_Result = xxx->tst_exe( cmd, cap );
+					if( x->m_psTstOutput )
+						*x->m_psTstOutput += cap;
+				} else {
+					bool m = (mycnf().miniboot() || m_mode==mDc1);
+					x->m_Result = xxx->cmd( cmd, m );
+				}
 				r->setInt( x->m_Result );
 
 				if( name[0] == 'x' )
@@ -637,9 +674,19 @@ void CArcB2e::CB2eCore::arc( const char* opt, const CharArray& a, const BoolArra
 			*r += add;
 		}
 
-		// Quote if necessary
-		if( part==full )
-			r->quote();
+		// Quote if necessary (full or nam)
+		r->quote();
+	}
+	else
+	{
+		// part==dir: double any trailing separator before quoting.
+		// Windows argument parsers treat '\"' as an escaped quote, so
+		// "C:\dir\" would be malformed.  "C:\dir\\" is correct.
+		const char* s = (const char*)*r;
+		int n = r->len();
+		if( n > 0 && (s[n-1]=='\\' || s[n-1]=='/') )
+			*r += s[n-1];
+		r->quote();
 	}
 }
 
