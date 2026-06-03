@@ -40,8 +40,8 @@ uses the richer AileEx UI layer, which introduces some features not in Noah whil
 
 | # | Option | Noah | AileFlow |
 |---|---|---|---|
-| 10 | **`-w` / `-W` (alt/each mode)** | Compresses each input file into its own separate archive. | Not implemented. |
-| 11 | **`-t<ext>` (type) and `-m<method>` (method)** | Directly specifies compression format and method on the command line. | Not implemented. |
+| 10 | **`-w` / `-W` (alt/each mode)** | Compresses each input file into its own separate archive. | Implemented. `-w`/`-W` sets `eachMode` in `main.cpp`; routes to `App::RunCompressEachMode()` which compresses each file independently with the same settings. |
+| 11 | **`-t<ext>` (type) and `-m<method>` (method)** | Directly specifies compression format and method on the command line. | Implemented. `App::RunCompressMode()` and `RunCompressEachMode()` accept `typeOverride` / `methodOverride`; when set, the compression dialog is skipped and compression proceeds immediately. |
 
 ---
 
@@ -51,9 +51,7 @@ The following gaps are good candidates for future implementation:
 
 1. **Drag-out (DnD source)** (gap #7) — useful for day-to-day interaction with Explorer.
 
-2. **CLI `-t` / `-m` options** (gaps #10, #11) — would allow scripted format/method selection without the GUI.
-
-3. **Start minimized** (gap #4) — low-complexity INI + `nCmdShow` change.
+2. **Start minimized** (gap #4) — low-complexity INI + `nCmdShow` change.
 
 ---
 
