@@ -58,30 +58,19 @@ AileFlow-side changes only:
 
 ---
 
-## Known Bug (Deferred)
+## Known Bug — Fixed
 
-### Paths with Spaces Break B2E Processing
+### Paths with Spaces in `(arc n)` / `(arc d)` Were Not Quoted
 
-The `(arc)` token in `.b2e` scripts expands to the archive path without quoting.
-`CArcModule::cmd()` passes this directly to `CreateProcess`, which splits on spaces.
+`CArcB2e::CB2eCore::arc()` (`ArcB2e.cpp`) previously only quoted the result when
+`part==full` (the default `(arc)` case).  The `(arc n)` (name-only) and `(arc d)`
+(directory-only) variants were not quoted, so any space in the filename or directory
+would break the command line passed to `CreateProcess`.
 
-Example failure: archiving or extracting `C:\My Documents\test.zip`.
+Additional subtlety for `(arc d)`: a trailing path separator followed by a closing quote
+(`"C:\dir\"`) is parsed as an escaped quote by Windows argument parsers.  The fix
+doubles the trailing separator before quoting, producing `"C:\dir\\"` instead.
 
-Root cause: `CArcB2e::CB2eCore::arc()` (`ArcB2e.cpp`) appends basedir + filename with
-no quoting. The fix requires either:
+**Fixed in `ArcB2e.cpp`**: `r->quote()` is now called unconditionally for all three
+`part` modes; `part==dir` additionally doubles any trailing separator first.
 
-- Quoting the result inside `arc()` (change propagates to all callers — may break other uses), or
-- Quoting path tokens in `CArcModule::cmd()` before building the command string.
-
-Impact: archives stored in paths containing spaces silently fail or produce unexpected
-output. Workaround: keep archive files in paths without spaces.
-
----
-
-## Documentation Updates Needed
-
-- `docs/limitations.md` — several items listed as "unavailable" have since been removed from
-  the UI entirely (archive comment, archive properties, Info dialog) or changed behavior
-  (progress dialog now delegated fully to the external tool). Review and prune.
-- `docs/noah-feature-gaps.md` — gaps #1, #2, #3 (double-folder collapse, extension strip mode,
-  trailing-number removal) were implemented. Mark as resolved.
