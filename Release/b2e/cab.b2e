@@ -17,5 +17,8 @@ decode:
 decode1:
  (xcmd 7zG.exe x -y (arc))
 
+test:
+ (xcmd 7z.exe t (arc))
+
 list:
  (xscan "------------------" 1 "------------------" 1 53 7z.exe l (arc))

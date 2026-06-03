@@ -24,5 +24,11 @@ decode:
 decode1:
  (cmd x -y (arc) (list))
 
+delete:
+ (cmd d (arc) (list))
+
+test:
+ (xcmd Rar.exe t (arc))
+
 list:
  (xscan "-----------" 1 "-----------" 1 68 Rar.exe v (arc))
