@@ -1859,7 +1859,7 @@ void MainWindow::OnAddFiles() {
         auto& s = App::Instance().GetSettings();
         params.SaveToSettings(s);
         s.Save();
-        OnCompress(params);
+        OnCompress(params, /*openAfterCompress=*/true);
     }
 }
 
