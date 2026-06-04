@@ -77,7 +77,7 @@ Dynamically updated via `WM_INITMENUPOPUP` based on archive state (open / read-o
 
 ### Compression Feature
 
-- Supported formats: 7z / ZIP / TAR / GZip / BZip2 / XZ / RAR
+- Supported formats: dynamically enumerated from loaded 7z.dll (`GetNumberOfFormats` / `GetHandlerProperty2`). Typical formats: 7z / ZIP / TAR / GZip / BZip2 / XZ and ZS-extended formats (Zstandard / LZ4 / LZ5 / Brotli / Lizard). RAR is appended separately when rar.exe is found.
 - RAR spawns WinRAR.exe (GUI) or Rar.exe (console) as subprocess
   - 7z.dll does not support RAR writing (`FormatToOutGuid("rar")` is unsupported, falls back to CLSID_Format_7z). **RAR compression path is consolidated in `CompressHelper::RunRarCompressSync()`**
 - Other formats use 7z.dll's `IOutArchive`
@@ -91,6 +91,7 @@ Dynamically updated via `WM_INITMENUPOPUP` based on archive state (open / read-o
 - **Split volume** (`volumeSize`): Supported for 7z / ZIP only. Splits as `archive.7z.001` / `archive.7z.002` ... RAR uses `rar.exe -v<size>`
 - Password protection supported (7z has header encryption option)
 - Output file extension auto-corrected when format changes
+- **After successful compression from the main window**, the resulting archive is automatically opened in the main window. Split volume archives open at `.001`. CLI `-a` mode is unaffected.
 - Advanced options last-used values persisted in INI
 - **Self-extracting (SFX)**: 7z / RAR only. Select from dropdown in compression dialog: "GUI version (.exe)", "Console version (.exe)", or "None"
   - 7z: Prepend `7z.sfx` (GUI) or `7zCon.sfx` (console) from same directory as 7z.dll to compressed .7z data, generate `.exe`
