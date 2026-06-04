@@ -109,6 +109,17 @@ and other options.
 
 ## Credits
 
+### B2E Scripts
+
+The `.b2e` archive handler scripts bundled with AileFlow are based on scripts from
+[Noah](https://www.kmonos.net/lib/noah.ja.html), a script-driven archive manager for Windows
+created by **Kazuhiro Inaba**.
+
+Noah uses a small scripting language called B2E (Batch-to-EXE) to describe how each archive
+format is listed, extracted, and created by delegating to external tools. AileFlow reuses these
+scripts as-is (with minor modifications where needed) and drives them through the same B2E engine
+(`ArcB2e` + Rythp VM).
+
 ### Application Icon
 
 [Archiver - free Icon in PNG and SVG](https://icon-icons.com/icon/archiver/37045) by [icon-icons.com](https://icon-icons.com/), used under free for commercial use license.
