@@ -36,6 +36,17 @@ INT_PTR SettingsDlg::HandleMsg(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             EnableWindow(GetDlgItem(hwnd, IDC_BROWSE_DIR),  fixed);
             break;
         }
+        case IDC_MKDIR_0:
+        case IDC_MKDIR_1:
+        case IDC_MKDIR_2:
+        case IDC_MKDIR_3:
+            CheckRadioButton(hwnd, IDC_MKDIR_0, IDC_MKDIR_3, LOWORD(wp));
+            break;
+        case IDC_EXT_STRIP_ALL:
+        case IDC_EXT_STRIP_ONE:
+        case IDC_EXT_STRIP_KEEP:
+            CheckRadioButton(hwnd, IDC_EXT_STRIP_ALL, IDC_EXT_STRIP_KEEP, LOWORD(wp));
+            break;
         case IDC_BROWSE_DIR:
             OnBrowseDir(hwnd);
             break;
