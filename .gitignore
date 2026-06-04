@@ -25,6 +25,7 @@ Makefile
 # AI assistant instructions (local only)
 CLAUDE.md
 .github/copilot-instructions.md
+.github/hooks/
 
 # Unrelated tools in workspace root
 Noah.exe
