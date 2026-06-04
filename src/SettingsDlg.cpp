@@ -39,6 +39,12 @@ INT_PTR SettingsDlg::HandleMsg(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             EnableWindow(GetDlgItem(hwnd, IDC_BROWSE_DIR),  fixed);
             break;
         }
+        case IDC_MKDIR_0:
+        case IDC_MKDIR_1:
+        case IDC_MKDIR_2:
+        case IDC_MKDIR_3:
+            CheckRadioButton(hwnd, IDC_MKDIR_0, IDC_MKDIR_3, LOWORD(wp));
+            break;
         case IDC_BROWSE_FONT:
             OnBrowseFont(hwnd);
             break;
