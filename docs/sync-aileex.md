@@ -88,7 +88,7 @@ Quick summary of files most likely to change in AileEx:
 
 | File | Class | Sync action |
 |---|---|---|
-| `src/MainWindow.cpp` | A | `git checkout aileex/main -- src/MainWindow.cpp` |
+| `src/MainWindow.cpp` | B | Review B2E patches before merging; do not `git checkout` wholesale |
 | `src/CompressDlg.cpp/h` | A | Same |
 | `src/Settings.cpp/h` | A | Same |
 | `src/ProgressDlg.cpp/h` | A | Same |

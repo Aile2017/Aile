@@ -19,7 +19,8 @@ AileFlow/
   src/
     [B] MainWindow.cpp          … Main window — tree + list view, toolbar, menus
                                   (B2E patches: m_isReadOnly for all archives,
-                                   skip outer password retry, OnTest not-supported guard)
+                                   skip outer password retry, OnTest not-supported guard,
+                                   openAfterCompress=true in OnAddFiles)
     [A] MainWindow.h            … Unchanged from AileEx
     [B] CompressDlg.cpp/h       … Compression dialog
                                   (B2E patches: B2E mode hides Level/Password/SFX/Advanced;
