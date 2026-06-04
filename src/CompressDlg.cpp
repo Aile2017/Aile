@@ -47,15 +47,6 @@ void CompressDlg::Params::SaveToSettings(Settings& s) const {
 
 struct MethodEntry { const wchar_t* label; const wchar_t* id; };
 
-// Static fallback (used when 7z.dll cannot be loaded)
-static const WritableFormat kFallbackFormats[] = {
-    {L"7-Zip (.7z)",  L"7z"},
-    {L"ZIP (.zip)",   L"zip"},
-    {L"TAR (.tar)",   L"tar"},
-    {L"GZip (.gz)",   L"gz"},
-    {L"BZip2 (.bz2)", L"bz2"},
-    {L"XZ (.xz)",     L"xz"},
-};
 
 // label is the display base name. The default entry gets IDS_DEFAULT_SUFFIX appended at populate time.
 static const MethodEntry kMethods7z[] = {
@@ -96,17 +87,13 @@ bool CompressDlg::Show(HWND hwndParent, Params& params,
                        const std::vector<std::wstring>* encoderNames,
                        const std::vector<WritableFormat>* writableFormats,
                        bool includeRar) {
+    if (!writableFormats || writableFormats->empty()) return false;
+
     m_params       = params;
     m_encoderNames = encoderNames;
 
-    // Build format list: prefer list from 7z.dll → fallback → append RAR at end
-    m_writableFormats.clear();
-    if (writableFormats && !writableFormats->empty()) {
-        m_writableFormats = *writableFormats;
-    } else {
-        for (const auto& f : kFallbackFormats)
-            m_writableFormats.push_back(f);
-    }
+    // Build format list from 7z.dll → append RAR at end
+    m_writableFormats = *writableFormats;
     // RAR is handled via rar.exe; only include when rar.exe is found
     if (includeRar) {
         m_writableFormats.push_back({L"RAR (.rar)", L"rar"});

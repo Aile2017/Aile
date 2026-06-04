@@ -429,6 +429,17 @@ void SevenZip::EnumerateFormats() {
     }
 }
 
+std::wstring SevenZip::GetExtensionFilterPattern() const {
+    if (m_extToClsid.empty()) return L"";
+    std::wstring result;
+    for (const auto& kv : m_extToClsid) {
+        if (!result.empty()) result += L';';
+        result += L"*.";
+        result += kv.first;
+    }
+    return result;
+}
+
 bool SevenZip::IsArchiveExt(const wchar_t* ext) const {
     if (!ext || !ext[0]) return false;
     std::wstring lower(ext);
@@ -440,6 +451,7 @@ bool SevenZip::IsArchiveExt(const wchar_t* ext) const {
     static const wchar_t* kFallback[] = {
         L"7z", L"zip", L"rar", L"tar", L"gz", L"bz2", L"xz",
         L"cab", L"iso", L"jar", L"wim", L"lzma", L"lzh", L"arj",
+        L"zst", L"lz4", L"lz5", L"br", L"liz",
         nullptr
     };
     for (int i = 0; kFallback[i]; ++i)
@@ -514,15 +526,21 @@ GUID SevenZip::FormatToInGuid(const wchar_t* path) const {
         return (it != m_extToClsid.end()) ? it->second : CLSID_Format_7z;
     }
     // Static fallback when dynamic enumeration is unavailable
-    if (ext == L"7z")  return CLSID_Format_7z;
+    if (ext == L"7z")              return CLSID_Format_7z;
     if (ext == L"zip" || ext == L"jar") return CLSID_Format_Zip;
-    if (ext == L"tar") return CLSID_Format_Tar;
-    if (ext == L"gz")  return CLSID_Format_GZip;
-    if (ext == L"bz2") return CLSID_Format_BZip2;
-    if (ext == L"xz")  return CLSID_Format_Xz;
-    if (ext == L"rar") return CLSID_Format_Rar5;
-    if (ext == L"cab") return CLSID_Format_Cab;
-    if (ext == L"iso") return CLSID_Format_Iso;
+    if (ext == L"tar")             return CLSID_Format_Tar;
+    if (ext == L"gz")              return CLSID_Format_GZip;
+    if (ext == L"bz2")             return CLSID_Format_BZip2;
+    if (ext == L"xz")              return CLSID_Format_Xz;
+    if (ext == L"rar")             return CLSID_Format_Rar5;
+    if (ext == L"cab")             return CLSID_Format_Cab;
+    if (ext == L"iso")             return CLSID_Format_Iso;
+    // 7-Zip ZS extended formats
+    if (ext == L"zst" || ext == L"zstd")   return CLSID_Format_Zstd;
+    if (ext == L"lz4")             return CLSID_Format_LZ4;
+    if (ext == L"lz5")             return CLSID_Format_LZ5;
+    if (ext == L"liz")             return CLSID_Format_Lizard;
+    if (ext == L"br"  || ext == L"brotli") return CLSID_Format_Brotli;
     return CLSID_Format_7z;
 }
 
@@ -540,6 +558,12 @@ GUID SevenZip::FormatToOutGuid(const wchar_t* format) const {
     if (f == L"gz")  return CLSID_Format_GZip;
     if (f == L"bz2") return CLSID_Format_BZip2;
     if (f == L"xz")  return CLSID_Format_Xz;
+    // 7-Zip ZS extended formats
+    if (f == L"zst" || f == L"zstd")   return CLSID_Format_Zstd;
+    if (f == L"lz4")   return CLSID_Format_LZ4;
+    if (f == L"lz5")   return CLSID_Format_LZ5;
+    if (f == L"liz")   return CLSID_Format_Lizard;
+    if (f == L"br" || f == L"brotli") return CLSID_Format_Brotli;
     return CLSID_Format_7z;
 }
 

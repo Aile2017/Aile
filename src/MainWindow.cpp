@@ -79,38 +79,25 @@ int CountTopLevelEntries(const std::vector<ArchiveItem>& items) {
 
 // Generate subfolder name from archive path (strip compound extensions: archive.tar.gz → archive,
 // archive.7z.001 → archive)
-std::wstring ArchiveBaseName(const std::wstring& archivePath) {
-    static const wchar_t* kExts[] = {
-        L".7z", L".zip", L".rar", L".tar", L".gz", L".bz2", L".xz",
-        L".cab", L".iso", L".jar", L".wim", L".lzh", L".lzma", L".arj",
-        L".zst", L".lz4", L".lz5", L".br", L".liz", nullptr
-    };
+std::wstring ArchiveBaseName(const std::wstring& archivePath, const SevenZip& sz) {
     std::wstring name = PathFindFileNameW(archivePath.c_str());
     bool stripped = true;
     while (stripped) {
         stripped = false;
-        // Strip all-digit trailing extensions (.001 etc.)
         auto dot = name.rfind(L'.');
-        if (dot != std::wstring::npos && dot + 1 < name.size()) {
-            bool allDigits = true;
-            for (size_t i = dot + 1; i < name.size(); ++i)
-                if (!iswdigit(name[i])) { allDigits = false; break; }
-            if (allDigits) {
-                name = name.substr(0, dot);
-                stripped = true;
-                continue;
-            }
+        if (dot == std::wstring::npos || dot + 1 >= name.size()) break;
+        std::wstring ext = name.substr(dot + 1);
+        // Strip all-digit trailing extensions (.001 etc.)
+        bool allDigits = true;
+        for (auto c : ext) if (!iswdigit(c)) { allDigits = false; break; }
+        if (allDigits) {
+            name = name.substr(0, dot);
+            stripped = true;
+            continue;
         }
-        for (int i = 0; kExts[i]; ++i) {
-            size_t elen = wcslen(kExts[i]);
-            if (name.size() <= elen) continue;
-            std::wstring tail = name.substr(name.size() - elen);
-            for (auto& c : tail) c = (wchar_t)towlower(c);
-            if (tail == kExts[i]) {
-                name = name.substr(0, name.size() - elen);
-                stripped = true;
-                break;
-            }
+        if (sz.IsArchiveExt(ext.c_str())) {
+            name = name.substr(0, dot);
+            stripped = true;
         }
     }
     return name.empty() ? L"archive" : name;
@@ -876,6 +863,8 @@ void MainWindow::OnDropFiles(HDROP hDrop) {
         if (addToCurrent) {
             AddFilesToCurrentArchive(std::move(regular));
         } else {
+            if (!Ensure7zLoaded()) return;
+
             CompressDlg::Params params;
             params.inputFiles  = std::move(regular);
             params.LoadFromSettings(App::Instance().GetSettings());
@@ -883,8 +872,8 @@ void MainWindow::OnDropFiles(HDROP hDrop) {
 
             CompressDlg dlg;
             auto& sz7 = App::Instance().Get7z();
-            const auto* enc = sz7.IsLoaded() ? &sz7.GetEncoderNames() : nullptr;
-            const auto* wf  = sz7.IsLoaded() ? &sz7.GetWritableFormats() : nullptr;
+            const auto* enc = &sz7.GetEncoderNames();
+            const auto* wf  = &sz7.GetWritableFormats();
             if (dlg.Show(m_hwnd, params, enc, wf)) {
                 auto& s = App::Instance().GetSettings();
                 params.SaveToSettings(s);
@@ -1276,7 +1265,7 @@ void MainWindow::RunExtraction(std::vector<UINT32> indices, std::set<std::wstrin
             makeSubfolder = ShouldCreateSubfolder(mkDir, m_items);
         }
         if (makeSubfolder)
-            finalDest = std::wstring(destDir) + L"\\" + ArchiveBaseName(m_archivePath);
+            finalDest = std::wstring(destDir) + L"\\" + ArchiveBaseName(m_archivePath, app.Get7z());
     }
 
     ProgressDlg progDlg;
@@ -1435,8 +1424,10 @@ void MainWindow::OnFileOpen() {
         b = (e == std::wstring::npos) ? s.substr(p + 1) : s.substr(p + 1, e - p - 1);
     };
     std::wstring archiveLabel, archivePat, allLabel, allPat;
-    split(I18n::Tr(IDS_FILTER_ARCHIVE),   archiveLabel, archivePat);
-    split(I18n::Tr(IDS_FILTER_ALL_FILES), allLabel,     allPat);
+    split(I18n::Tr(IDS_FILTER_ARCHIVE), archiveLabel, archivePat);
+    std::wstring dynPat = App::Instance().Get7z().GetExtensionFilterPattern();
+    if (!dynPat.empty()) archivePat = dynPat;
+    split(I18n::Tr(IDS_FILTER_ALL_FILES), allLabel, allPat);
     COMDLG_FILTERSPEC filter[] = {
         { archiveLabel.c_str(), archivePat.c_str() },
         { allLabel.c_str(),     allPat.c_str()     },
@@ -1746,6 +1737,8 @@ void MainWindow::OnDone(HRESULT hr) {
 // ---- Compress flow ----
 
 void MainWindow::OnAddFiles() {
+    if (!Ensure7zLoaded()) return;
+
     auto files = BrowseMultipleFiles(m_hwnd, IDS_TITLE_SELECT_COMPRESS);
     if (files.empty()) return;
 
@@ -1756,8 +1749,8 @@ void MainWindow::OnAddFiles() {
 
     CompressDlg dlg;
     auto& sz7 = App::Instance().Get7z();
-    const auto* enc = sz7.IsLoaded() ? &sz7.GetEncoderNames() : nullptr;
-    const auto* wf  = sz7.IsLoaded() ? &sz7.GetWritableFormats() : nullptr;
+    const auto* enc = &sz7.GetEncoderNames();
+    const auto* wf  = &sz7.GetWritableFormats();
     if (dlg.Show(m_hwnd, params, enc, wf)) {
         auto& s = App::Instance().GetSettings();
         params.SaveToSettings(s);

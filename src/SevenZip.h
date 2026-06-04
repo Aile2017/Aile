@@ -162,6 +162,10 @@ public:
     // Use in OpenArchive/Compress to guard transparent tar-in-stream handling.
     bool IsStreamFormat(const wchar_t* ext) const;
 
+    // Returns "*.7z;*.zip;*.rar;..." built from the loaded DLL's format list.
+    // Empty when DLL is not loaded or format enumeration is unavailable.
+    std::wstring GetExtensionFilterPattern() const;
+
     // Writable formats supported by the loaded 7z.dll (RAR not included).
     const std::vector<WritableFormat>& GetWritableFormats() const { return m_writableFormats; }
 

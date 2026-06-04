@@ -120,8 +120,8 @@ BEGIN
     LTEXT           "Extra parameters:",     IDC_STATIC,    14, 112,  68,   8
     LTEXT           "(e.g. mf=bt4 mpass=2)", IDC_STATIC,    14, 122,  90,   8
     EDITTEXT        IDC_ADV_PARAMS,          14, 134, 256,  14, ES_AUTOHSCROLL
-    LTEXT           "* Solid block applies only to 7z format.",            IDC_STATIC, 14, 154, 260, 8
-    LTEXT           "* Volume splitting is not applied to gz/bz2/xz/tar.", IDC_STATIC, 14, 162, 260, 8
+    LTEXT           "* Solid block is only effective for the 7z format.",              IDC_STATIC, 14, 154, 260, 8
+    LTEXT           "* Volume splitting is not supported for stream compression formats.", IDC_STATIC, 14, 162, 260, 8
 
     DEFPUSHBUTTON   "OK",                IDOK,          176, 195,  50,  14
     PUSHBUTTON      "Cancel",            IDCANCEL,      233, 195,  50,  14
@@ -579,8 +579,8 @@ BEGIN
     LTEXT           "追加パラメーター:",     IDC_STATIC,    14, 112,  68,   8
     LTEXT           "(例: mf=bt4 mpass=2)", IDC_STATIC,    14, 122,  90,   8
     EDITTEXT        IDC_ADV_PARAMS,         14, 134, 256,  14, ES_AUTOHSCROLL
-    LTEXT           "※ 7z形式以外ではソリッドブロックは無効です。",     IDC_STATIC, 14, 154, 260, 8
-    LTEXT           "※ 分割ボリュームは gz/bz2/xz/tar では適用されません。", IDC_STATIC, 14, 162, 260, 8
+    LTEXT           "※ ソリッドブロックは 7z 形式専用の機能です。",                   IDC_STATIC, 14, 154, 260, 8
+    LTEXT           "※ ストリーム圧縮形式では分割ボリュームは使用できません。", IDC_STATIC, 14, 162, 260, 8
 
     DEFPUSHBUTTON   "OK",              IDOK,          176, 195,  50,  14
     PUSHBUTTON      "キャンセル",       IDCANCEL,      233, 195,  50,  14

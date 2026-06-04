@@ -25,6 +25,13 @@ Z7_FMT_GUID(CLSID_Format_Rar5,  0xCC);  // 7-Zip uses 0xCC, not 0x04
 Z7_FMT_GUID(CLSID_Format_Cab,   0x08);
 Z7_FMT_GUID(CLSID_Format_Iso,   0xE7);
 
+// 7-Zip ZS extended formats (verified against 7z.dll ZS build)
+Z7_FMT_GUID(CLSID_Format_Zstd,   0x0E);
+Z7_FMT_GUID(CLSID_Format_LZ4,    0x0F);
+Z7_FMT_GUID(CLSID_Format_LZ5,    0x10);
+Z7_FMT_GUID(CLSID_Format_Lizard, 0x11);
+Z7_FMT_GUID(CLSID_Format_Brotli, 0x1F);
+
 // ---- CreateObject export ----
 typedef HRESULT (WINAPI *Func_CreateObject)(const GUID* clsid, const GUID* iid, void** outObject);
 

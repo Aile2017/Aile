@@ -133,9 +133,15 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
         }
     }
 
+    if (!m_sevenZip.IsLoaded()) {
+        MessageBoxW(wnd.Hwnd(), I18n::Tr(IDS_ERR_7Z_NOT_LOADED).c_str(),
+                    I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
+        return 0;
+    }
+
     CompressDlg dlg;
-    const auto* enc = m_sevenZip.IsLoaded() ? &m_sevenZip.GetEncoderNames() : nullptr;
-    const auto* wf  = m_sevenZip.IsLoaded() ? &m_sevenZip.GetWritableFormats() : nullptr;
+    const auto* enc = &m_sevenZip.GetEncoderNames();
+    const auto* wf  = &m_sevenZip.GetWritableFormats();
     const bool rarAvailable = !m_settings.GetRarExePath().empty()
         ? (PathFileExistsW(m_settings.GetRarExePath().c_str()) == TRUE)
         : !RarProcess::FindRarExe().empty();
