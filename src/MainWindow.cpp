@@ -231,7 +231,9 @@ void MainWindow::OpenArchive(const wchar_t* path) {
 
     // On open failure: may be encrypted header, prompt for password and retry.
     // Respect the user's preferred backend (preferUnrar) and fall back to the other.
-    if (FAILED(hr)) {
+    // Skip password prompt if no backend even attempted to open (e.g. DLL not loaded).
+    bool anyBackendTried = app.Get7z().IsLoaded() || (isRar && app.GetUnrar().IsLoaded());
+    if (FAILED(hr) && anyBackendTried) {
         std::wstring pw = PromptPassword();
         if (!pw.empty()) {
             m_items.clear();
@@ -271,10 +273,15 @@ void MainWindow::OpenArchive(const wchar_t* path) {
 
     if (FAILED(hr)) {
         std::wstring msg = I18n::Tr(IDS_ERR_OPEN_ARCHIVE);
-        if (!app.Get7z().IsLoaded() && !app.GetUnrar().IsLoaded())
+        if (!app.Get7z().IsLoaded() && !app.GetUnrar().IsLoaded()) {
             msg += I18n::Tr(IDS_ERR_OPEN_ARCHIVE_7Z_UNRAR);
-        else if (!app.Get7z().IsLoaded())
+            if (app.Get7z().IsWrongBitness())
+                msg += I18n::Tr(IDS_ERR_7Z_WRONG_BITNESS);
+        } else if (!app.Get7z().IsLoaded()) {
             msg += I18n::Tr(IDS_ERR_OPEN_ARCHIVE_7Z);
+            if (app.Get7z().IsWrongBitness())
+                msg += I18n::Tr(IDS_ERR_7Z_WRONG_BITNESS);
+        }
         ShowError(msg.c_str(), hr);
         return;
     }

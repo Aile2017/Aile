@@ -211,9 +211,7 @@ void CompressDlg::UpdateOutputExt(HWND hwnd, const wchar_t* fmtId, const wchar_t
     GetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, outPath, MAX_PATH);
     if (!outPath[0] || !fmtId) return;
 
-    bool isStream = (wcscmp(fmtId, L"gz")  == 0 ||
-                     wcscmp(fmtId, L"bz2") == 0 ||
-                     wcscmp(fmtId, L"xz")  == 0);
+    bool isStream = SevenZip::IsStreamExt(fmtId);
     bool is7z  = (wcscmp(fmtId, L"7z")  == 0);
     bool isRar = (wcscmp(fmtId, L"rar") == 0);
     bool sfxOn = (sfxMode && sfxMode[0] && (is7z || isRar));

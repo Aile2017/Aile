@@ -309,7 +309,7 @@ BEGIN
     IDS_CTX_INFO                    "&Info"
     IDS_CTX_DELETE                  "&Delete"
 
-    IDS_FILTER_ARCHIVE              "Archive files|*.zip;*.7z;*.rar;*.tar;*.gz;*.bz2;*.xz;*.tgz;*.tbz;*.tbz2;*.txz|All files|*.*|"
+    IDS_FILTER_ARCHIVE              "Archive files|*.zip;*.7z;*.rar;*.tar;*.gz;*.bz2;*.xz;*.lzma;*.zst;*.lz4;*.lz5;*.br;*.liz;*.tgz;*.tbz;*.tbz2;*.txz|All files|*.*|"
     IDS_FILTER_ALL_FILES            "All files|*.*|"
     IDS_FILTER_EXE                  "Executable files|*.exe|"
     IDS_FILTER_DLL                  "DLL files|*.dll|"
@@ -329,6 +329,7 @@ BEGIN
     IDS_ERR_OPEN_ARCHIVE            "Could not open the archive."
     IDS_ERR_OPEN_ARCHIVE_7Z_UNRAR   "\n7z.dll / unrar.dll is not loaded."
     IDS_ERR_OPEN_ARCHIVE_7Z         "\n7z.dll is not loaded."
+    IDS_ERR_7Z_WRONG_BITNESS        "\n(The DLL may be the wrong bitness — use the 64-bit version.)"
     IDS_INFO_SELECT_FILE            "Please select a file."
     IDS_INFO_FOLDERS_NOT_VIEWABLE   "Folders cannot be viewed. Please select a file."
     IDS_VIEW_REQUIRES_7Z            "Viewing only works when 7z.dll is used.\nIn Settings, switch the RAR extraction engine to ""7z.dll""."
@@ -767,7 +768,7 @@ BEGIN
     IDS_CTX_INFO                    "情報(&I)"
     IDS_CTX_DELETE                  "削除(&D)"
 
-    IDS_FILTER_ARCHIVE              "アーカイブファイル|*.zip;*.7z;*.rar;*.tar;*.gz;*.bz2;*.xz;*.tgz;*.tbz;*.tbz2;*.txz|すべてのファイル|*.*|"
+    IDS_FILTER_ARCHIVE              "アーカイブファイル|*.zip;*.7z;*.rar;*.tar;*.gz;*.bz2;*.xz;*.lzma;*.zst;*.lz4;*.lz5;*.br;*.liz;*.tgz;*.tbz;*.tbz2;*.txz|すべてのファイル|*.*|"
     IDS_FILTER_ALL_FILES            "すべてのファイル|*.*|"
     IDS_FILTER_EXE                  "実行ファイル|*.exe|"
     IDS_FILTER_DLL                  "DLL ファイル|*.dll|"
@@ -787,6 +788,7 @@ BEGIN
     IDS_ERR_OPEN_ARCHIVE            "アーカイブを開けませんでした。"
     IDS_ERR_OPEN_ARCHIVE_7Z_UNRAR   "\n7z.dll / unrar.dll が読み込まれていません。"
     IDS_ERR_OPEN_ARCHIVE_7Z         "\n7z.dll が読み込まれていません。"
+    IDS_ERR_7Z_WRONG_BITNESS        "\n（DLL のビット数が異なる可能性があります — 64bit 版をご使用ください。）"
     IDS_INFO_SELECT_FILE            "ファイルを選択してください。"
     IDS_INFO_FOLDERS_NOT_VIEWABLE   "フォルダは閲覧できません。ファイルを選択してください。"
     IDS_VIEW_REQUIRES_7Z            "閲覧機能は 7z.dll 使用時のみ利用できます。\n設定で RAR 展開エンジンを「7z.dll」に切り替えてください。"

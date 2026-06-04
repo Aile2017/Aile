@@ -55,6 +55,8 @@ public:
     bool Load(const wchar_t* dllPath = nullptr);
     void Unload();
     bool IsLoaded() const { return m_hDll != nullptr; }
+    // True if the last Load() call failed because the DLL is the wrong bitness (32-bit DLL on 64-bit process or vice versa).
+    bool IsWrongBitness() const { return m_loadBadExe; }
     const std::wstring& GetLoadedName() const { return m_loadedName; }
     // Full path of the loaded 7z.dll. Empty when not loaded.
     std::wstring GetLoadedPath() const;
@@ -130,7 +132,7 @@ public:
     // Compress srcPaths into outPath.
     HRESULT Compress(const std::vector<std::wstring>& srcPaths,
                      const wchar_t* outPath,
-                     const wchar_t* format,   // "7z","zip","tar","gz","bz2","xz"
+                     const wchar_t* format,   // "7z","zip","tar","gz","bz2","xz","zst", etc.
                      int level,               // 0-9
                      const wchar_t* method,   // "lzma","deflate","zstd", etc.
                      const wchar_t* password,
@@ -151,11 +153,21 @@ public:
     // Recognizes normal archive extensions and split volume 1 names like *.7z.001.
     bool IsArchivePath(const wchar_t* path) const;
 
+    // Returns true if ext is a known single-file stream compression format
+    // (gz, bz2, xz, zst, lzma, lz4, lz5, br, liz, ...).
+    // Static: checks the static list only — no DLL support verification.
+    // Use when the format is already known to be supported (e.g. it came from the UI dropdown).
+    static bool IsStreamExt(const wchar_t* ext);
+    // Returns true if ext is a known stream format AND the loaded DLL supports it.
+    // Use in OpenArchive/Compress to guard transparent tar-in-stream handling.
+    bool IsStreamFormat(const wchar_t* ext) const;
+
     // Writable formats supported by the loaded 7z.dll (RAR not included).
     const std::vector<WritableFormat>& GetWritableFormats() const { return m_writableFormats; }
 
 private:
     HMODULE                      m_hDll               = nullptr;
+    bool                         m_loadBadExe         = false;  // true when LoadLibrary failed with ERROR_BAD_EXE_FORMAT
     std::wstring                 m_loadedName;
     std::wstring                 m_loadedPath;        // Full path to loaded DLL (for caching codec enumeration)
     Func_CreateObject            m_pfnCreateObject    = nullptr;

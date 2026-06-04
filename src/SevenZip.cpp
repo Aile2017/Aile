@@ -254,8 +254,13 @@ bool SevenZip::Load(const wchar_t* dllPath) {
             wcsncpy_s(buf, found.c_str(), MAX_PATH - 1);
         dllPath = buf;
     }
+    m_loadBadExe = false;
     m_hDll = LoadLibraryW(dllPath);
-    if (!m_hDll) return false;
+    if (!m_hDll) {
+        if (GetLastError() == ERROR_BAD_EXE_FORMAT)
+            m_loadBadExe = true;
+        return false;
+    }
     m_pfnCreateObject = (Func_CreateObject)GetProcAddress(m_hDll, "CreateObject");
     if (!m_pfnCreateObject) { FreeLibrary(m_hDll); m_hDll = nullptr; return false; }
     wchar_t nameBuf[MAX_PATH] = {};
@@ -467,6 +472,31 @@ bool SevenZip::IsArchivePath(const wchar_t* path) const {
     return !baseExt.empty() && IsArchiveExt(baseExt.c_str());
 }
 
+// All known single-file stream compression extensions (superset of all 7z.dll variants).
+// These are formats that wrap at most one inner file — suitable as .tar.XXX outer wrappers.
+bool SevenZip::IsStreamExt(const wchar_t* ext) {
+    if (!ext || !ext[0]) return false;
+    std::wstring lower(ext);
+    for (auto& c : lower) c = (wchar_t)towlower(c);
+    static const wchar_t* kStreamExts[] = {
+        L"gz", L"bz2", L"xz",          // standard 7z.dll
+        L"zst",                          // Zstandard (7-Zip ZS)
+        L"lzma",                         // LZMA (standard 7z.dll)
+        L"lz4", L"lz5",                  // LZ4 / LZ5 (7-Zip ZS)
+        L"br",                           // Brotli (7-Zip ZS)
+        L"liz",                          // Lizard (7-Zip ZS)
+        nullptr
+    };
+    for (int i = 0; kStreamExts[i]; ++i)
+        if (lower == kStreamExts[i]) return true;
+    return false;
+}
+
+bool SevenZip::IsStreamFormat(const wchar_t* ext) const {
+    return IsStreamExt(ext) && IsArchiveExt(ext);
+}
+
+
 
 
 std::wstring SevenZip::ExtOfPath(const wchar_t* path) {
@@ -528,7 +558,7 @@ HRESULT SevenZip::CreateOutArchive(const GUID& clsid, IOutArchive** ppArc) {
 // Minimal helpers for single-item extraction used when opening
 // stream-wrapped tar archives (.tar.gz, .tar.bz2, .tar.xz).
 // ============================================================
-class CTempOutStream : public ISequentialOutStream {
+class CTempOutStream : public IOutStream {
 public:
     bool Create(const wchar_t* path) {
         m_hFile = CreateFileW(path, GENERIC_WRITE, 0, nullptr,
@@ -538,7 +568,9 @@ public:
     ~CTempOutStream() { if (m_hFile != INVALID_HANDLE_VALUE) CloseHandle(m_hFile); }
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void** ppv) override {
         if (iid == IID_IUnknown || iid == IID_ISequentialOutStream)
-            { *ppv = this; AddRef(); return S_OK; }
+            { *ppv = static_cast<ISequentialOutStream*>(this); AddRef(); return S_OK; }
+        if (iid == IID_IOutStream)
+            { *ppv = static_cast<IOutStream*>(this); AddRef(); return S_OK; }
         *ppv = nullptr; return E_NOINTERFACE;
     }
     ULONG STDMETHODCALLTYPE AddRef()  override { return (ULONG)InterlockedIncrement(&m_refCount); }
@@ -551,6 +583,22 @@ public:
         DWORD written = 0;
         WriteFile(m_hFile, data, size, &written, nullptr);
         if (processed) *processed = written;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE Seek(Int64 offset, UInt32 origin, UInt64* newPos) override {
+        LARGE_INTEGER li, np;
+        li.QuadPart = offset;
+        if (!SetFilePointerEx(m_hFile, li, &np, origin))
+            return HRESULT_FROM_WIN32(GetLastError());
+        if (newPos) *newPos = (UInt64)np.QuadPart;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE SetSize(UInt64 newSize) override {
+        UInt64 cur = 0;
+        Seek(0, FILE_CURRENT, &cur);
+        Seek((Int64)newSize, FILE_BEGIN, nullptr);
+        SetEndOfFile(m_hFile);
+        Seek((Int64)cur, FILE_BEGIN, nullptr);
         return S_OK;
     }
 private:
@@ -812,13 +860,13 @@ HRESULT SevenZip::OpenArchive(const wchar_t* path, std::vector<ArchiveItem>& ite
         items.push_back(std::move(it));
     }
 
-    // Transparent tar-in-stream detection: .tar.gz / .tar.bz2 / .tar.xz
+    // Transparent tar-in-stream detection: .tar.gz / .tar.bz2 / .tar.xz / .tar.zst / etc.
     // When the outer archive wraps exactly one non-directory item whose name ends
     // in ".tar", extract it to a temp file and re-enumerate so the caller sees
     // the inner tar contents directly.
     {
         std::wstring outerExt = ExtOfPath(path);
-        if ((outerExt == L"gz" || outerExt == L"bz2" || outerExt == L"xz") &&
+        if (IsStreamFormat(outerExt.c_str()) &&
             items.size() == 1 && !items[0].isDir)
         {
             // Determine inner name: prefer item path/name, but bz2/xz may
@@ -2366,11 +2414,9 @@ HRESULT SevenZip::Compress(const std::vector<std::wstring>& srcPaths,
                             bool encryptHeaders) {
     if (!IsLoaded()) return E_FAIL;
 
-    // For stream formats (gz/bz2/xz) with multiple files or a single directory,
+    // For stream formats (gz/bz2/xz/zst/...) with multiple files or a single directory,
     // automatically wrap contents in a tar first, then apply the stream format.
-    bool isStream = format && (wcscmp(format, L"gz")  == 0 ||
-                                wcscmp(format, L"bz2") == 0 ||
-                                wcscmp(format, L"xz")  == 0);
+    bool isStream = format && IsStreamFormat(format);
     if (isStream) {
         bool needsTar = srcPaths.size() > 1;
         if (!needsTar && srcPaths.size() == 1) {
