@@ -25,7 +25,7 @@ void Settings::Load() {
     m_fontName         = ReadStr(L"General", L"FontName",         L"Segoe UI");
 
     wchar_t buf[16] = {};
-    GetPrivateProfileStringW(L"General", L"CompressionLevel", L"5", buf, 16, m_iniPath.c_str());
+    GetPrivateProfileStringW(L"General", L"CompressionLevel", L"0", buf, 16, m_iniPath.c_str());
     m_compressionLevel = _wtoi(buf);
     if (m_compressionLevel < 0) m_compressionLevel = 0;
 

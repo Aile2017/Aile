@@ -86,14 +86,12 @@ HRESULT SevenZip::Compress(const std::vector<std::wstring>& srcPaths,
 {
     // Resolve the effective B2E method index from the method name and output format.
     //
-    // Three cases:
-    //   method == ""      → GUI B2E dialog already set level to the correct index; use it as-is.
-    //   method found      → CLI -mName: look up the 0-based index in the type list.
-    //   method not found  → CLI -tFmt without -m: the method string is a 7z-world default
-    //                       ("lzma", etc.) that has no meaning for B2E; fall back to the
-    //                       format's default method (the one marked * in the type list).
-    int effectiveLevel = level;
-    if (method && method[0] && outPath) {
+    // Two cases:
+    //   method found      → -mName: look up the 0-based index in the type list.
+    //   method == "" or   → no method specified (GUI or CLI): use the format's default
+    //   method not found    method (the one marked * in the type list).
+    int effectiveLevel = 0;
+    if (outPath) {
         const wchar_t* dot = wcsrchr(outPath, L'.');
         if (dot) {
             std::wstring ext = dot + 1;
@@ -101,19 +99,17 @@ HRESULT SevenZip::Compress(const std::vector<std::wstring>& srcPaths,
             auto formats = B2e_GetWritableFormats();
             for (const auto& fi : formats) {
                 if (fi.ext == ext) {
+                    int defaultIdx = fi.methods.empty() ? 0 : 0;
                     bool found = false;
-                    int defaultIdx = fi.methods.empty() ? -1 : 0;
                     for (int i = 0; i < (int)fi.methods.size(); ++i) {
                         if (fi.methods[i].isDefault) defaultIdx = i;
-                        if (!found && _wcsicmp(fi.methods[i].name.c_str(), method) == 0) {
+                        if (!found && method && method[0] &&
+                            _wcsicmp(fi.methods[i].name.c_str(), method) == 0) {
                             effectiveLevel = i;
                             found = true;
                         }
                     }
-                    if (!found) {
-                        if (defaultIdx < 0) return E_FAIL;
-                        effectiveLevel = defaultIdx;
-                    }
+                    if (!found) effectiveLevel = defaultIdx;
                     break;
                 }
             }
@@ -141,14 +137,33 @@ HRESULT SevenZip::AddToArchive(const wchar_t* archivePath,
                                 const std::vector<std::wstring>& srcPaths,
                                 const wchar_t* /*archiveFolder*/,
                                 const wchar_t* /*password*/,
-                                int level,
+                                int /*level*/,
                                 const wchar_t* /*method*/,
                                 IExtractProgressSink* sink,
                                 const CompressAdvanced* /*adv*/)
 {
     // B2E: delegate to B2e_Compress with the existing archive as output path.
     // archiveFolder is ignored — B2E encodes files relative to their base directory.
-    return B2e_Compress(srcPaths, archivePath, level, sink);
+    // Always resolve the format's default method (the one marked * in the type list)
+    // rather than using the raw settings level, which is format-agnostic.
+    int effectiveLevel = 0;
+    if (archivePath) {
+        const wchar_t* dot = wcsrchr(archivePath, L'.');
+        if (dot) {
+            std::wstring ext = dot + 1;
+            for (wchar_t& c : ext) c = (wchar_t)towlower(c);
+            auto formats = B2e_GetWritableFormats();
+            for (const auto& fi : formats) {
+                if (fi.ext == ext) {
+                    for (int i = 0; i < (int)fi.methods.size(); ++i) {
+                        if (fi.methods[i].isDefault) { effectiveLevel = i; break; }
+                    }
+                    break;
+                }
+            }
+        }
+    }
+    return B2e_Compress(srcPaths, archivePath, effectiveLevel, sink);
 }
 
 std::wstring SevenZip::Find7zDll() { return {}; }

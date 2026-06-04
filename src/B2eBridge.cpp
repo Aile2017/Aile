@@ -4,42 +4,84 @@
 
 #include "stdafx.h"
 #include <ctype.h>
+#include <map>
 #include <set>
 #include <strsafe.h>
 #include "ArcB2e.h"
 #include "B2eBridge.h"
 
-// ── Extension → .b2e mapping ─────────────────────────────────────────────────
+// ── Extension → .b2e mapping (dynamic scan) ──────────────────────────────────
+// Scans all *.b2e files in the b2e directory.  Each filename stem is split on
+// '.' to enumerate the archive extensions it handles.
+// Example: "zip.zipx.b2e" maps both "zip" and "zipx" to that file.
 
-struct B2eTableEntry {
-    const char* ext;       // lowercase, no dot
-    const char* b2eFile;   // filename under the b2e/ directory
-    bool        writable;  // true when the script has an encode: section
-    const char* label;     // display label for writable formats (nullptr if not writable)
-    const char* cmpExt;    // canonical output extension for writable formats
-};
+static bool GetB2eDir(char* buf, int bufSize);  // defined below, after utilities
 
-static const B2eTableEntry B2E_TABLE[] = {
-    { "7z",   "7z.b2e",                                true,  "7-Zip (.7z)", "7z"  },
-    { "zip",  "zip.zipx.b2e",                          true,  "ZIP (.zip)",  "zip" },
-    { "zipx", "zip.zipx.b2e",                          false, nullptr,       nullptr },
-    { "rar",  "rar.b2e",                               true,  "RAR (.rar)",  "rar" },
-    { "lzh",  "lzh.b2e",                               true,  "LZH (.lzh)",  "lzh" },
-    { "lha",  "lzh.b2e",                               false, nullptr,       nullptr },
-    { "tar",  "tar.gz.bz2.xz.zst.liz.lz4.lz5.br.b2e", true, "TAR (.tar)",  "tar" },
-    { "gz",   "tar.gz.bz2.xz.zst.liz.lz4.lz5.br.b2e", false, nullptr,      nullptr },
-    { "bz2",  "tar.gz.bz2.xz.zst.liz.lz4.lz5.br.b2e", false, nullptr,      nullptr },
-    { "xz",   "tar.gz.bz2.xz.zst.liz.lz4.lz5.br.b2e", false, nullptr,      nullptr },
-    { "zst",  "tar.gz.bz2.xz.zst.liz.lz4.lz5.br.b2e", false, nullptr,      nullptr },
-    { "liz",  "tar.gz.bz2.xz.zst.liz.lz4.lz5.br.b2e", false, nullptr,      nullptr },
-    { "lz4",  "tar.gz.bz2.xz.zst.liz.lz4.lz5.br.b2e", false, nullptr,      nullptr },
-    { "lz5",  "tar.gz.bz2.xz.zst.liz.lz4.lz5.br.b2e", false, nullptr,      nullptr },
-    { "br",   "tar.gz.bz2.xz.zst.liz.lz4.lz5.br.b2e", false, nullptr,      nullptr },
-    { "cab",  "cab.b2e",                               true,  "CAB (.cab)",  "cab"  },
-    { "rpm",  "rpm.cpio.b2e",                          false, nullptr,       nullptr },
-    { "cpio", "rpm.cpio.b2e",                          false, nullptr,       nullptr },
-    { nullptr, nullptr, false, nullptr, nullptr }
-};
+static std::map<std::string, std::string> BuildExtMap()
+{
+    std::map<std::string, std::string> m;
+
+    char b2eDir[MAX_PATH];
+    if (!GetB2eDir(b2eDir, MAX_PATH)) return m;
+
+    char pattern[MAX_PATH];
+    if (FAILED(StringCchCopyA(pattern, _countof(pattern), b2eDir)) ||
+        FAILED(StringCchCatA(pattern, _countof(pattern), "*.b2e")))
+        return m;
+
+    WIN32_FIND_DATA fd;
+    HANDLE hFind = ::FindFirstFileA(pattern, &fd);
+    if (hFind == INVALID_HANDLE_VALUE) return m;
+
+    do {
+        // Strip the ".b2e" suffix to get the stem.
+        std::string name = fd.cFileName;
+        if (name.size() >= 4) {
+            std::string suffix = name.substr(name.size() - 4);
+            for (char& c : suffix) c = (char)tolower((unsigned char)c);
+            if (suffix == ".b2e")
+                name = name.substr(0, name.size() - 4);
+        }
+        // Each dot-separated token in the stem is a handled extension.
+        std::string tok;
+        for (size_t i = 0; i <= name.size(); ++i) {
+            char c = (i < name.size()) ? name[i] : '\0';
+            if (c == '.' || c == '\0') {
+                if (!tok.empty()) {
+                    // Map extension (lowercase) → original filename, first-wins on collision.
+                    m.emplace(tok, std::string(fd.cFileName));
+                    tok.clear();
+                }
+            } else {
+                tok += (char)tolower((unsigned char)c);
+            }
+        }
+    } while (::FindNextFileA(hFind, &fd));
+
+    ::FindClose(hFind);
+    return m;
+}
+
+// Thread-safe singleton (C++11 static-local init).
+static const std::map<std::string, std::string>& GetExtMap()
+{
+    static std::map<std::string, std::string> s_map = BuildExtMap();
+    return s_map;
+}
+
+// Returns the b2e script filename for the given ANSI path, or nullptr if not found.
+static const std::string* FindScript(const char* path)
+{
+    const char* extRaw = kiPath::ext(path);
+    if (!extRaw || !extRaw[0]) return nullptr;
+
+    std::string extLow = extRaw;
+    for (char& c : extLow) c = (char)tolower((unsigned char)c);
+
+    const auto& m = GetExtMap();
+    auto it = m.find(extLow);
+    return (it != m.end()) ? &it->second : nullptr;
+}
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
@@ -181,25 +223,6 @@ static HRESULT WideFsPathToAnsiPath(const wchar_t* path, bool allowMissingLeaf, 
 
     *ansiPath = ansi;
     return S_OK;
-}
-
-// Convert ANSI extension to lowercase and look it up in B2E_TABLE.
-static const B2eTableEntry* FindEntry(const char* path)
-{
-    // kiPath::ext() returns a pointer to the char after the last '.',
-    // or a pointer to '\0' when there is no extension.
-    const char* extRaw = kiPath::ext(path);
-    if (!extRaw || !extRaw[0]) return nullptr;
-
-    char extLow[64] = {};
-    int i = 0;
-    for (; extRaw[i] && i < 63; ++i)
-        extLow[i] = (char)tolower((unsigned char)extRaw[i]);
-
-    for (const B2eTableEntry* e = B2E_TABLE; e->ext; ++e)
-        if (0 == ki_strcmpi(e->ext, extLow))
-            return e;
-    return nullptr;
 }
 
 // Try FindFirstFile; if the file doesn't exist yet, build a minimal struct.
@@ -405,18 +428,32 @@ std::vector<std::wstring> B2e_GetComponentVersions()
     // Process it first so those appear at the top of the list.
     processScript("0.b2e");
 
-    for (const B2eTableEntry* e = B2E_TABLE; e->ext; ++e)
-        processScript(e->b2eFile);
+    // Scan all *.b2e files and process each unique script.
+    char b2eDir[MAX_PATH];
+    if (GetB2eDir(b2eDir, MAX_PATH)) {
+        char pattern[MAX_PATH];
+        if (SUCCEEDED(StringCchCopyA(pattern, _countof(pattern), b2eDir)) &&
+            SUCCEEDED(StringCchCatA(pattern, _countof(pattern), "*.b2e"))) {
+            WIN32_FIND_DATA fds;
+            HANDLE hFind = ::FindFirstFileA(pattern, &fds);
+            if (hFind != INVALID_HANDLE_VALUE) {
+                do {
+                    processScript(fds.cFileName);
+                } while (::FindNextFileA(hFind, &fds));
+                ::FindClose(hFind);
+            }
+        }
+    }
 
     return result;
 }
 
 bool B2e_IsArchiveExt(const wchar_t* ext)
 {
-    // Build "x.<ext>" so kiPath::ext() inside FindEntry can extract the extension.
+    // Build "x.<ext>" so kiPath::ext() inside FindScript can extract the extension.
     char extA[66] = {'x', '.'};
     if (!WToA(ext, extA + 2, 62)) return false;
-    return FindEntry(extA) != nullptr;
+    return FindScript(extA) != nullptr;
 }
 
 HRESULT B2e_List(const wchar_t* archivePath, std::vector<ArchiveItem>& items,
@@ -427,8 +464,8 @@ HRESULT B2e_List(const wchar_t* archivePath, std::vector<ArchiveItem>& items,
     HRESULT hr = WideFsPathToAnsiPath(archivePath, false, &path);
     if (FAILED(hr)) return hr;
 
-    const B2eTableEntry* entry = FindEntry(path.c_str());
-    if (!entry) return E_NOTIMPL;
+    const std::string* scriptFile = FindScript(path.c_str());
+    if (!scriptFile) return E_NOTIMPL;
 
     // Get archive file info (long name + short name for arcname).
     WIN32_FIND_DATA fd;
@@ -441,13 +478,13 @@ HRESULT B2e_List(const wchar_t* archivePath, std::vector<ArchiveItem>& items,
     const char* sname = fd.cAlternateFileName[0] ? fd.cAlternateFileName : fd.cFileName;
     arcname aname(dir, sname, fd.cFileName);
 
-    CArcB2e b2e(entry->b2eFile);
+    CArcB2e b2e(scriptFile->c_str());
     aflArray aflFiles;
     if (!b2e.list(aname, aflFiles)) return E_FAIL;
 
     if (canTest)   *canTest   = (b2e.ability() & aTest)   != 0;
     if (canDelete) *canDelete = (b2e.ability() & aDelete) != 0;
-    if (canAdd)    *canAdd    = entry->writable;
+    if (canAdd)    *canAdd    = (b2e.ability() & aCompress) != 0;
 
     items.clear();
     if (columnHeader) columnHeader->clear();
@@ -525,8 +562,8 @@ HRESULT B2e_Extract(const wchar_t* archivePath,
     hr = WideFsPathToAnsiPath(destDir, false, &dest);
     if (FAILED(hr)) return hr;
 
-    const B2eTableEntry* entry = FindEntry(path.c_str());
-    if (!entry) return E_NOTIMPL;
+    const std::string* scriptFile = FindScript(path.c_str());
+    if (!scriptFile) return E_NOTIMPL;
 
     WIN32_FIND_DATA fd;
     if (!GetWfd(path.c_str(), &fd)) return E_FAIL;
@@ -537,7 +574,7 @@ HRESULT B2e_Extract(const wchar_t* archivePath,
     const char* sname = fd.cAlternateFileName[0] ? fd.cAlternateFileName : fd.cFileName;
     arcname aname(dir, sname, fd.cFileName);
 
-    CArcB2e b2e(entry->b2eFile);
+    CArcB2e b2e(scriptFile->c_str());
     int result;
 
     if (indices.empty()) {
@@ -573,8 +610,11 @@ HRESULT B2e_Compress(const std::vector<std::wstring>& srcPaths,
     HRESULT hr = WideFsPathToAnsiPath(outPath, true, &out);
     if (FAILED(hr)) return hr;
 
-    const B2eTableEntry* entry = FindEntry(out.c_str());
-    if (!entry || !entry->writable) return E_NOTIMPL;
+    const std::string* scriptFile = FindScript(out.c_str());
+    if (!scriptFile) return E_NOTIMPL;
+
+    CArcB2e b2e(scriptFile->c_str());
+    if (!(b2e.ability() & aCompress)) return E_NOTIMPL;
 
     // Output dir and filename.
     kiPath outDir(out.c_str()); outDir.beDirOnly();
@@ -607,7 +647,6 @@ HRESULT B2e_Compress(const std::vector<std::wstring>& srcPaths,
         wfd.add(fdSrc);
     }
 
-    CArcB2e b2e(entry->b2eFile);
     // level 0 → store (method 1 in the .b2e script); level N → method N+1.
     int result = b2e.compress(base, wfd, outDir, level, /*sfx=*/false);
     return (result < 0x8000) ? S_OK : E_FAIL;
@@ -619,8 +658,8 @@ HRESULT B2e_Test(const wchar_t* archivePath, std::wstring* output)
     HRESULT hr = WideFsPathToAnsiPath(archivePath, false, &path);
     if (FAILED(hr)) return hr;
 
-    const B2eTableEntry* entry = FindEntry(path.c_str());
-    if (!entry) return E_NOTIMPL;
+    const std::string* scriptFile = FindScript(path.c_str());
+    if (!scriptFile) return E_NOTIMPL;
 
     WIN32_FIND_DATA fd;
     if (!GetWfd(path.c_str(), &fd)) return E_FAIL;
@@ -629,7 +668,7 @@ HRESULT B2e_Test(const wchar_t* archivePath, std::wstring* output)
     const char* sname = fd.cAlternateFileName[0] ? fd.cAlternateFileName : fd.cFileName;
     arcname aname(dir, sname, fd.cFileName);
 
-    CArcB2e b2e(entry->b2eFile);
+    CArcB2e b2e(scriptFile->c_str());
     kiStr cap;
     int result = b2e.test(aname, cap);
 
@@ -647,8 +686,8 @@ HRESULT B2e_Delete(const wchar_t* archivePath,
     HRESULT hr = WideFsPathToAnsiPath(archivePath, false, &path);
     if (FAILED(hr)) return hr;
 
-    const B2eTableEntry* entry = FindEntry(path.c_str());
-    if (!entry) return E_NOTIMPL;
+    const std::string* scriptFile = FindScript(path.c_str());
+    if (!scriptFile) return E_NOTIMPL;
 
     WIN32_FIND_DATA fd;
     if (!GetWfd(path.c_str(), &fd)) return E_FAIL;
@@ -669,7 +708,7 @@ HRESULT B2e_Delete(const wchar_t* archivePath,
     }
     if (selected.len() == 0) return S_OK;
 
-    CArcB2e b2e(entry->b2eFile);
+    CArcB2e b2e(scriptFile->c_str());
     int result = b2e.delete_items(aname, selected);
     return (result < 0x8000) ? S_OK : E_FAIL;
 }
