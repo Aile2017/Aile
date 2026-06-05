@@ -73,12 +73,17 @@ script-based backend, so no archive DLLs are bundled with the application itself
 ## Building
 
 ```bat
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+cmake --build build
+
 cmake -B build_release -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build_release --config Release
+cmake --build build_release
 ```
 
-The output executable is placed in `build_release/`. After each build, the `.b2e` script files
-are automatically copied to `build_release/b2e/` next to the executable.
+- Debug output: `build/AileFlow.exe`
+- Release output: `build_release/AileFlow.exe`
+- After each build, the `.b2e` script files are automatically copied next to the executable
+  (`build/b2e/` or `build_release/b2e/`).
 
 ---
 
@@ -123,4 +128,3 @@ scripts as-is (with minor modifications where needed) and drives them through th
 ### Application Icon
 
 [Archiver - free Icon in PNG and SVG](https://icon-icons.com/icon/archiver/37045) by [icon-icons.com](https://icon-icons.com/), used under free for commercial use license.
-

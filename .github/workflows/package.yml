@@ -53,6 +53,7 @@ jobs:
           $pkg = "dist\${{ steps.names.outputs.pkg_name }}"
           New-Item -ItemType Directory -Force $pkg | Out-Null
           Copy-Item build_release\AileFlow.exe $pkg\
+          Copy-Item README.md $pkg\
           Copy-Item -Recurse Release\b2e $pkg\b2e
 
       - name: Create ZIP
