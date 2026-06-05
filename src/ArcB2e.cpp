@@ -589,10 +589,15 @@ bool CArcB2e::CB2eCore::exec_function( const kiVar& name, const CharArray& a, co
 				kiVar fnm;
 				getarg( a[1],b[1],&fnm );
 				char buf[MAX_PATH];
-				if( 0==::SearchPath( NULL,fnm.unquote(),NULL,MAX_PATH,buf,NULL ) )
-					*r = "";
-				else
+				kiPath exeDir2( kiPath::Exe );
+				kiPath binDir2( kiPath::Exe ); binDir2 += "bin\\";
+				const char* fn = fnm.unquote();
+				if( 0!=::SearchPath( exeDir2,fn,NULL,MAX_PATH,buf,NULL ) ||
+					0!=::SearchPath( binDir2,fn,NULL,MAX_PATH,buf,NULL ) ||
+					0!=::SearchPath( NULL,   fn,NULL,MAX_PATH,buf,NULL ) )
 					*r = buf, r->quote();
+				else
+					*r = "";
 			}
 		}
 	}

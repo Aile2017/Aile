@@ -13,7 +13,13 @@ CArcModule::CArcModule( const char* name )
 	::GetCurrentDirectory(MAX_PATH, prev_cur);
 	kiSUtil::switchCurDirToExeDir();
 
-	if( 0!=::SearchPath( NULL,name,NULL,MAX_PATH,m_name,NULL ) )
+	// Search order: (1) exe dir, (2) exe\bin\, (3) system PATH.
+	kiPath exeDir( kiPath::Exe );
+	kiPath binDir( kiPath::Exe ); binDir += "bin\\";
+
+	if( 0!=::SearchPath( exeDir,name,NULL,MAX_PATH,m_name,NULL ) ||
+		0!=::SearchPath( binDir,name,NULL,MAX_PATH,m_name,NULL ) ||
+		0!=::SearchPath( NULL,  name,NULL,MAX_PATH,m_name,NULL ) )
 	{
 		m_type = EXE;
 	}
