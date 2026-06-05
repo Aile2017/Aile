@@ -10,6 +10,16 @@ static std::wstring NormalizePath(std::wstring path) {
     return path;
 }
 
+// Create password callback for unrar.dll UCM_NEEDPASSWORDW message.
+// Callback receives password string as user data and copies it to buffer p1 (max p2 bytes).
+static int CALLBACK PasswordCallback(UINT msg, LPARAM ud, LPARAM p1, LPARAM p2) {
+    if (msg == UCM_NEEDPASSWORDW) {
+        const wchar_t* pw = reinterpret_cast<const wchar_t*>(ud);
+        wcsncpy_s(reinterpret_cast<wchar_t*>(p1), (size_t)(p2 / sizeof(wchar_t)), pw, _TRUNCATE);
+    }
+    return 1;
+}
+
 // Auto-detect UnRAR64.dll / UnRAR.dll from known install paths.
 std::wstring UnrarDll::FindUnrarDll() {
     // First: same directory as AileEx.exe, then bin\ subdirectory
@@ -96,14 +106,7 @@ bool UnrarDll::ExtractArchiveSelected(const wchar_t* path, const wchar_t* destDi
     if (!hArc || od.OpenResult != ERAR_SUCCESS) return false;
 
     if (m_pfnSetCb && password && password[0]) {
-        auto cb = [](UINT msg, LPARAM ud, LPARAM p1, LPARAM p2) -> int {
-            if (msg == UCM_NEEDPASSWORDW) {
-                const wchar_t* pw = reinterpret_cast<const wchar_t*>(ud);
-                wcsncpy_s(reinterpret_cast<wchar_t*>(p1), (size_t)(p2 / sizeof(wchar_t)), pw, _TRUNCATE);
-            }
-            return 1;
-        };
-        m_pfnSetCb(hArc, cb, (LPARAM)password);
+        m_pfnSetCb(hArc, PasswordCallback, (LPARAM)password);
     }
 
     RARHeaderDataEx hdr = {};
@@ -141,14 +144,7 @@ bool UnrarDll::ListArchive(const wchar_t* path, std::vector<ArchiveItem>& items,
 
     // パスワード設定（RAR 5+ ファイル名暗号化対応）
     if (m_pfnSetCb && password && password[0]) {
-        auto cb = [](UINT msg, LPARAM ud, LPARAM p1, LPARAM p2) -> int {
-            if (msg == UCM_NEEDPASSWORDW) {
-                const wchar_t* pw = reinterpret_cast<const wchar_t*>(ud);
-                wcsncpy_s(reinterpret_cast<wchar_t*>(p1), (size_t)(p2 / sizeof(wchar_t)), pw, _TRUNCATE);
-            }
-            return 1;
-        };
-        m_pfnSetCb(hArc, cb, (LPARAM)password);
+        m_pfnSetCb(hArc, PasswordCallback, (LPARAM)password);
     }
 
     RARHeaderDataEx hdr = {};
@@ -252,14 +248,7 @@ bool UnrarDll::TestArchive(const wchar_t* path,
     if (!hArc || od.OpenResult != ERAR_SUCCESS) return false;
 
     if (m_pfnSetCb && password && password[0]) {
-        auto cb = [](UINT msg, LPARAM ud, LPARAM p1, LPARAM p2) -> int {
-            if (msg == UCM_NEEDPASSWORDW) {
-                const wchar_t* pw = reinterpret_cast<const wchar_t*>(ud);
-                wcsncpy_s(reinterpret_cast<wchar_t*>(p1), (size_t)(p2 / sizeof(wchar_t)), pw, _TRUNCATE);
-            }
-            return 1;
-        };
-        m_pfnSetCb(hArc, cb, (LPARAM)password);
+        m_pfnSetCb(hArc, PasswordCallback, (LPARAM)password);
     }
 
     RARHeaderDataEx hdr = {};
@@ -291,14 +280,7 @@ bool UnrarDll::ExtractArchive(const wchar_t* path, const wchar_t* destDir,
     if (m_pfnSetCb && password && password[0]) {
         // RARSetCallback uses UNRARCALLBACK: int CALLBACK(UINT, LPARAM, LPARAM, LPARAM)
         // UCM_NEEDPASSWORDW: P1=wchar_t* buf, P2=buf size in chars
-        auto cb = [](UINT msg, LPARAM ud, LPARAM p1, LPARAM p2) -> int {
-            if (msg == UCM_NEEDPASSWORDW) {
-                const wchar_t* pw = reinterpret_cast<const wchar_t*>(ud);
-                wcsncpy_s(reinterpret_cast<wchar_t*>(p1), (size_t)(p2 / sizeof(wchar_t)), pw, _TRUNCATE);
-            }
-            return 1;
-        };
-        m_pfnSetCb(hArc, cb, (LPARAM)password);
+        m_pfnSetCb(hArc, PasswordCallback, (LPARAM)password);
     }
 
     RARHeaderDataEx hdr = {};

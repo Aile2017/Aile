@@ -5,12 +5,13 @@
 - Windows 10/11
 - Visual Studio 2022 or later (MSVC compiler)
 - CMake 3.20+
-- Ninja or NMake (invoked by CMake)
+- Ninja
 
 ## Runtime Environment
 
 - 7-Zip must be installed (`C:\Program Files\7-Zip\7z.dll` referenced by default)
 - For RAR features: WinRAR / unrar.dll
+- Packaged binaries require Visual C++ Redistributable 2015-2022 (`VCRUNTIME140.dll`, `MSVCP140.dll`)
 
 ## Build Commands
 
@@ -19,7 +20,7 @@
 ```powershell
 cd C:\Users\asano\Desktop\workspace\AileEx
 $env:PATH = "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.44.35207\bin\Hostx64\x64;" + $env:PATH
-cmake -B build
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
 cmake --build build
 ```
 
@@ -29,7 +30,7 @@ Output: `build\AileEx.exe`
 
 ```powershell
 $env:PATH = "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.44.35207\bin\Hostx64\x64;" + $env:PATH
-cmake -B build_release -DCMAKE_BUILD_TYPE=Release
+cmake -B build_release -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build_release
 ```
 

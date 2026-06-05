@@ -4,8 +4,8 @@ project(AileEx LANGUAGES CXX RC)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Static CRT linking: single EXE distribution (no dependency on msvcp140.dll / vcruntime140.dll)
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+# Dynamic CRT linking: use the Visual C++ Redistributable runtime (/MD, /MDd)
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 
 add_executable(AileEx WIN32
     src/main.cpp

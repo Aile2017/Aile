@@ -51,19 +51,7 @@ std::wstring ParentDir(const std::wstring& path) {
 // Return the initial output path based on OutputDirMode setting and the given source files.
 // Returns "dir\stem" (no extension) so CompressDlg::UpdateOutputExt can append the right one.
 std::wstring DefaultOutputPath(const Settings& s, const std::vector<std::wstring>& srcFiles) {
-    std::wstring dir;
-    if (s.GetOutputDirModeFixed())
-        dir = s.GetDefaultOutputDir();
-    else
-        dir = srcFiles.empty() ? s.GetDefaultOutputDir() : ParentDir(srcFiles[0]);
-
-    if (srcFiles.empty()) return dir;
-
-    auto sl = srcFiles[0].find_last_of(L"\\/");
-    std::wstring name = (sl != std::wstring::npos) ? srcFiles[0].substr(sl + 1) : srcFiles[0];
-    auto dot = name.rfind(L'.');
-    std::wstring stem = (dot != std::wstring::npos) ? name.substr(0, dot) : name;
-    return dir.empty() ? stem : dir + L"\\" + stem;
+    return Settings::ComputeDefaultOutputPath(s, srcFiles);
 }
 
 // Return top-level entry count from archive m_items (unique first path components)
@@ -168,11 +156,15 @@ bool MainWindow::Create(HINSTANCE hInst, int nCmdShow) {
 }
 
 void MainWindow::OpenArchive(const wchar_t* path) {
-    // Delete previously unwrapped split temp file (prevent leak on replace)
-    if (!m_effectiveArchivePath.empty() &&
-        _wcsicmp(m_effectiveArchivePath.c_str(), m_archivePath.c_str()) != 0) {
-        DeleteFileW(m_effectiveArchivePath.c_str());
-    }
+    // Save state before attempting open; revert on failure to keep UI/state consistent
+    const std::wstring prevPath = m_archivePath;
+    const std::wstring prevEffPath = m_effectiveArchivePath;
+    const bool prevReadOnly = m_isReadOnly;
+    const std::vector<ArchiveItem> prevItems = m_items;
+    const std::wstring prevPassword = m_password;
+    const bool prevOpenedWithUnrar = m_openedWithUnrar;
+    const std::wstring oldTempPath = m_effectiveArchivePath;
+    
     m_archivePath = path;
     m_effectiveArchivePath = path;
     m_isReadOnly = false;
@@ -259,6 +251,14 @@ void MainWindow::OpenArchive(const wchar_t* path) {
     }
 
     if (FAILED(hr)) {
+        // Restore state on failure to keep UI consistent
+        m_archivePath = prevPath;
+        m_effectiveArchivePath = prevEffPath;
+        m_isReadOnly = prevReadOnly;
+        m_items = prevItems;
+        m_password = prevPassword;
+        m_openedWithUnrar = prevOpenedWithUnrar;
+        
         std::wstring msg = I18n::Tr(IDS_ERR_OPEN_ARCHIVE);
         if (!app.Get7z().IsLoaded() && !app.GetUnrar().IsLoaded()) {
             msg += I18n::Tr(IDS_ERR_OPEN_ARCHIVE_7Z_UNRAR);
@@ -271,6 +271,14 @@ void MainWindow::OpenArchive(const wchar_t* path) {
         }
         ShowError(msg.c_str(), hr);
         return;
+    }
+
+    // Delete previously unwrapped split temp file only after successful open
+    // (If we're reloading a different archive, clean up the old temp)
+    if (!oldTempPath.empty() &&
+        _wcsicmp(oldTempPath.c_str(), prevPath.c_str()) != 0 &&
+        _wcsicmp(oldTempPath.c_str(), m_archivePath.c_str()) != 0) {
+        DeleteFileW(oldTempPath.c_str());
     }
 
     // Update MRU — normalize relative paths and mixed cases ("../" etc.) via GetFullPathNameW.

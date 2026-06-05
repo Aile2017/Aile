@@ -10,6 +10,12 @@ public:
     void Load();
     void Save() const;
 
+    // Compute default output path ("dir\stem") for compress dialog based on settings and input files.
+    // Priority: overrideDir > fixed mode > source file directory. Returns path without extension.
+    static std::wstring ComputeDefaultOutputPath(const Settings& s,
+                                                 const std::vector<std::wstring>& srcFiles,
+                                                 const std::wstring& overrideDir = L"");
+
     const std::wstring& GetRarExtractor() const    { return m_rarExtractor; }
     void SetRarExtractor(const wchar_t* v)          { m_rarExtractor = v; }
 

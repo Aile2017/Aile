@@ -6,13 +6,40 @@
 #include <sstream>
 #include <cwctype>
 
+namespace {
+    // Windows command-line escaping: backslash doubled only before quote.
+    // "-hp\"My Pass\"" → CommandLineToArgvW interprets as "-hpMy Pass" single token.
+    std::wstring QuotePwForRar(const std::wstring& s) {
+        std::wstring r = L"\"";
+        int bs = 0;
+        for (wchar_t c : s) {
+            if (c == L'\\') { ++bs; }
+            else if (c == L'"') { r.append(bs * 2 + 1, L'\\'); r += L'"'; bs = 0; }
+            else { r.append(bs, L'\\'); r += c; bs = 0; }
+        }
+        r.append(bs * 2, L'\\');
+        r += L'"';
+        return r;
+    }
+
+    bool IsValidHandle(HANDLE h) {
+        return h && h != INVALID_HANDLE_VALUE;
+    }
+
+    void CloseHandleIfValid(HANDLE& h) {
+        if (IsValidHandle(h))
+            CloseHandle(h);
+        h = INVALID_HANDLE_VALUE;
+    }
+}
+
 RarProcess::~RarProcess() {
-    if (m_hReader != INVALID_HANDLE_VALUE) {
+    if (IsValidHandle(m_hReader)) {
         WaitForSingleObject(m_hReader, 5000);
         CloseHandle(m_hReader);
         m_hReader = INVALID_HANDLE_VALUE;
     }
-    if (m_hProcess != INVALID_HANDLE_VALUE) {
+    if (IsValidHandle(m_hProcess)) {
         CloseHandle(m_hProcess);
         m_hProcess = INVALID_HANDLE_VALUE;
     }
@@ -92,15 +119,17 @@ static bool IsWinRarGui(const std::wstring& exePath) {
 // ---- WinRAR.exe GUI waiter thread ----
 DWORD WINAPI RarProcess::WinrarWaiterThread(LPVOID param) {
     auto* ctx = static_cast<WaiterCtx*>(param);
+    bool cancelled = false;
     while (WaitForSingleObject(ctx->hProcess, 100) == WAIT_TIMEOUT) {
         if (*ctx->pCancel) {
             TerminateProcess(ctx->hProcess, 1);
+            cancelled = true;
             break;
         }
     }
     DWORD exitCode = 0;
     GetExitCodeProcess(ctx->hProcess, &exitCode);
-    HRESULT hr = (exitCode == 0) ? S_OK : HRESULT_FROM_WIN32(ERROR_CANCELLED);
+    HRESULT hr = cancelled ? E_ABORT : ((exitCode == 0) ? S_OK : E_FAIL);
     PostMessageW(ctx->hwnd, ctx->doneMsg, (WPARAM)hr, 0);
     CloseHandle(ctx->hProcess);
     delete ctx;
@@ -144,23 +173,10 @@ bool RarProcess::Compress(const std::vector<std::wstring>& srcPaths,
     // "-hp\"My Pass\"" → CommandLineToArgvW interprets as "-hpMy Pass" single token.
     if (password && password[0]) {
         std::wstring pw(password);
-        // Windows command-line escape: backslash doubled only before "
-        auto quotePw = [](const std::wstring& s) -> std::wstring {
-            std::wstring r = L"\"";
-            int bs = 0;
-            for (wchar_t c : s) {
-                if (c == L'\\') { ++bs; }
-                else if (c == L'"') { r.append(bs * 2 + 1, L'\\'); r += L'"'; bs = 0; }
-                else { r.append(bs, L'\\'); r += c; bs = 0; }
-            }
-            r.append(bs * 2, L'\\');
-            r += L'"';
-            return r;
-        };
         if (encryptHeaders)
-            cmd += L" -hp" + quotePw(pw);
+            cmd += L" -hp" + QuotePwForRar(pw);
         else
-            cmd += L" -p" + quotePw(pw);
+            cmd += L" -p" + QuotePwForRar(pw);
     }
 
     if (adv) {
@@ -214,11 +230,31 @@ bool RarProcess::LaunchRarCommand(const std::wstring& cmd,
         if (!ok) return false;
         m_hProcess = pi.hProcess;
         CloseHandle(pi.hThread);
-        auto* ctx = new WaiterCtx{m_hProcess, hwndNotify, doneMsg, &m_cancelFlag};
-        DuplicateHandle(GetCurrentProcess(), m_hProcess,
-                        GetCurrentProcess(), &ctx->hProcess,
-                        0, FALSE, DUPLICATE_SAME_ACCESS);
+        auto* ctx = new WaiterCtx{INVALID_HANDLE_VALUE, hwndNotify, doneMsg, &m_cancelFlag};
+        if (!DuplicateHandle(GetCurrentProcess(), m_hProcess,
+                             GetCurrentProcess(), &ctx->hProcess,
+                             0, FALSE, DUPLICATE_SAME_ACCESS)) {
+            DWORD err = GetLastError();
+            if (IsValidHandle(m_hProcess))
+                TerminateProcess(m_hProcess, 1);
+            CloseHandleIfValid(m_hProcess);
+            PostMessageW(hwndNotify, doneMsg, (WPARAM)HRESULT_FROM_WIN32(err), 0);
+            delete ctx;
+            return false;
+        }
         m_hReader = CreateThread(nullptr, 0, WinrarWaiterThread, ctx, 0, nullptr);
+        if (!m_hReader) {
+            DWORD err = GetLastError();
+            // Thread creation failed: notify and cleanup
+            CloseHandleIfValid(ctx->hProcess);
+            if (IsValidHandle(m_hProcess))
+                TerminateProcess(m_hProcess, 1);
+            CloseHandleIfValid(m_hProcess);
+            m_hReader = INVALID_HANDLE_VALUE;
+            PostMessageW(hwndNotify, doneMsg, (WPARAM)HRESULT_FROM_WIN32(err), 0);
+            delete ctx;
+            return false;
+        }
         return true;
     }
 
@@ -259,11 +295,32 @@ bool RarProcess::LaunchRarCommand(const std::wstring& cmd,
     m_hProcess = pi.hProcess;
     CloseHandle(pi.hThread);
     HANDLE hProcForReader = INVALID_HANDLE_VALUE;
-    DuplicateHandle(GetCurrentProcess(), m_hProcess,
-                    GetCurrentProcess(), &hProcForReader,
-                    0, FALSE, DUPLICATE_SAME_ACCESS);
+    if (!DuplicateHandle(GetCurrentProcess(), m_hProcess,
+                         GetCurrentProcess(), &hProcForReader,
+                         0, FALSE, DUPLICATE_SAME_ACCESS)) {
+        DWORD err = GetLastError();
+        if (IsValidHandle(m_hProcess))
+            TerminateProcess(m_hProcess, 1);
+        CloseHandleIfValid(m_hProcess);
+        CloseHandle(hRead);
+        PostMessageW(hwndNotify, doneMsg, (WPARAM)HRESULT_FROM_WIN32(err), 0);
+        return false;
+    }
     auto* ctx = new ReaderCtx{hRead, hProcForReader, hwndNotify, progressMsg, doneMsg, &m_cancelFlag};
     m_hReader = CreateThread(nullptr, 0, StdoutReaderThread, ctx, 0, nullptr);
+    if (!m_hReader) {
+        DWORD err = GetLastError();
+        // Thread creation failed: notify and cleanup
+        if (IsValidHandle(m_hProcess))
+            TerminateProcess(m_hProcess, 1);
+        CloseHandleIfValid(m_hProcess);
+        CloseHandle(hRead);
+        CloseHandleIfValid(hProcForReader);
+        m_hReader = INVALID_HANDLE_VALUE;
+        PostMessageW(hwndNotify, doneMsg, (WPARAM)HRESULT_FROM_WIN32(err), 0);
+        delete ctx;
+        return false;
+    }
     return true;
 }
 
@@ -302,23 +359,10 @@ bool RarProcess::Add(const wchar_t* archivePath,
 
     if (password && password[0]) {
         std::wstring pw(password);
-        // Same Windows command-line escaping as Compress
-        auto quotePw = [](const std::wstring& s) -> std::wstring {
-            std::wstring r = L"\"";
-            int bs = 0;
-            for (wchar_t c : s) {
-                if (c == L'\\') { ++bs; }
-                else if (c == L'"') { r.append(bs * 2 + 1, L'\\'); r += L'"'; bs = 0; }
-                else { r.append(bs, L'\\'); r += c; bs = 0; }
-            }
-            r.append(bs * 2, L'\\');
-            r += L'"';
-            return r;
-        };
         if (encryptHeaders)
-            cmd += L" -hp" + quotePw(pw);
+            cmd += L" -hp" + QuotePwForRar(pw);
         else
-            cmd += L" -p" + quotePw(pw);
+            cmd += L" -p" + QuotePwForRar(pw);
     }
 
     // -ap<folder>: specify destination folder in archive
@@ -379,7 +423,9 @@ DWORD WINAPI RarProcess::StdoutReaderThread(LPVOID param) {
                             }
                         }
                         wchar_t* copy = _wcsdup(fname.c_str());
-                        PostMessageW(ctx->hwnd, ctx->progressMsg, (WPARAM)pct, (LPARAM)copy);
+                        if (!PostMessageW(ctx->hwnd, ctx->progressMsg, (WPARAM)pct, (LPARAM)copy)) {
+                            free(copy);
+                        }
                     }
                     line.clear();
                 }
@@ -394,7 +440,9 @@ DWORD WINAPI RarProcess::StdoutReaderThread(LPVOID param) {
     // Wait for rar.exe to exit, convert ExitCode to HRESULT, and notify
     // (pipe EOF arrives after the child exits, but wait anyway to be safe)
     HRESULT hr = S_OK;
-    if (ctx->hProcess != INVALID_HANDLE_VALUE) {
+    if (*ctx->pCancel) {
+        hr = E_ABORT;
+    } else if (ctx->hProcess != INVALID_HANDLE_VALUE) {
         WaitForSingleObject(ctx->hProcess, INFINITE);
         DWORD exitCode = 0;
         if (GetExitCodeProcess(ctx->hProcess, &exitCode) && exitCode != 0)
@@ -487,9 +535,19 @@ bool RarProcess::SetComment(const wchar_t* archivePath,
         wchar_t      tempPath[MAX_PATH];
     };
     auto* ctx = new CtxWithTemp{};
-    DuplicateHandle(GetCurrentProcess(), m_hProcess,
-                    GetCurrentProcess(), &ctx->hProcess,
-                    0, FALSE, DUPLICATE_SAME_ACCESS);
+    ctx->hProcess = INVALID_HANDLE_VALUE;
+    if (!DuplicateHandle(GetCurrentProcess(), m_hProcess,
+                         GetCurrentProcess(), &ctx->hProcess,
+                         0, FALSE, DUPLICATE_SAME_ACCESS)) {
+        DWORD err = GetLastError();
+        if (IsValidHandle(m_hProcess))
+            TerminateProcess(m_hProcess, 1);
+        CloseHandleIfValid(m_hProcess);
+        DeleteFileW(tempFile);
+        PostMessageW(hwndNotify, doneMsg, (WPARAM)HRESULT_FROM_WIN32(err), 0);
+        delete ctx;
+        return false;
+    }
     ctx->hwnd      = hwndNotify;
     ctx->doneMsg   = doneMsg;
     ctx->pCancel   = &m_cancelFlag;
@@ -507,6 +565,19 @@ bool RarProcess::SetComment(const wchar_t* archivePath,
         delete c;
         return 0;
     }, ctx, 0, nullptr);
+    if (!m_hReader) {
+        DWORD err = GetLastError();
+        // Thread creation failed: cleanup and notify
+        CloseHandleIfValid(ctx->hProcess);
+        if (IsValidHandle(m_hProcess))
+            TerminateProcess(m_hProcess, 1);
+        CloseHandleIfValid(m_hProcess);
+        DeleteFileW(tempFile);
+        m_hReader = INVALID_HANDLE_VALUE;
+        PostMessageW(hwndNotify, doneMsg, (WPARAM)HRESULT_FROM_WIN32(err), 0);
+        delete ctx;
+        return false;
+    }
     return true;
 }
 
@@ -553,10 +624,30 @@ bool RarProcess::Delete(const wchar_t* archivePath,
     m_hProcess = pi.hProcess;
     CloseHandle(pi.hThread);
 
-    auto* ctx = new WaiterCtx{m_hProcess, hwndNotify, doneMsg, &m_cancelFlag};
-    DuplicateHandle(GetCurrentProcess(), m_hProcess,
-                    GetCurrentProcess(), &ctx->hProcess,
-                    0, FALSE, DUPLICATE_SAME_ACCESS);
+    auto* ctx = new WaiterCtx{INVALID_HANDLE_VALUE, hwndNotify, doneMsg, &m_cancelFlag};
+    if (!DuplicateHandle(GetCurrentProcess(), m_hProcess,
+                         GetCurrentProcess(), &ctx->hProcess,
+                         0, FALSE, DUPLICATE_SAME_ACCESS)) {
+        DWORD err = GetLastError();
+        if (IsValidHandle(m_hProcess))
+            TerminateProcess(m_hProcess, 1);
+        CloseHandleIfValid(m_hProcess);
+        PostMessageW(hwndNotify, doneMsg, (WPARAM)HRESULT_FROM_WIN32(err), 0);
+        delete ctx;
+        return false;
+    }
     m_hReader = CreateThread(nullptr, 0, WinrarWaiterThread, ctx, 0, nullptr);
+    if (!m_hReader) {
+        DWORD err = GetLastError();
+        // Thread creation failed: notify and cleanup
+        CloseHandleIfValid(ctx->hProcess);
+        if (IsValidHandle(m_hProcess))
+            TerminateProcess(m_hProcess, 1);
+        CloseHandleIfValid(m_hProcess);
+        m_hReader = INVALID_HANDLE_VALUE;
+        PostMessageW(hwndNotify, doneMsg, (WPARAM)HRESULT_FROM_WIN32(err), 0);
+        delete ctx;
+        return false;
+    }
     return true;
 }

@@ -49,10 +49,17 @@ void WorkerThread::Start(Task task, HWND hwndNotify, UINT doneMsg) {
     Wait();
     auto* ctx = new Ctx{std::move(task), hwndNotify, doneMsg};
     m_hThread = CreateThread(nullptr, 0, ThreadProc, ctx, 0, nullptr);
+    if (!m_hThread) {
+        DWORD err = GetLastError();
+        // Thread creation failed: notify immediately and clean up
+        PostMessageW(hwndNotify, doneMsg, (WPARAM)HRESULT_FROM_WIN32(err), 0);
+        m_hThread = INVALID_HANDLE_VALUE;
+        delete ctx;
+    }
 }
 
 void WorkerThread::Wait() {
-    if (m_hThread != INVALID_HANDLE_VALUE) {
+    if (m_hThread && m_hThread != INVALID_HANDLE_VALUE) {
         WaitForSingleObject(m_hThread, INFINITE);
         CloseHandle(m_hThread);
         m_hThread = INVALID_HANDLE_VALUE;

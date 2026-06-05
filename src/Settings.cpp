@@ -164,3 +164,30 @@ std::wstring Settings::ReadStr(const wchar_t* section, const wchar_t* key, const
 void Settings::WriteStr(const wchar_t* section, const wchar_t* key, const wchar_t* val) const {
     WritePrivateProfileStringW(section, key, val, m_iniPath);
 }
+
+std::wstring Settings::ComputeDefaultOutputPath(const Settings& s,
+                                               const std::vector<std::wstring>& srcFiles,
+                                               const std::wstring& overrideDir) {
+    // Priority: overrideDir > fixed mode > source file directory
+    std::wstring dir;
+    if (!overrideDir.empty()) {
+        dir = overrideDir;
+    } else if (s.GetOutputDirModeFixed()) {
+        dir = s.GetDefaultOutputDir();
+    } else if (!srcFiles.empty()) {
+        auto sl = srcFiles[0].find_last_of(L"\\/");
+        dir = (sl != std::wstring::npos) ? srcFiles[0].substr(0, sl) : L"";
+    } else {
+        dir = s.GetDefaultOutputDir();
+    }
+
+    // Extract stem of first input file (without extension)
+    if (srcFiles.empty()) return dir;
+
+    auto sl = srcFiles[0].find_last_of(L"\\/");
+    std::wstring name = (sl != std::wstring::npos) ? srcFiles[0].substr(sl + 1) : srcFiles[0];
+    auto dot = name.rfind(L'.');
+    std::wstring stem = (dot != std::wstring::npos) ? name.substr(0, dot) : name;
+
+    return dir.empty() ? stem : dir + L"\\" + stem;
+}

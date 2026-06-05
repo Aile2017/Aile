@@ -25,6 +25,7 @@ Backed by 7z.dll and implemented with Win32 API / C++17.
 | OS | Windows 10 / 11 (x64) |
 | Language | C++17 / Win32 API |
 | Build system | CMake 3.20+ / MSVC 2022+ |
+| Runtime | Visual C++ Redistributable 2015-2022 (`VCRUNTIME140.dll`, `MSVCP140.dll`) |
 
 ### Runtime DLLs / EXEs
 
@@ -38,12 +39,12 @@ Backed by 7z.dll and implemented with Win32 API / C++17.
 
 ```powershell
 # Debug
-cmake -B build
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
 cmake --build build
 # Output: build\AileEx.exe
 
 # Release
-cmake -B build_release -DCMAKE_BUILD_TYPE=Release
+cmake -B build_release -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build_release
 # Output: build_release\AileEx.exe
 ```
