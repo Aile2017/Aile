@@ -40,7 +40,7 @@ std::wstring RarProcess::QueryRegistryRarPath(HKEY hRoot) {
 
 // Search for WinRAR.exe (preferred) or Rar.exe in a given directory.
 static std::wstring FindInDir(const std::wstring& dir) {
-    for (const wchar_t* name : {L"WinRAR.exe", L"Rar.exe", L"rar.exe"}) {
+    for (const wchar_t* name : {L"WinRAR.exe", L"Rar.exe"}) {
         std::wstring p = dir + name;
         if (PathFileExistsW(p.c_str())) return p;
     }
@@ -48,7 +48,7 @@ static std::wstring FindInDir(const std::wstring& dir) {
 }
 
 std::wstring RarProcess::FindRarExe() {
-    // First: same directory as AileEx.exe (allows bundled Rar.exe to take priority)
+    // First: same directory as AileEx.exe, then bin\ subdirectory
     {
         wchar_t buf[MAX_PATH] = {};
         GetModuleFileNameW(nullptr, buf, MAX_PATH);
@@ -56,6 +56,8 @@ std::wstring RarProcess::FindRarExe() {
         if (p) {
             *(p + 1) = L'\0';
             auto found = FindInDir(buf);
+            if (!found.empty()) return found;
+            found = FindInDir(std::wstring(buf) + L"bin\\");
             if (!found.empty()) return found;
         }
     }
@@ -116,7 +118,7 @@ bool RarProcess::Compress(const std::vector<std::wstring>& srcPaths,
                            const RarAdvancedParams* adv) {
     // Resolve executable: override > auto-detect
     std::wstring rarExe;
-    if (rarExePathOverride && rarExePathOverride[0])
+    if (rarExePathOverride && rarExePathOverride[0] && PathFileExistsW(rarExePathOverride))
         rarExe = rarExePathOverride;
     else
         rarExe = FindRarExe();
@@ -276,7 +278,7 @@ bool RarProcess::Add(const wchar_t* archivePath,
                      HWND hwndNotify,
                      UINT progressMsg, UINT doneMsg) {
     std::wstring rarExe;
-    if (rarExePathOverride && rarExePathOverride[0])
+    if (rarExePathOverride && rarExePathOverride[0] && PathFileExistsW(rarExePathOverride))
         rarExe = rarExePathOverride;
     else
         rarExe = FindRarExe();
@@ -415,7 +417,7 @@ bool RarProcess::SetComment(const wchar_t* archivePath,
                             HWND hwndNotify,
                             UINT doneMsg) {
     std::wstring rarExe;
-    if (rarExePathOverride && rarExePathOverride[0])
+    if (rarExePathOverride && rarExePathOverride[0] && PathFileExistsW(rarExePathOverride))
         rarExe = rarExePathOverride;
     else
         rarExe = FindRarExe();
@@ -516,7 +518,7 @@ bool RarProcess::Delete(const wchar_t* archivePath,
                          HWND hwndNotify,
                          UINT doneMsg) {
     std::wstring rarExe;
-    if (rarExePathOverride && rarExePathOverride[0])
+    if (rarExePathOverride && rarExePathOverride[0] && PathFileExistsW(rarExePathOverride))
         rarExe = rarExePathOverride;
     else
         rarExe = FindRarExe();

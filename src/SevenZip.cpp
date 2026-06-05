@@ -203,13 +203,15 @@ private:
 
 // Auto-detect 7z.dll from registry (7-Zip install) or known paths.
 std::wstring SevenZip::Find7zDll() {
-    // First: same directory as AileEx.exe (allows bundled DLL to take priority)
+    // First: same directory as AileEx.exe, then bin\ subdirectory
     {
         wchar_t buf[MAX_PATH] = {};
         GetModuleFileNameW(nullptr, buf, MAX_PATH);
         wchar_t* p = wcsrchr(buf, L'\\');
         if (p) {
             wcscpy_s(p + 1, MAX_PATH - (DWORD)(p + 1 - buf), L"7z.dll");
+            if (PathFileExistsW(buf)) return buf;
+            wcscpy_s(p + 1, MAX_PATH - (DWORD)(p + 1 - buf), L"bin\\7z.dll");
             if (PathFileExistsW(buf)) return buf;
         }
     }
@@ -248,7 +250,7 @@ std::wstring SevenZip::Find7zDll() {
 
 bool SevenZip::Load(const wchar_t* dllPath) {
     wchar_t buf[MAX_PATH] = {};
-    if (!dllPath || !dllPath[0]) {
+    if (!dllPath || !dllPath[0] || !PathFileExistsW(dllPath)) {
         std::wstring found = Find7zDll();
         if (!found.empty())
             wcsncpy_s(buf, found.c_str(), MAX_PATH - 1);
