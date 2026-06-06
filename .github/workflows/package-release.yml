@@ -1,0 +1,193 @@
+name: Package Release
+
+# Builds and releases AileEx and/or AileFlow from the Aile monorepo.
+# Tag format: AileEx_{version}_{yyyyMMdd} / AileFlow_{version}_{yyyyMMdd}
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: 'App to release'
+        required: true
+        type: choice
+        options:
+          - both
+          - AileEx
+          - AileFlow
+        default: both
+      version:
+        description: 'Version string (e.g. 1.0.0). Leave empty to use git describe'
+        required: false
+        default: ''
+      date:
+        description: 'Date for tag (yyyyMMdd). Leave empty to use today'
+        required: false
+        default: ''
+      prerelease:
+        description: 'Mark as pre-release'
+        type: boolean
+        required: false
+        default: false
+
+jobs:
+  # ── Build both apps from monorepo root ───────────────────────────────────────
+  build:
+    runs-on: windows-latest
+    outputs:
+      aileex_tag: ${{ steps.names.outputs.aileex_tag }}
+      aileflow_tag: ${{ steps.names.outputs.aileflow_tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MSVC x64
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Configure CMake
+        run: >
+          cmake -B build_release -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_C_COMPILER=cl
+          -DCMAKE_CXX_COMPILER=cl
+
+      - name: Build
+        run: cmake --build build_release
+
+      - name: Compute tag names
+        id: names
+        shell: pwsh
+        run: |
+          $input_ver = "${{ inputs.version }}"
+          if ($input_ver -ne "") {
+            $ver = $input_ver
+          } else {
+            $ver = git describe --tags --always 2>$null
+            if (-not $ver) { $ver = "dev" }
+          }
+          $input_date = "${{ inputs.date }}"
+          $d = if ($input_date -ne "") { $input_date } else { (Get-Date).ToString("yyyyMMdd") }
+          "aileex_tag=AileEx_${ver}_${d}"     | Out-File $env:GITHUB_OUTPUT -Append
+          "aileflow_tag=AileFlow_${ver}_${d}" | Out-File $env:GITHUB_OUTPUT -Append
+
+      - name: Package AileEx
+        if: ${{ inputs.app == 'both' || inputs.app == 'AileEx' }}
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.names.outputs.aileex_tag }}"
+          New-Item -ItemType Directory -Force pkg_aileex | Out-Null
+          Copy-Item build_release\aileex\AileEx.exe pkg_aileex\AileEx.exe
+          Copy-Item aileex\README.md               pkg_aileex\README.md
+          Compress-Archive -Path pkg_aileex\* -DestinationPath "${tag}.zip"
+          Write-Host "Created: ${tag}.zip ($([Math]::Round((Get-Item "${tag}.zip").Length/1KB)) KB)"
+
+      - name: Package AileFlow
+        if: ${{ inputs.app == 'both' || inputs.app == 'AileFlow' }}
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.names.outputs.aileflow_tag }}"
+          New-Item -ItemType Directory -Force pkg_aileflow | Out-Null
+          Copy-Item build_release\aileflow\AileFlow.exe pkg_aileflow\AileFlow.exe
+          Copy-Item aileflow\README.md                  pkg_aileflow\README.md
+          Copy-Item -Recurse aileflow\Release\b2e       pkg_aileflow\b2e
+          Compress-Archive -Path pkg_aileflow\* -DestinationPath "${tag}.zip"
+          Write-Host "Created: ${tag}.zip ($([Math]::Round((Get-Item "${tag}.zip").Length/1KB)) KB)"
+
+      - name: Upload AileEx artifact
+        if: ${{ inputs.app == 'both' || inputs.app == 'AileEx' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.names.outputs.aileex_tag }}
+          path: ${{ steps.names.outputs.aileex_tag }}.zip
+
+      - name: Upload AileFlow artifact
+        if: ${{ inputs.app == 'both' || inputs.app == 'AileFlow' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.names.outputs.aileflow_tag }}
+          path: ${{ steps.names.outputs.aileflow_tag }}.zip
+
+  # ── Publish AileEx release ────────────────────────────────────────────────────
+  release-aileex:
+    needs: build
+    if: ${{ inputs.app == 'both' || inputs.app == 'AileEx' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.aileex_tag }}
+          path: dist
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.build.outputs.aileex_tag }}
+          name: ${{ needs.build.outputs.aileex_tag }}
+          prerelease: ${{ inputs.prerelease }}
+          generate_release_notes: true
+          body: |
+            ## AileEx
+
+            Built from commit ${{ github.sha }} (`${{ github.ref_name }}`)
+
+            ### Package contents
+
+            | File | Description |
+            |---|---|
+            | `AileEx.exe` | Executable (MSVC x64 Release) |
+            | `README.md`  | Overview and usage |
+
+            > **実行時の依存 DLL / EXE** は同梱していません。
+            > Visual C++ Redistributable 2015–2022（`VCRUNTIME140.dll`, `MSVCP140.dll`）と `7z.dll` が必要です。
+            > RAR 機能は `WinRAR.exe` / `Rar.exe` または `unrar.dll` も参照します。詳細は README を参照してください。
+          files: dist/${{ needs.build.outputs.aileex_tag }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── Publish AileFlow release ──────────────────────────────────────────────────
+  release-aileflow:
+    needs: build
+    if: ${{ inputs.app == 'both' || inputs.app == 'AileFlow' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.aileflow_tag }}
+          path: dist
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.build.outputs.aileflow_tag }}
+          name: ${{ needs.build.outputs.aileflow_tag }}
+          prerelease: ${{ inputs.prerelease }}
+          generate_release_notes: true
+          body: |
+            ## AileFlow
+
+            Built from commit ${{ github.sha }} (`${{ github.ref_name }}`)
+
+            ### Package contents
+
+            | File | Description |
+            |---|---|
+            | `AileFlow.exe` | Executable (MSVC x64 Release) |
+            | `README.md`    | Overview and usage |
+            | `b2e/`         | B2E archive handler scripts |
+
+            > **実行時の依存 EXE** は同梱していません。
+            > Visual C++ Redistributable 2015–2022（`VCRUNTIME140.dll`, `MSVCP140.dll`）と、
+            > 各フォーマットに対応した外部ツール（7z.exe / WinRAR.exe 等）が必要です。詳細は README を参照してください。
+          files: dist/${{ needs.build.outputs.aileflow_tag }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
