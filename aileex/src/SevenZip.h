@@ -126,6 +126,7 @@ public:
     // and return E_NOTIMPL or similar.
     HRESULT DeleteItems(const wchar_t* archivePath,
                         const std::vector<UINT32>& deleteIndices,
+                        const std::vector<ArchiveItem>& allItems,
                         const wchar_t* password,
                         IExtractProgressSink* sink);
 

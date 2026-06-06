@@ -2054,8 +2054,9 @@ void MainWindow::OnDelete() {
         }
         std::vector<UINT32> deleteIndices(indexSet.begin(), indexSet.end());
         auto& sz = app.Get7z();
-        m_worker.Start([&sz, archivePath, deleteIndices, sink]() -> HRESULT {
-            return sz.DeleteItems(archivePath.c_str(), deleteIndices, nullptr, sink);
+        auto allItems = m_items;
+        m_worker.Start([&sz, archivePath, deleteIndices, allItems, sink]() -> HRESULT {
+            return sz.DeleteItems(archivePath.c_str(), deleteIndices, allItems, nullptr, sink);
         }, m_hwnd, WM_APP_DONE);
         hrDone = progDlg.RunMessageLoop();
         m_worker.Wait();

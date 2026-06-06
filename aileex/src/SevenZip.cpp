@@ -2745,6 +2745,7 @@ private:
 // ============================================================
 HRESULT SevenZip::DeleteItems(const wchar_t* archivePath,
                                const std::vector<UInt32>& deleteIndices,
+                               const std::vector<ArchiveItem>& /*allItems*/,
                                const wchar_t* password,
                                IExtractProgressSink* sink) {
     if (!IsLoaded()) return E_FAIL;
