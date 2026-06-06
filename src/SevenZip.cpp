@@ -331,6 +331,15 @@ std::wstring SevenZip::BuildCacheKey(const wchar_t* path, const wchar_t* passwor
     return key;
 }
 
+void SevenZip::InvalidateCacheForPath(const wchar_t* path) {
+    std::wstring prefix = std::wstring(path) + L"|";
+    for (auto it = m_itemsCache.begin(); it != m_itemsCache.end(); ) {
+        if (it->first.compare(0, prefix.size(), prefix) == 0)
+            it = m_itemsCache.erase(it);
+        else
+            ++it;
+    }
+}
 
 // ============================================================
 // Codec enumeration
@@ -2813,6 +2822,8 @@ HRESULT SevenZip::DeleteItems(const wchar_t* archivePath,
         if (!MoveFileExW(tempPath.c_str(), archivePath,
                          MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
             hr = HRESULT_FROM_WIN32(GetLastError());
+        else
+            InvalidateCacheForPath(archivePath);
     } else {
         DeleteFileW(tempPath.c_str());
     }
@@ -3113,6 +3124,8 @@ HRESULT SevenZip::AddToArchive(const wchar_t* archivePath,
         if (!MoveFileExW(tempPath.c_str(), archivePath,
                          MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
             hr = HRESULT_FROM_WIN32(GetLastError());
+        else
+            InvalidateCacheForPath(archivePath);
     } else {
         DeleteFileW(tempPath.c_str());
     }

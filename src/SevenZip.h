@@ -197,9 +197,12 @@ private:
     
     // Build cache key from path, password, and format GUID
     static std::wstring BuildCacheKey(const wchar_t* path, const wchar_t* password, const GUID& fmt);
-    
+
     // Hash password to short string (for cache key)
     static UINT32 HashPassword(const wchar_t* password);
+
+    // Remove all cache entries for the given archive path (call after modifying the archive)
+    void InvalidateCacheForPath(const wchar_t* path);
 
     void EnumerateCodecs();
     void EnumerateFormats();

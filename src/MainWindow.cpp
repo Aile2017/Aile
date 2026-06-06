@@ -2028,6 +2028,7 @@ void MainWindow::OnDelete() {
 
     HRESULT hrDone = S_OK;
     auto archivePath = m_effectiveArchivePath;
+    const std::wstring currentFolder = m_currentFolderPath;
 
     if (isRar) {
         // RAR: delete including folders via rar.exe d -y -r
@@ -2069,8 +2070,9 @@ void MainWindow::OnDelete() {
     }
     if (hrDone == E_ABORT) return;
 
-    // Success → reload the archive
+    // Success → reload and restore folder position
     OpenArchive(archivePath.c_str());
+    if (!currentFolder.empty()) SelectTreeFolder(currentFolder);
 }
 
 void MainWindow::OnCompress(CompressDlg::Params& params, bool openAfterCompress) {
