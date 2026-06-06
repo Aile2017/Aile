@@ -60,6 +60,7 @@ int App::RunBrowseMode(const std::vector<std::wstring>& archivePaths, int nCmdSh
         { FVIRTKEY | FCONTROL, VK_F4,     ID_CLOSE      },  // Close: close the archive
         // VK_RETURN is handled contextually inside ListView/TreeView so not defined here
         { FVIRTKEY,              VK_ESCAPE, IDM_FILE_EXIT },  // Exit: quit the application
+        { FVIRTKEY,              VK_F1,     IDM_HELP_ABOUT },
     };
     HACCEL hAccel = CreateAcceleratorTable(accelTable, _countof(accelTable));
 
