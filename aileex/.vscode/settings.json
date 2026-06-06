@@ -1,0 +1,9 @@
+{
+  "cmake.useCMakePresets": "always",
+  "cmake.configureOnOpen": false,
+  "cmake.buildDirectory": "${workspaceFolder}/build",
+  "cmake.configurePreset": "msvc-debug",
+  "cmake.buildPreset": "msvc-debug",
+  "cmake.defaultConfigurePreset": "msvc-debug",
+  "cmake.defaultBuildPreset": "msvc-debug"
+}
