@@ -1,0 +1,17 @@
+# Normalize line endings: store LF in repo, checkout CRLF on Windows.
+* text=auto eol=crlf
+
+# Binary files — no line-ending conversion.
+*.exe   binary
+*.dll   binary
+*.obj   binary
+*.pdb   binary
+*.lib   binary
+*.zip   binary
+*.rar   binary
+*.7z    binary
+*.lzh   binary
+*.cab   binary
+*.png   binary
+*.ico   binary
+*.bmp   binary

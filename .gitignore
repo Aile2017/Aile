@@ -1,2 +1,37 @@
+# Build output
 build/
 build_release/
+out/
+
+# MSVC artifacts
+*.exe
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+Makefile
+
+# Editor
+.vs/
+.vscode/
+*.user
+*.suo
+*.vcxproj.user
+
+# Claude / Copilot (local only)
+.claude/
+CLAUDE.md
+.github/copilot-instructions.md
+.github/hooks/
+
+# Misc
+*.tmp
+*.bak
+Thumbs.db
