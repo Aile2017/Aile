@@ -108,6 +108,19 @@ bool ShouldCreateSubfolder(int mkDir, const std::vector<ArchiveItem>& items) {
     return true;
 }
 
+// RAII wrapper: creates a ProgressPostSink, assigns it to the owner pointer, and
+// deletes it + clears the owner when the guard goes out of scope (normal return or
+// early return both handled). The raw `sink` member is kept for lambda captures.
+struct SinkGuard {
+    ProgressPostSink* const sink;
+    ProgressPostSink*& ref;
+    SinkGuard(HWND hwnd, ProgressPostSink*& ownerRef)
+        : sink(new ProgressPostSink(hwnd, WM_APP_PROGRESS)), ref(ownerRef) {
+        ref = sink;
+    }
+    ~SinkGuard() { delete sink; ref = nullptr; }
+};
+
 } // namespace
 
 bool MainWindow::RegisterClass(HINSTANCE hInst) {
@@ -465,16 +478,6 @@ LRESULT MainWindow::HandleMsg(UINT msg, WPARAM wp, LPARAM lp) {
             m_draggingSplitter = false;
         }
         break;
-
-    case WM_APP_PROGRESS:
-        // fallback: normally unreachable because the inner loop absorbs WM_APP_PROGRESS/DONE
-        OnProgress((int)wp, (wchar_t*)lp);
-        return 0;
-
-    case WM_APP_DONE:
-        // fallback: normally unreachable because the inner loop absorbs WM_APP_PROGRESS/DONE
-        OnDone((HRESULT)wp);
-        return 0;
 
     case WM_DESTROY: {
         // Save window placement and splitter position
@@ -839,6 +842,14 @@ void MainWindow::OnDropFiles(HDROP hDrop) {
         (isArchive ? archives : regular).push_back(std::move(path));
     }
     DragFinish(hDrop);
+
+    // If compressing, treat any dropped archive files as plain files too.
+    // e.g. AileEx.exe is classified as archive by 7z.dll (PE/SFX format), but
+    // when dropped alongside folders the user intends to compress everything.
+    if (!regular.empty() && !archives.empty()) {
+        for (auto& a : archives) regular.push_back(std::move(a));
+        archives.clear();
+    }
 
     if (!regular.empty()) {
         // If archive currently open and writable, let user choose add vs. create new
@@ -1279,8 +1290,8 @@ void MainWindow::RunExtraction(std::vector<UINT32> indices, std::set<std::wstrin
     ProgressDlg progDlg;
     progDlg.Show(m_hwnd, I18n::Tr(IDS_PROGRESS_EXTRACTING).c_str());
 
-    auto* sink = new ProgressPostSink(m_hwnd, WM_APP_PROGRESS);
-    m_pSink    = sink;
+    SinkGuard sg(m_hwnd, m_pSink);
+    ProgressPostSink* sink = sg.sink;
     progDlg.SetSink(sink);
 
     auto archivePath = m_effectiveArchivePath;
@@ -1314,8 +1325,6 @@ void MainWindow::RunExtraction(std::vector<UINT32> indices, std::set<std::wstrin
 
     HRESULT hrDone = progDlg.RunMessageLoop();
     m_worker.Wait();
-    delete sink;
-    m_pSink = nullptr;
 
     if (FAILED(hrDone) && hrDone != E_ABORT)
         ShowError(I18n::Tr(IDS_ERR_EXTRACT_FAILED).c_str(), hrDone);
@@ -1377,8 +1386,8 @@ void MainWindow::OnTest() {
     ProgressDlg progDlg;
     progDlg.Show(m_hwnd, I18n::Tr(IDS_PROGRESS_TESTING).c_str());
 
-    auto* sink = new ProgressPostSink(m_hwnd, WM_APP_PROGRESS);
-    m_pSink    = sink;
+    SinkGuard sg(m_hwnd, m_pSink);
+    ProgressPostSink* sink = sg.sink;
     progDlg.SetSink(sink);
 
     auto archivePath = m_effectiveArchivePath;
@@ -1403,8 +1412,6 @@ void MainWindow::OnTest() {
     // unrar.dll's TestArchive returns false (= E_FAIL) even on cancel,
     // so check sink's cancel flag and normalize to E_ABORT equivalent.
     bool wasCancelled = sink->IsCancelled();
-    delete sink;
-    m_pSink = nullptr;
 
     if (hrDone == E_ABORT || wasCancelled) {
         // Silent on cancel
@@ -1728,20 +1735,6 @@ void MainWindow::CloseArchive() {
     UpdateExtractDestEdit();
 }
 
-void MainWindow::OnProgress(int pct, wchar_t* filename) {
-    wchar_t status[512];
-    swprintf_s(status, L"%d%%  %s", pct, filename ? filename : L"");
-    SetWindowTextW(m_hStatus, status);
-    free(filename);
-}
-
-void MainWindow::OnDone(HRESULT hr) {
-    if (FAILED(hr) && hr != E_ABORT) {
-        ShowError(I18n::Tr(IDS_OP_FAILED).c_str(), hr);
-    }
-    SetWindowTextW(m_hStatus, I18n::Tr(IDS_DONE).c_str());
-}
-
 // ---- Compress flow ----
 
 void MainWindow::OnAddFiles() {
@@ -1798,8 +1791,8 @@ void MainWindow::AddFilesToCurrentArchive(std::vector<std::wstring> srcPaths) {
     ProgressDlg progDlg;
     progDlg.Show(m_hwnd, I18n::Tr(IDS_PROGRESS_ADDING).c_str());
 
-    auto* sink = new ProgressPostSink(m_hwnd, WM_APP_PROGRESS);
-    m_pSink = sink;
+    SinkGuard sg(m_hwnd, m_pSink);
+    ProgressPostSink* sink = sg.sink;
     progDlg.SetSink(sink);
 
     HRESULT hrDone = S_OK;
@@ -1819,7 +1812,6 @@ void MainWindow::AddFilesToCurrentArchive(std::vector<std::wstring> srcPaths) {
                      nullptr, false,
                      m_hwnd, WM_APP_PROGRESS, WM_APP_DONE)) {
             progDlg.Dismiss();
-            delete sink; m_pSink = nullptr;
             return;
         }
         hrDone = progDlg.RunMessageLoop([&]{ rar.Cancel(); });
@@ -1827,7 +1819,6 @@ void MainWindow::AddFilesToCurrentArchive(std::vector<std::wstring> srcPaths) {
         // 7z/zip/tar etc.: SevenZip::AddToArchive
         if (!app.Get7z().IsLoaded()) {
             progDlg.Dismiss();
-            delete sink; m_pSink = nullptr;
             ShowError(I18n::Tr(IDS_ERR_7Z_NOT_LOADED).c_str());
             return;
         }
@@ -1843,9 +1834,6 @@ void MainWindow::AddFilesToCurrentArchive(std::vector<std::wstring> srcPaths) {
         hrDone = progDlg.RunMessageLoop();
         m_worker.Wait();
     }
-
-    delete sink;
-    m_pSink = nullptr;
 
     if (FAILED(hrDone) && hrDone != E_ABORT) {
         ShowError(I18n::Tr(IDS_ERR_ADD_FAILED).c_str(), hrDone);
@@ -2034,8 +2022,8 @@ void MainWindow::OnDelete() {
     ProgressDlg progDlg;
     progDlg.Show(m_hwnd, I18n::Tr(IDS_PROGRESS_DELETING).c_str());
 
-    auto* sink = new ProgressPostSink(m_hwnd, WM_APP_PROGRESS);
-    m_pSink = sink;
+    SinkGuard sg(m_hwnd, m_pSink);
+    ProgressPostSink* sink = sg.sink;
     progDlg.SetSink(sink);
 
     HRESULT hrDone = S_OK;
@@ -2056,7 +2044,6 @@ void MainWindow::OnDelete() {
                               m_hwnd, WM_APP_DONE);
         if (!ok) {
             progDlg.Dismiss();
-            delete sink; m_pSink = nullptr;
             return;
         }
         hrDone = progDlg.RunMessageLoop([&]{ proc.Cancel(); });
@@ -2064,7 +2051,6 @@ void MainWindow::OnDelete() {
     } else {
         if (!app.Get7z().IsLoaded()) {
             progDlg.Dismiss();
-            delete sink; m_pSink = nullptr;
             ShowError(I18n::Tr(IDS_ERR_7Z_NOT_LOADED).c_str());
             return;
         }
@@ -2076,9 +2062,6 @@ void MainWindow::OnDelete() {
         hrDone = progDlg.RunMessageLoop();
         m_worker.Wait();
     }
-
-    delete sink;
-    m_pSink = nullptr;
 
     if (FAILED(hrDone) && hrDone != E_ABORT) {
         ShowError(I18n::Tr(IDS_ERR_DELETE_FAILED).c_str(), hrDone);
@@ -2103,8 +2086,8 @@ void MainWindow::OnCompress(CompressDlg::Params& params, bool openAfterCompress)
     ProgressDlg progDlg;
     progDlg.Show(m_hwnd, I18n::Tr(IDS_PROGRESS_COMPRESSING).c_str());
 
-    auto* sink = new ProgressPostSink(m_hwnd, WM_APP_PROGRESS);
-    m_pSink = sink;
+    SinkGuard sg(m_hwnd, m_pSink);
+    ProgressPostSink* sink = sg.sink;
     progDlg.SetSink(sink);
 
     HRESULT hrDone = S_OK;
@@ -2115,13 +2098,11 @@ void MainWindow::OnCompress(CompressDlg::Params& params, bool openAfterCompress)
                                     progDlg, sink);
         if (hrDone == E_FAIL) {
             // progDlg was already dismissed internally on launch failure
-            delete sink; m_pSink = nullptr;
             return;
         }
     } else {
         if (!App::Instance().Get7z().IsLoaded()) {
             progDlg.Dismiss();
-            delete sink; m_pSink = nullptr;
             ShowError(I18n::Tr(IDS_ERR_7Z_NOT_LOADED).c_str());
             return;
         }
@@ -2134,7 +2115,6 @@ void MainWindow::OnCompress(CompressDlg::Params& params, bool openAfterCompress)
                 sz.GetLoadedPath().c_str(), params.sfxMode.c_str());
             if (sfxModulePath.empty()) {
                 progDlg.Dismiss();
-                delete sink; m_pSink = nullptr;
                 const wchar_t* leaf = (params.sfxMode == L"console") ? L"7zCon.sfx" : L"7z.sfx";
                 std::wstring msg = I18n::TrFmt(IDS_FMT_SFX_NOT_FOUND_7Z, leaf);
                 MessageBoxW(m_hwnd, msg.c_str(), I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
@@ -2167,9 +2147,6 @@ void MainWindow::OnCompress(CompressDlg::Params& params, bool openAfterCompress)
         hrDone = progDlg.RunMessageLoop();
         m_worker.Wait();
     }
-
-    delete sink;
-    m_pSink = nullptr;
 
     if (FAILED(hrDone) && hrDone != E_ABORT) {
         ShowError(I18n::Tr(IDS_ERR_COMPRESS_FAILED).c_str(), hrDone);
@@ -2276,19 +2253,6 @@ void MainWindow::PopulateTree() {
     SetFocus(m_hTreeView);
 }
 
-static std::wstring FormatFileSize(UINT64 bytes) {
-    if (bytes == 0) return L"";
-    wchar_t buf[64];
-    if (bytes >= 1024ULL * 1024 * 1024)
-        swprintf_s(buf, L"%.1f GB", bytes / (1024.0 * 1024 * 1024));
-    else if (bytes >= 1024ULL * 1024)
-        swprintf_s(buf, L"%.1f MB", bytes / (1024.0 * 1024));
-    else if (bytes >= 1024ULL)
-        swprintf_s(buf, L"%.1f KB", bytes / 1024.0);
-    else
-        swprintf_s(buf, L"%llu B", bytes);
-    return buf;
-}
 
 // Returns the system image list icon index for a given filename.
 // Uses SHGFI_USEFILEATTRIBUTES so no filesystem access is needed.
@@ -2313,8 +2277,7 @@ void MainWindow::PopulateList(const std::wstring& folderPath) {
         lvi.iSubItem = 0;
         // Use UINT32_MAX as special marker for ".."
         lvi.lParam   = UINT32_MAX;
-        lvi.iImage   = (m_iconIndexFolder < 0) ? 
-            (m_iconIndexFolder = GetIconIndex(L"folder", true)) : m_iconIndexFolder;
+        lvi.iImage   = m_iconIndexFolder;
         const wchar_t* parentText = L"..";
         lvi.pszText  = const_cast<wchar_t*>(parentText);
         ListView_InsertItem(m_hListView, &lvi);
@@ -2407,8 +2370,6 @@ void MainWindow::PopulateList(const std::wstring& folderPath) {
             return _wcsicmp(a.name.c_str(), b.name.c_str()) < 0;
         });
 
-    if (m_iconIndexFolder < 0)
-        m_iconIndexFolder = GetIconIndex(L"folder", true);
     int icoFolder = m_iconIndexFolder;
 
     // Insert virtual folders first
@@ -2448,11 +2409,11 @@ void MainWindow::PopulateList(const std::wstring& folderPath) {
         ListView_InsertItem(m_hListView, &lvi);
 
         // Size column
-        std::wstring sizeStr = it.isDir ? L"" : FormatFileSize(it.size);
+        std::wstring sizeStr = it.isDir ? L"" : FormatSize(it.size);
         ListView_SetItemText(m_hListView, row, 1, const_cast<wchar_t*>(sizeStr.c_str()));
 
         // Packed size
-        std::wstring packedStr = it.isDir ? L"" : FormatFileSize(it.packedSize);
+        std::wstring packedStr = it.isDir ? L"" : FormatSize(it.packedSize);
         ListView_SetItemText(m_hListView, row, 2, const_cast<wchar_t*>(packedStr.c_str()));
 
         // Ratio

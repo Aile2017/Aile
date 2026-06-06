@@ -37,7 +37,7 @@ Recognized extensions (treated as archives): `7z`, `zip`, `rar`, `tar`, `gz`, `b
 
 ### Main Window
 
-- **Menu bar** (`IDR_MAIN_MENU`): File / Edit / View / Help
+- **Menu bar** (`IDR_MAIN_MENU`): File / Actions / View / Help
 - Left pane: TreeView (folder hierarchy)
 - Right pane: ListView (file list, columns: Name / Size / Compressed / Type / Modified)
   - **Column header click** to sort ascending/descending (click again to reverse)
@@ -70,7 +70,9 @@ Recognized extensions (treated as archives): `7z`, `zip`, `rar`, `tar`, `gz`, `b
 | | Archive comment... | `ID_ARCHIVE_COMMENT` | View/edit whole-archive comment (`IDD_COMMENT`) |
 | | Settings... | `ID_SETTINGS_DLG` | |
 | View | Toolbar | `IDM_VIEW_TOOLBAR` | Toggle checkbox |
-| | Tree View | `IDM_VIEW_TREE` | Toggle checkbox |
+| | Tree | `IDM_VIEW_TREE` | Toggle checkbox |
+| | Icons | `IDM_VIEW_ICONS` | Toggle file/folder icons in ListView |
+| | Menu bar `F10` | `IDM_VIEW_MENUBAR` | Toggle menu bar visibility |
 | Help | About... | `IDM_HELP_ABOUT` | About dialog |
 
 Dynamically updated via `WM_INITMENUPOPUP` based on archive state (open / read-only / selection count) using `EnableMenuItem` / `CheckMenuItem`.
@@ -264,7 +266,7 @@ Menu mnemonics like `Alt+F` also work. Tab key navigated via `IsDialogMessageW`.
 | `WM_APP_PROGRESS` (`WM_APP+1`) | wParam=percent, lParam=filename (requires `free()`) |
 | `WM_APP_DONE` (`WM_APP+2`) | wParam=HRESULT |
 | `WM_DROPFILES` | Receive file drop |
-| `WM_INITMENUPOPUP` | Update state before menu display (exclude system menu with `HIWORD(lParam) == 0`) |
+| `WM_INITMENUPOPUP` | Update state before menu display; process only when `HIWORD(lParam) == 0` (non-zero means system menu — skip those) |
 
 ## Limitations and Unimplemented Features
 
