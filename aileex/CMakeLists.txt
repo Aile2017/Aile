@@ -7,6 +7,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Dynamic CRT linking: use the Visual C++ Redistributable runtime (/MD, /MDd)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 
+set(COMMON_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../common)
+
 add_executable(AileEx WIN32
     src/main.cpp
     src/App.cpp
@@ -18,20 +20,21 @@ add_executable(AileEx WIN32
     src/InfoDlg.cpp
     src/PropertiesDlg.cpp
     src/CommentDlg.cpp
-    src/ProgressDlg.cpp
     src/SettingsDlg.cpp
     src/Settings.cpp
-    src/I18n.cpp
     src/SevenZip.cpp
     src/UnrarDll.cpp
     src/RarProcess.cpp
-    src/WorkerThread.cpp
+    ${COMMON_DIR}/I18n.cpp
+    ${COMMON_DIR}/WorkerThread.cpp
+    ${COMMON_DIR}/ProgressDlg.cpp
     res/AileEx.rc
 )
 
 target_include_directories(AileEx PRIVATE
     src
     sdk
+    ${COMMON_DIR}
 )
 
 target_compile_definitions(AileEx PRIVATE

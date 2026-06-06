@@ -354,11 +354,10 @@ void CompressDlg::OnFormatChange(HWND hwnd) {
 }
 
 void CompressDlg::OnBrowseOutput(HWND hwnd) {
-    wchar_t path[MAX_PATH] = {};
-    GetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, path, MAX_PATH);
+    std::wstring path = GetDlgItemTextString(hwnd, IDC_OUTPUT_PATH);
     if (BrowseForFile(hwnd, IDS_TITLE_SELECT_OUTPUT, IDS_FILTER_ALL_FILES,
-                      OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST, path, MAX_PATH, true))
-        SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, path);
+                      OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST, &path, true))
+        SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, path.c_str());
 }
 
 void CompressDlg::OnAdvanced(HWND hwnd) {

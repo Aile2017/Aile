@@ -115,7 +115,7 @@ struct SinkGuard {
     ProgressPostSink* const sink;
     ProgressPostSink*& ref;
     SinkGuard(HWND hwnd, ProgressPostSink*& ownerRef)
-        : sink(new ProgressPostSink(hwnd, WM_APP_PROGRESS)), ref(ownerRef) {
+        : sink(new ProgressPostSink(hwnd, WM_APP_PROGRESS, WM_APP_DONE)), ref(ownerRef) {
         ref = sink;
     }
     ~SinkGuard() { delete sink; ref = nullptr; }
@@ -973,11 +973,10 @@ void MainWindow::OnCommand(WORD id) {
         OnAbout();
         break;
     case ID_TOOLBAR_BROWSE_DEST: {
-        wchar_t path[MAX_PATH] = {};
-        GetWindowTextW(m_hExtractEdit, path, MAX_PATH);
-        if (BrowseFolderDialog(m_hwnd, IDS_TITLE_SELECT_DEST_FOLDER, path, MAX_PATH)) {
+        std::wstring path = GetWindowTextString(m_hExtractEdit);
+        if (BrowseFolderDialog(m_hwnd, IDS_TITLE_SELECT_DEST_FOLDER, &path)) {
             m_extractDestOverride = path;
-            SetWindowTextW(m_hExtractEdit, path);
+            SetWindowTextW(m_hExtractEdit, path.c_str());
         }
         break;
     }
@@ -1240,17 +1239,16 @@ void MainWindow::RunExtraction(std::vector<UINT32> indices, std::set<std::wstrin
         }
     }
 
-    wchar_t destDir[MAX_PATH] = {};
+    std::wstring destDir;
     if (!presetDest.empty()) {
-        wcsncpy_s(destDir, presetDest.c_str(), MAX_PATH - 1);
+        destDir = presetDest;
     } else {
         if (!m_extractDestOverride.empty()) {
-            wcsncpy_s(destDir, m_extractDestOverride.c_str(), MAX_PATH - 1);
+            destDir = m_extractDestOverride;
         } else {
             const Settings& st = app.GetSettings();
             if (st.GetOutputDirModeFixed()) {
-                const auto& d = st.GetDefaultOutputDir();
-                if (!d.empty()) wcsncpy_s(destDir, d.c_str(), MAX_PATH - 1);
+                destDir = st.GetDefaultOutputDir();
             } else {
                 wchar_t full[MAX_PATH] = {};
                 std::wstring abs;
@@ -1259,11 +1257,10 @@ void MainWindow::RunExtraction(std::vector<UINT32> indices, std::set<std::wstrin
                 else
                     abs = m_archivePath;
                 auto sl = abs.find_last_of(L"\\/");
-                std::wstring archDir = (sl != std::wstring::npos) ? abs.substr(0, sl) : abs;
-                wcsncpy_s(destDir, archDir.c_str(), MAX_PATH - 1);
+                destDir = (sl != std::wstring::npos) ? abs.substr(0, sl) : abs;
             }
         }
-        if (!BrowseFolderDialog(m_hwnd, IDS_TITLE_SELECT_DEST_FOLDER, destDir, MAX_PATH))
+        if (!BrowseFolderDialog(m_hwnd, IDS_TITLE_SELECT_DEST_FOLDER, &destDir))
             return;
         // Keep edit box and override in sync with the user's folder picker choice.
         m_extractDestOverride = destDir;
@@ -1937,7 +1934,7 @@ void MainWindow::OnArchiveComment() {
         // RAR: apply via rar.exe c -z. Wait for completion via WM_APP_DONE.
         ProgressDlg progDlg;
         progDlg.Show(m_hwnd, I18n::Tr(IDS_PROGRESS_SAVING_COMMENT).c_str());
-        auto* sink = new ProgressPostSink(m_hwnd, WM_APP_PROGRESS);
+        auto* sink = new ProgressPostSink(m_hwnd, WM_APP_PROGRESS, WM_APP_DONE);
         m_pSink = sink;
         progDlg.SetSink(sink);
 

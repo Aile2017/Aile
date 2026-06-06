@@ -7,18 +7,20 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Dynamic CRT linking: use the Visual C++ Redistributable runtime (/MD, /MDd)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 
+set(COMMON_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../common)
+
 # AileEx UI layer (C++17, STL, exceptions enabled — Class A/B sources)
 set(AILEFLOW_UI_SOURCES
     src/main.cpp
     src/App.cpp
     src/MainWindow.cpp
     src/CompressDlg.cpp
-    src/ProgressDlg.cpp
     src/SettingsDlg.cpp
     src/Settings.cpp
-    src/I18n.cpp
     src/SevenZipB2e.cpp
-    src/WorkerThread.cpp
+    ${COMMON_DIR}/I18n.cpp
+    ${COMMON_DIR}/WorkerThread.cpp
+    ${COMMON_DIR}/ProgressDlg.cpp
 )
 
 # kilib + B2E engine (no STL, no exceptions, no RTTI — kilib convention)
@@ -48,7 +50,8 @@ add_executable(AileFlow WIN32
 
 target_include_directories(AileFlow PRIVATE
     src
-    ${CMAKE_SOURCE_DIR}  # exposes kilib/ as #include "kilib/kilib.h"
+    ${COMMON_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}  # exposes kilib/ as #include "kilib/kilib.h"
 )
 
 target_compile_definitions(AileFlow PRIVATE
@@ -113,7 +116,7 @@ endif()
 add_custom_command(TARGET AileFlow POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:AileFlow>/b2e"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${CMAKE_SOURCE_DIR}/Release/b2e"
+            "${CMAKE_CURRENT_SOURCE_DIR}/Release/b2e"
             "$<TARGET_FILE_DIR:AileFlow>/b2e"
     COMMENT "Copying b2e scripts → $<TARGET_FILE_DIR:AileFlow>/b2e"
 )

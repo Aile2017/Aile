@@ -137,17 +137,15 @@ void SettingsDlg::OnBrowseFont(HWND hwnd) {
 }
 
 void SettingsDlg::OnBrowseDir(HWND hwnd) {
-    wchar_t path[MAX_PATH] = {};
-    GetDlgItemTextW(hwnd, IDC_DEFAULT_DIR, path, MAX_PATH);
-    if (BrowseFolderDialog(hwnd, IDS_TITLE_SELECT_DEFAULT_DIR, path, MAX_PATH))
-        SetDlgItemTextW(hwnd, IDC_DEFAULT_DIR, path);
+    std::wstring path = GetDlgItemTextString(hwnd, IDC_DEFAULT_DIR);
+    if (BrowseFolderDialog(hwnd, IDS_TITLE_SELECT_DEFAULT_DIR, &path))
+        SetDlgItemTextW(hwnd, IDC_DEFAULT_DIR, path.c_str());
 }
 
 void SettingsDlg::OnBrowseFile(HWND hwnd, int pathCtrlId, UINT filterId, UINT titleId) {
-    wchar_t path[MAX_PATH] = {};
-    GetDlgItemTextW(hwnd, pathCtrlId, path, MAX_PATH);
-    if (BrowseForFile(hwnd, titleId, filterId, OFN_FILEMUSTEXIST, path, MAX_PATH))
-        SetDlgItemTextW(hwnd, pathCtrlId, path);
+    std::wstring path = GetDlgItemTextString(hwnd, pathCtrlId);
+    if (BrowseForFile(hwnd, titleId, filterId, OFN_FILEMUSTEXIST, &path))
+        SetDlgItemTextW(hwnd, pathCtrlId, path.c_str());
 }
 
 bool SettingsDlg::OnOK(HWND hwnd) {

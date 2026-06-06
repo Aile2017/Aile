@@ -137,7 +137,7 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
     progDlg.Show(wnd.Hwnd(), I18n::Tr(IDS_PROGRESS_COMPRESSING).c_str());
 
     if (params.format == L"rar") {
-        auto* sink = new ProgressPostSink(wnd.Hwnd(), WM_APP_PROGRESS);
+        auto* sink = new ProgressPostSink(wnd.Hwnd(), WM_APP_PROGRESS, WM_APP_DONE);
         RunRarCompressSync(wnd.Hwnd(), params,
                            m_settings.GetRarExePath().c_str(),
                            progDlg, sink);
@@ -157,7 +157,7 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
             }
         }
 
-        auto* sink = new ProgressPostSink(wnd.Hwnd(), WM_APP_PROGRESS);
+        auto* sink = new ProgressPostSink(wnd.Hwnd(), WM_APP_PROGRESS, WM_APP_DONE);
         auto& sz   = m_sevenZip;
         progDlg.SetSink(sink);
 
