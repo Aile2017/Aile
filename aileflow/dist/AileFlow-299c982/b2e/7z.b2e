@@ -1,0 +1,48 @@
+load:
+ (name 7zG.exe)
+ (type 7z Store *LZMA2 LZMA PPMd Bzip2 Deflate zstd brotli lizard lz4 lz5 flzma2 password)
+
+encode:
+ (if (method 1) (let o "-m0=Copy"))
+ (if (method 2) (let o "-mx=9 -myx=9 -m0=LZMA2"))
+ (if (method 3) (let o "-mx=9 -myx=9 -m0=LZMA"))
+ (if (method 4) (let o "-mx=9 -myx=9 -m0=PPMd"))
+ (if (method 5) (let o "-mx=9 -myx=9 -m0=Bzip2"))
+ (if (method 6) (let o "-mx=9 -myx=9 -m0=Deflate"))
+ (if (method 7) (let o "-mx=22 -myx=9 -m0=bcj -m1=zstd"))
+ (if (method 8) (let o "-mx=22 -myx=9 -m0=bcj -m1=brotli"))
+ (if (method 9) (let o "-mx=22 -myx=9 -m0=bcj -m1=lizard"))
+ (if (method 10) (let o "-mx=22 -myx=9 -m0=bcj -m1=lz4"))
+ (if (method 11) (let o "-mx=22 -myx=9 -m0=bcj -m1=lz5"))
+ (if (method 12) (let o "-mx=22 -myx=9 -m0=bcj -m1=flzma2"))
+ (if (method 13) (exec
+    (let p (input "Password"))
+    (let o "-p%p -mx=9 -myx=9 -m0=LZMA2 -mhe")))
+ (cmd a -t7z %o -r0 (arc.7z) (resp@ (listr)) -scsWIN)
+
+sfxd:
+ (if (method 1) (let o "-m0=Copy"))
+ (if (method 2) (let o "-mx=9 -myx=9 -m0=LZMA2"))
+ (if (method 3) (let o "-mx=9 -myx=9 -m0=LZMA"))
+ (if (method 4) (let o "-mx=9 -myx=9 -m0=PPMd"))
+ (if (method 5) (let o "-mx=9 -myx=9 -m0=Bzip2"))
+ (if (method 6) (let o "-mx=9 -myx=9 -m0=Deflate"))
+ (if (method 7) (let o "-mx=22 -myx=9 -m0=bcj -m1=zstd"))
+ (if (method 8) (let o "-mx=22 -myx=9 -m0=bcj -m1=brotli"))
+ (if (method 9) (let o "-mx=22 -myx=9 -m0=bcj -m1=lizard"))
+ (if (method 10) (let o "-mx=22 -myx=9 -m0=bcj -m1=lz4"))
+ (if (method 11) (let o "-mx=22 -myx=9 -m0=bcj -m1=lz5"))
+ (if (method 12) (let o "-mx=22 -myx=9 -m0=bcj -m1=flzma2"))
+ (if (method 13) (exec
+    (let p (input "Password"))
+    (let o "-p%p -mx=9 -myx=9 -m0=LZMA2 -mhe")))
+ (cmd a -t7z %o -r0 -sfx7z.sfx (arc.exe) (resp@ (listr)) -scsWIN)
+
+decode:
+ (cmd x (arc))
+
+decode1:
+ (cmd x -y (arc) (list))
+
+list:
+ (xscan "------------------" 1 "------------------" 1 53 7z.exe l (arc))

@@ -1,0 +1,19 @@
+load:
+ (name lha32.exe)
+ (type lzh Store *lh6)
+
+encode:
+ (if (method 1) (cmd a -d -z1 (arc.lzh) (list)))
+ (if (method 2) (cmd a -d (arc.lzh) (list)))
+
+sfx:
+ (xcmd copy /b (find DecLHaW.EXE) + (arc) (arc.exe))
+
+decode:
+ (xcmd 7zG x (arc))
+
+decode1:
+ (xcmd 7zG x -y (arc))
+
+list:
+ (xscan "------------------" 1 "------------------" 1 53 7z.exe l (arc))

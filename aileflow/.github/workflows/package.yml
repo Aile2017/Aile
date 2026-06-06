@@ -1,0 +1,92 @@
+﻿name: Package Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    outputs:
+      pkg_name: ${{ steps.names.outputs.pkg_name }}
+      tag_name: ${{ steps.names.outputs.tag_name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install Ninja
+        run: choco install ninja --no-progress -y
+
+      - name: Configure (Release)
+        run: >
+          cmake -B build_release -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_C_COMPILER=cl
+          -DCMAKE_CXX_COMPILER=cl
+
+      - name: Build
+        run: cmake --build build_release
+
+      - name: Compute names
+        id: names
+        shell: pwsh
+        run: |
+          $short = git rev-parse --short HEAD
+          $date  = (Get-Date -Format "yyyyMMdd")
+          $name  = "AileFlow_${short}_${date}"
+          echo "pkg_name=$name" >> $env:GITHUB_OUTPUT
+          echo "tag_name=$name" >> $env:GITHUB_OUTPUT
+
+      - name: Stage package
+        shell: pwsh
+        run: |
+          $pkg = "dist\${{ steps.names.outputs.pkg_name }}"
+          New-Item -ItemType Directory -Force $pkg | Out-Null
+          Copy-Item build_release\AileFlow.exe $pkg\
+          Copy-Item README.md $pkg\
+          Copy-Item -Recurse Release\b2e $pkg\b2e
+
+      - name: Create ZIP
+        shell: pwsh
+        run: |
+          $name = "${{ steps.names.outputs.pkg_name }}"
+          Compress-Archive -Path "dist\$name\*" -DestinationPath "dist\$name.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.names.outputs.pkg_name }}
+          path: dist\${{ steps.names.outputs.pkg_name }}.zip
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.pkg_name }}
+          path: dist
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.build.outputs.tag_name }}
+          name: ${{ needs.build.outputs.pkg_name }}
+          files: dist/${{ needs.build.outputs.pkg_name }}.zip
+          generate_release_notes: true
