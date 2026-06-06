@@ -51,6 +51,9 @@ INT_PTR CompressDlg::HandleMsg(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case IDC_METHOD:
             if (HIWORD(wp) == CBN_SELCHANGE) OnB2eMethodChange(hwnd);
             break;
+        case IDC_CREATE_SFX:
+            if (HIWORD(wp) == BN_CLICKED) OnSfxChange(hwnd);
+            break;
         case IDC_BROWSE:
             OnBrowseOutput(hwnd);
             break;
@@ -188,7 +191,39 @@ void CompressDlg::OnFormatChange(HWND hwnd) {
         SendMessageW(hMethod, CB_SETCURSEL, defaultIdx, 0);
     }
     EnableWindow(hMethod, info != nullptr && !info->methods.empty());
+
+    // Disable SFX checkbox for formats without sfx:/sfxd: section.
+    HWND hSfx = GetDlgItem(hwnd, IDC_CREATE_SFX);
+    bool fmtCanSfx = info && info->canSfx;
+    EnableWindow(hSfx, fmtCanSfx);
+    if (!fmtCanSfx)
+        SendMessageW(hSfx, BM_SETCHECK, BST_UNCHECKED, 0);
+
     OnB2eMethodChange(hwnd);
+}
+
+void CompressDlg::OnSfxChange(HWND hwnd) {
+    bool checked = SendMessageW(GetDlgItem(hwnd, IDC_CREATE_SFX),
+                                BM_GETCHECK, 0, 0) == BST_CHECKED;
+    std::wstring path = GetDlgItemTextString(hwnd, IDC_OUTPUT_PATH);
+    if (path.empty()) return;
+
+    // Find the filename portion start.
+    auto base = path.find_last_of(L"\\/");
+    base = (base == std::wstring::npos) ? 0 : base + 1;
+
+    if (checked) {
+        // Replace everything from the first dot in the filename with .exe
+        auto dot = path.find(L'.', base);
+        if (dot != std::wstring::npos) path.erase(dot);
+        path += L".exe";
+    } else {
+        // Restore the normal format extension via existing logic.
+        SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, path.c_str());
+        OnB2eMethodChange(hwnd);
+        return;
+    }
+    SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, path.c_str());
 }
 
 void CompressDlg::OnBrowseOutput(HWND hwnd) {
@@ -228,5 +263,9 @@ bool CompressDlg::OnOK(HWND hwnd) {
             break;
         }
     }
+
+    // Read SFX checkbox.
+    m_params.sfx = (SendMessageW(GetDlgItem(hwnd, IDC_CREATE_SFX),
+                                 BM_GETCHECK, 0, 0) == BST_CHECKED);
     return true;
 }

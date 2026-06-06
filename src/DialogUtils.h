@@ -8,6 +8,17 @@
 #include <string>
 #include <vector>
 
+// ---- Path helpers ----
+
+// Return the filename stem of a path (last component, extension stripped).
+// E.g. "C:\foo\bar.7z" -> "bar", "archive.tar.gz" -> "archive.tar", "file" -> "file".
+inline std::wstring StemFromPath(const std::wstring& path) {
+    auto sl   = path.find_last_of(L"\\/");
+    std::wstring name = (sl != std::wstring::npos) ? path.substr(sl + 1) : path;
+    auto dot  = name.rfind(L'.');
+    return (dot != std::wstring::npos) ? name.substr(0, dot) : name;
+}
+
 // ---- Formatting helpers for Info and Properties dialogs ----
 
 inline std::wstring FormatFileTime(const FILETIME& ft) {

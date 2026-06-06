@@ -14,6 +14,7 @@ public:
         std::wstring format = L"7z";   // B2E format extension
         std::wstring method;           // B2E method name (from .b2e type list)
         int          level  = 0;       // selected method index; persisted for Settings restore
+        bool         sfx    = false;   // create self-extracting archive (not persisted)
         // outputPath / inputFiles are excluded (these change per user action and are not persisted)
         void LoadFromSettings(const Settings& s);
         void SaveToSettings(Settings& s) const;
@@ -29,6 +30,7 @@ private:
     void OnInit(HWND hwnd);
     void OnFormatChange(HWND hwnd);
     void OnB2eMethodChange(HWND hwnd);
+    void OnSfxChange(HWND hwnd);
     void OnBrowseOutput(HWND hwnd);
     bool OnOK(HWND hwnd);
 

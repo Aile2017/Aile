@@ -76,46 +76,64 @@ HRESULT SevenZip::Extract(const wchar_t* archivePath,
 
 HRESULT SevenZip::Compress(const std::vector<std::wstring>& srcPaths,
                             const wchar_t* outPath,
-                            const wchar_t* /*format*/,
+                            const wchar_t* format,
                             int level,
                             const wchar_t* method,
                             const wchar_t* /*password*/,
                             IExtractProgressSink* sink,
-                            const CompressAdvanced* /*adv*/,
+                            const CompressAdvanced* adv,
                             bool /*encryptHeaders*/)
 {
-    // Resolve the effective B2E method index from the method name and output format.
+    // Parameters not forwarded to B2E:
+    //   password       — B2E scripts request passwords via their (input) directive internally.
+    //   encryptHeaders — no header encryption control in B2E.
+    //   adv (except sfx) — B2E uses discrete type-list entries only; dictionary size,
+    //                       word size, and threads are not configurable.
     //
-    // Two cases:
-    //   method found      → -mName: look up the 0-based index in the type list.
-    //   method == "" or   → no method specified (GUI or CLI): use the format's default
-    //   method not found    method (the one marked * in the type list).
-    int effectiveLevel = 0;
-    if (outPath) {
+    // Resolve the effective B2E method index from the method name and format extension.
+    // When sfx=true, outPath ends in .exe; use the format parameter for the lookup instead.
+    // method found    → look up its 0-based index in the type list.
+    // method "" / not found → use the format's default entry (marked * in the type list).
+    bool sfx = adv && adv->sfx;
+
+    // Determine which extension to use for format/method resolution.
+    std::wstring lookupExt;
+    if (sfx && format && format[0]) {
+        lookupExt = format;
+        for (wchar_t& c : lookupExt) c = (wchar_t)towlower(c);
+    } else if (outPath) {
         const wchar_t* dot = wcsrchr(outPath, L'.');
         if (dot) {
-            std::wstring ext = dot + 1;
-            for (wchar_t& c : ext) c = (wchar_t)towlower(c);
-            auto formats = B2e_GetWritableFormats();
-            for (const auto& fi : formats) {
-                if (fi.ext == ext) {
-                    int defaultIdx = fi.methods.empty() ? 0 : 0;
-                    bool found = false;
-                    for (int i = 0; i < (int)fi.methods.size(); ++i) {
-                        if (fi.methods[i].isDefault) defaultIdx = i;
-                        if (!found && method && method[0] &&
-                            _wcsicmp(fi.methods[i].name.c_str(), method) == 0) {
-                            effectiveLevel = i;
-                            found = true;
-                        }
+            lookupExt = dot + 1;
+            for (wchar_t& c : lookupExt) c = (wchar_t)towlower(c);
+        }
+    }
+
+    int effectiveLevel = 0;
+    if (!lookupExt.empty()) {
+        auto formats = B2e_GetWritableFormats();
+        for (const auto& fi : formats) {
+            if (fi.ext == lookupExt) {
+                int defaultIdx = 0;
+                bool found = false;
+                for (int i = 0; i < (int)fi.methods.size(); ++i) {
+                    if (fi.methods[i].isDefault) defaultIdx = i;
+                    if (!found && method && method[0] &&
+                        _wcsicmp(fi.methods[i].name.c_str(), method) == 0) {
+                        effectiveLevel = i;
+                        found = true;
                     }
-                    if (!found) effectiveLevel = defaultIdx;
-                    break;
                 }
+                if (!found) effectiveLevel = defaultIdx;
+                break;
             }
         }
     }
-    return B2e_Compress(srcPaths, outPath, effectiveLevel, sink);
+
+    // When sfx=true, pass the format extension so B2e_Compress can find the right script
+    // despite the output path ending in .exe.
+    const wchar_t* fmtHint = (sfx && format && format[0]) ? format : nullptr;
+    return B2e_Compress(srcPaths, outPath, effectiveLevel, sink, sfx, fmtHint);
 }
 
 HRESULT SevenZip::Test(const wchar_t* archivePath, const wchar_t* /*password*/,
@@ -142,10 +160,11 @@ HRESULT SevenZip::AddToArchive(const wchar_t* archivePath,
                                 IExtractProgressSink* sink,
                                 const CompressAdvanced* /*adv*/)
 {
-    // B2E: delegate to B2e_Compress with the existing archive as output path.
-    // archiveFolder is ignored — B2E encodes files relative to their base directory.
-    // Always resolve the format's default method (the one marked * in the type list)
-    // rather than using the raw settings level, which is format-agnostic.
+    // Parameters not forwarded to B2E:
+    //   archiveFolder — B2E encodes files relative to their base directory; no subfolder target.
+    //   level / method / adv — always uses the format's default type-list entry (* marker);
+    //                          fine-grained compression control is not available via B2E.
+    //   password — B2E scripts request passwords via their (input) directive internally.
     int effectiveLevel = 0;
     if (archivePath) {
         const wchar_t* dot = wcsrchr(archivePath, L'.');

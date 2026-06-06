@@ -59,7 +59,8 @@ int CArcModule::cmd( const char* cmd, bool mini )
 	PROCESS_INFORMATION pi;
 	STARTUPINFO si={sizeof(STARTUPINFO)};
 	si.dwFlags    =STARTF_USESHOWWINDOW;
-	si.wShowWindow=mini?SW_MINIMIZE:SW_SHOW;
+	// Shell built-ins (copy, del, etc.) run non-interactively; hide the cmd.exe window.
+	si.wShowWindow=(m_type==SHLCMD)?SW_HIDE:(mini?SW_MINIMIZE:SW_SHOW);
 	if( !::CreateProcess( NULL,const_cast<char*>((const char*)theCmd),
 		NULL,NULL,FALSE,CREATE_NEW_PROCESS_GROUP|NORMAL_PRIORITY_CLASS,
 		NULL,NULL, &si,&pi ) )

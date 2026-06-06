@@ -22,6 +22,8 @@ struct CompressAdvanced {
     // Split volume size. "" = single file; specify as "10m","100m","1g" etc.
     // Valid only for seekable output (7z/zip etc.); ignored for stream-wrapped gz/bz2/xz/tar.
     std::wstring volumeSize;
+    // Create self-extracting archive (B2E: uses sfx:/sfxd: section of the .b2e script).
+    bool sfx = false;
 };
 
 class SevenZip {

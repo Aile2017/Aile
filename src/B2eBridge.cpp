@@ -372,8 +372,10 @@ std::vector<B2eFormatInfo> B2e_GetWritableFormats()
             if (FAILED(StringCchPrintfA(label, _countof(label), "%s (.%s)", upper.c_str(), fmtExt.c_str())))
                 continue;
         }
-        info.label = AToWString(label);
-        info.ext   = AToWString(fmtExt.c_str());
+        info.label   = AToWString(label);
+        info.ext     = AToWString(fmtExt.c_str());
+        info.canSfx  = (strstr(content, "sfx:") != nullptr ||
+                        strstr(content, "sfxd:") != nullptr);
 
         for (const auto& m : methods) {
             B2eMethodInfo mi;
@@ -602,7 +604,9 @@ HRESULT B2e_Extract(const wchar_t* archivePath,
 HRESULT B2e_Compress(const std::vector<std::wstring>& srcPaths,
                      const wchar_t* outPath,
                      int level,
-                     IExtractProgressSink* /*sink*/)
+                     IExtractProgressSink* /*sink*/,
+                     bool sfx,
+                     const wchar_t* fmtExt)
 {
     if (srcPaths.empty()) return E_INVALIDARG;
 
@@ -610,7 +614,16 @@ HRESULT B2e_Compress(const std::vector<std::wstring>& srcPaths,
     HRESULT hr = WideFsPathToAnsiPath(outPath, true, &out);
     if (FAILED(hr)) return hr;
 
-    const std::string* scriptFile = FindScript(out.c_str());
+    const std::string* scriptFile;
+    if (fmtExt && fmtExt[0]) {
+        // Use fmtExt to find the script (e.g., when outPath ends in .exe for SFX).
+        char hint[64] = "x.";
+        if (!WToA(fmtExt, hint + 2, (int)sizeof(hint) - 2)) return E_INVALIDARG;
+        for (char* p = hint + 2; *p; ++p) *p = (char)tolower((unsigned char)*p);
+        scriptFile = FindScript(hint);
+    } else {
+        scriptFile = FindScript(out.c_str());
+    }
     if (!scriptFile) return E_NOTIMPL;
 
     CArcB2e b2e(scriptFile->c_str());
@@ -648,7 +661,7 @@ HRESULT B2e_Compress(const std::vector<std::wstring>& srcPaths,
     }
 
     // level 0 → store (method 1 in the .b2e script); level N → method N+1.
-    int result = b2e.compress(base, wfd, outDir, level, /*sfx=*/false);
+    int result = b2e.compress(base, wfd, outDir, level, sfx);
     return (result < 0x8000) ? S_OK : E_FAIL;
 }
 

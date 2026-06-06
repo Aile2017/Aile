@@ -18,8 +18,6 @@
 #define IDD_COMPRESS        201
 #define IDD_PROGRESS        202
 #define IDD_SETTINGS        203
-#define IDD_COMPRESS_ADV    205
-#define IDD_RAR_COMPRESS_ADV  206
 #define IDD_PASSWORD        207
 #define IDD_ABOUT           208
 #define IDD_TEST_RESULT     209
@@ -29,6 +27,7 @@
 #define IDC_BROWSE          1002
 #define IDC_FORMAT          1003
 #define IDC_METHOD          1005
+#define IDC_CREATE_SFX      1006
 
 // Progress dialog controls
 #define IDC_PROGRESS_BAR    2001

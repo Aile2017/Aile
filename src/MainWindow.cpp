@@ -82,10 +82,7 @@ std::wstring DefaultOutputPath(const Settings& s, const std::vector<std::wstring
 
     if (srcFiles.empty()) return dir;
 
-    auto sl = srcFiles[0].find_last_of(L"\\/");
-    std::wstring name = (sl != std::wstring::npos) ? srcFiles[0].substr(sl + 1) : srcFiles[0];
-    auto dot = name.rfind(L'.');
-    std::wstring stem = (dot != std::wstring::npos) ? name.substr(0, dot) : name;
+    std::wstring stem = StemFromPath(srcFiles[0]);
     return dir.empty() ? stem : dir + L"\\" + stem;
 }
 
@@ -419,9 +416,9 @@ void MainWindow::OpenArchive(const wchar_t* path) {
         _wcsicmp(m_effectiveArchivePath.c_str(), m_archivePath.c_str()) != 0) {
         m_isReadOnly = true;
     }
-    // B2E backend: write operations not supported.
+    // B2E backend: read-only unless the format's .b2e has an encode: section.
     if (SUCCEEDED(hr))
-        m_isReadOnly = true;
+        m_isReadOnly = !app.Get7z().CanAddToCurrent();
 
     if (FAILED(hr)) {
         ShowError(I18n::Tr(IDS_ERR_OPEN_ARCHIVE).c_str(), hr);
@@ -1423,6 +1420,9 @@ void MainWindow::RunExtraction(std::vector<UINT32> indices, std::wstring presetD
     if (!Ensure7zLoaded()) return;
 
     // If password not yet known, check whether target items are encrypted and prompt.
+    // Note: in B2E mode B2e_List() never sets ArchiveItem::encrypted, so needPw is always
+    // false and PromptPassword() is never called here. Password prompting is handled
+    // internally by the B2E engine's input() callback when the .b2e script requests it.
     if (m_password.empty()) {
         bool needPw = false;
         if (indices.empty()) {
@@ -1999,11 +1999,14 @@ void MainWindow::OnCompress(CompressDlg::Params& params, bool openAfterCompress)
     auto  format  = params.format;
     int   level   = params.level;
     auto  method  = params.method;
+    bool  sfx     = params.sfx;
 
     auto& sz = App::Instance().Get7z();
-    m_worker.Start([&sz, inputs, outPath, format, level, method]() -> HRESULT {
+    m_worker.Start([&sz, inputs, outPath, format, level, method, sfx]() -> HRESULT {
+        CompressAdvanced adv;
+        adv.sfx = sfx;
         return sz.Compress(inputs, outPath.c_str(), format.c_str(),
-                           level, method.c_str(), nullptr, nullptr);
+                           level, method.c_str(), nullptr, nullptr, &adv);
     }, m_hwnd, WM_APP_DONE);
 
     HRESULT hrDone = S_OK;
@@ -2019,7 +2022,8 @@ void MainWindow::OnCompress(CompressDlg::Params& params, bool openAfterCompress)
 
     if (FAILED(hrDone) && hrDone != E_ABORT) {
         ShowError(I18n::Tr(IDS_ERR_COMPRESS_FAILED).c_str(), hrDone);
-    } else if (SUCCEEDED(hrDone) && openAfterCompress) {
+    } else if (SUCCEEDED(hrDone) && openAfterCompress && !sfx) {
+        // SFX output is .exe which has no B2E list handler; skip opening.
         OpenArchive(params.outputPath.c_str());
     }
 }

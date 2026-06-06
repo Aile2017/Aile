@@ -25,19 +25,15 @@ AileFlow/
     [B] CompressDlg.cpp/h       … Compression dialog
                                   (B2E patches: B2E mode hides Level/Password/SFX/Advanced;
                                    Method combo populated from b2e type list; dynamic b2e scanning)
-    [A] AdvancedCompressDlg.cpp/h … Advanced compression options dialog
     [A] SettingsDlg.cpp/h       … Settings dialog
     [A] Settings.cpp/h          … INI load/save
     [A] ProgressDlg.cpp/h       … Progress dialog (worker thread notifications)
     [A] WorkerThread.cpp/h      … Worker thread infrastructure
-    [A] InfoDlg.cpp/h           … Entry info dialog
     [A] I18n.cpp/h              … Bilingual (EN/JA) string lookup
     [A] DialogUtils.h           … Common dialog helpers
     [A] ArchiveItem.h           … Archive entry struct (path/isDir only populated)
     [A] App.cpp/h               … Application entry — startup mode routing
-    [A] UnrarDll.cpp/h          … unrar.dll wrapper (kept; unrar never loads in AileFlow)
-    [A] RarProcess.cpp/h        … rar.exe process wrapper (kept; used for RAR comment via rar.exe)
-    [A] CompressHelper.cpp/h    … Compression helper utilities
+    [C] AileFlowApp.h           … Application singleton (GetSettings, Get7z accessors)
     [B] SevenZip.h              … Archive backend public API (signature kept identical to AileEx)
     [B] SevenZipB2e.cpp         … B2E implementation of SevenZip.h (replaces SevenZip.cpp)
     [C] B2eBridge.h             … UNICODE/ANSI bridge API (no kilib types exposed)

@@ -1,6 +1,7 @@
 ﻿#include "App.h"
 #include "MainWindow.h"
 #include "CompressDlg.h"
+#include "DialogUtils.h"
 #include "I18n.h"
 #include "WorkerThread.h"
 #include "resource.h"
@@ -82,6 +83,7 @@ int App::RunBrowseMode(const std::vector<std::wstring>& archivePaths, int nCmdSh
 }
 
 // Derive output path for a single source file (no extension, CompressDlg appends it).
+// destDir overrides the OutputDirMode setting when non-empty (CLI -o or D&D target).
 static std::wstring DeriveOutputPath(const Settings& s, const std::wstring& srcFile,
                                      const std::wstring& destDir) {
     std::wstring outDir;
@@ -93,10 +95,7 @@ static std::wstring DeriveOutputPath(const Settings& s, const std::wstring& srcF
         auto sl = srcFile.find_last_of(L"\\/");
         outDir  = (sl != std::wstring::npos) ? srcFile.substr(0, sl) : L"";
     }
-    auto sl   = srcFile.find_last_of(L"\\/");
-    std::wstring name = (sl != std::wstring::npos) ? srcFile.substr(sl + 1) : srcFile;
-    auto dot  = name.rfind(L'.');
-    std::wstring stem = (dot != std::wstring::npos) ? name.substr(0, dot) : name;
+    std::wstring stem = StemFromPath(srcFile);
     return outDir.empty() ? stem : outDir + L"\\" + stem;
 }
 

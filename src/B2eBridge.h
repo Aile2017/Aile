@@ -22,6 +22,7 @@ struct B2eFormatInfo {
     std::wstring label;                  // e.g. L"7-Zip (.7z)"
     std::wstring ext;                    // e.g. L"7z"
     std::vector<B2eMethodInfo> methods;  // ordered by type-list position (index = level for B2e_Compress)
+    bool         canSfx = false;         // true if the .b2e has an sfx: or sfxd: section
 };
 
 // Dynamically scans the b2e/ directory next to the EXE.
@@ -72,11 +73,16 @@ HRESULT B2e_Extract(const wchar_t* archivePath,
 // level: 0 = store (method 1 in the .b2e encode: section);
 //        1 = default compression (the method marked * in load: type);
 //        2+ = successive methods in the type list.
+// sfx: if true and the .b2e has an sfx:/sfxd: section, creates a self-extracting archive.
+// fmtExt: when non-null, overrides the outPath extension for .b2e script lookup
+//         (needed when sfx=true and outPath ends in .exe instead of the format extension).
 // sink: optional progress callback; may be nullptr.
 HRESULT B2e_Compress(const std::vector<std::wstring>& srcPaths,
                      const wchar_t* outPath,
                      int level,
-                     IExtractProgressSink* sink);
+                     IExtractProgressSink* sink,
+                     bool sfx = false,
+                     const wchar_t* fmtExt = nullptr);
 
 // Run the test: section for the archive and capture stdout output.
 // output receives the full stdout/stderr text from the test tool.
