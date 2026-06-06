@@ -102,12 +102,14 @@ static std::wstring DeriveOutputPath(const Settings& s, const std::wstring& srcF
 int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdShow,
                          const std::wstring& destDir,
                          const std::wstring& typeOverride,
-                         const std::wstring& methodOverride) {
+                         const std::wstring& methodOverride,
+                         bool sfx) {
     MainWindow wnd;
     if (!wnd.Create(m_hInst, nCmdShow)) return 1;
 
     CompressDlg::Params params;
     params.inputFiles = filePaths;
+    params.sfx        = sfx;
     params.LoadFromSettings(m_settings);
     if (!filePaths.empty()) {
         params.outputPath = DeriveOutputPath(m_settings, filePaths[0], destDir);
@@ -121,8 +123,13 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
     if (!typeOverride.empty()) {
         params.format = typeOverride;
         if (!methodOverride.empty()) params.method = methodOverride;
-        if (params.outputPath.find(L'.') == std::wstring::npos)
+        if (params.sfx) {
+            auto dot = params.outputPath.find_last_of(L'.');
+            if (dot != std::wstring::npos) params.outputPath.erase(dot);
+            params.outputPath += L".exe";
+        } else if (params.outputPath.find(L'.') == std::wstring::npos) {
             params.outputPath += L"." + params.format;
+        }
     } else {
         CompressDlg dlg;
         if (!dlg.Show(wnd.Hwnd(), params)) {
@@ -136,9 +143,12 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
         auto& sz = m_sevenZip;
         WorkerThread worker;
         worker.Start([&sz, params]() -> HRESULT {
+            CompressAdvanced adv;
+            adv.sfx = params.sfx;
             return sz.Compress(params.inputFiles, params.outputPath.c_str(),
                                params.format.c_str(), params.level,
-                               params.method.c_str(), nullptr, nullptr);
+                               params.method.c_str(), nullptr, nullptr,
+                               params.sfx ? &adv : nullptr);
         }, wnd.Hwnd(), WM_APP_DONE);
 
         MSG msg;
@@ -155,7 +165,8 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
 int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCmdShow,
                              const std::wstring& destDir,
                              const std::wstring& typeOverride,
-                             const std::wstring& methodOverride) {
+                             const std::wstring& methodOverride,
+                             bool sfx) {
     if (filePaths.empty()) return 0;
 
     MainWindow wnd;
@@ -164,14 +175,20 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
     // Show CompressDlg once for the first file; apply same settings to all files.
     CompressDlg::Params baseParams;
     baseParams.inputFiles = { filePaths[0] };
+    baseParams.sfx        = sfx;
     baseParams.LoadFromSettings(m_settings);
     baseParams.outputPath = DeriveOutputPath(m_settings, filePaths[0], destDir);
 
     if (!typeOverride.empty()) {
         baseParams.format = typeOverride;
         if (!methodOverride.empty()) baseParams.method = methodOverride;
-        if (baseParams.outputPath.find(L'.') == std::wstring::npos)
+        if (baseParams.sfx) {
+            auto dot = baseParams.outputPath.find_last_of(L'.');
+            if (dot != std::wstring::npos) baseParams.outputPath.erase(dot);
+            baseParams.outputPath += L".exe";
+        } else if (baseParams.outputPath.find(L'.') == std::wstring::npos) {
             baseParams.outputPath += L"." + baseParams.format;
+        }
     } else {
         CompressDlg dlg;
         if (!dlg.Show(wnd.Hwnd(), baseParams)) return 0;
@@ -184,16 +201,24 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
         CompressDlg::Params params = baseParams;
         params.inputFiles  = { file };
         params.outputPath  = DeriveOutputPath(m_settings, file, destDir);
-        if (params.outputPath.find(L'.') == std::wstring::npos)
+        if (params.sfx) {
+            auto dot = params.outputPath.find_last_of(L'.');
+            if (dot != std::wstring::npos) params.outputPath.erase(dot);
+            params.outputPath += L".exe";
+        } else if (params.outputPath.find(L'.') == std::wstring::npos) {
             params.outputPath += L"." + params.format;
+        }
 
         {
             auto& sz = m_sevenZip;
             WorkerThread worker;
             worker.Start([&sz, params]() -> HRESULT {
+                CompressAdvanced adv;
+                adv.sfx = params.sfx;
                 return sz.Compress(params.inputFiles, params.outputPath.c_str(),
                                    params.format.c_str(), params.level,
-                                   params.method.c_str(), nullptr, nullptr);
+                                   params.method.c_str(), nullptr, nullptr,
+                                   params.sfx ? &adv : nullptr);
             }, wnd.Hwnd(), WM_APP_DONE);
             MSG msg;
             while (GetMessageW(&msg, nullptr, 0, 0) > 0) {

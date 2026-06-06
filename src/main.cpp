@@ -41,7 +41,8 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
 
     int result;
 
-    // Noah-style GUI options: -x forces extract dialog, -a forces compress dialog.
+    // Noah-style GUI options: -x forces extract dialog, -a forces compress dialog,
+    // -ca forces compress dialog with SFX pre-enabled.
     // -d<dir> (or -d <dir>) overrides the destination directory for both modes.
     // -w / -W compresses each input file into its own archive.
     // -t<ext> overrides archive type (format). -m<method> overrides compression method.
@@ -74,6 +75,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
     bool forceExtract  = false;
     bool forceCompress = false;
     bool eachMode      = false;   // -w / -W: compress each file separately
+    bool sfx           = false;   // -ca: create SFX
     std::wstring destDir, typeOverride, methodOverride;
     std::vector<std::wstring> positional;
     for (int i = 1; i < argc; ++i) {
@@ -82,6 +84,10 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
             forceExtract = true;
         else if (_wcsicmp(a, L"-a") == 0)
             forceCompress = true;
+        else if (_wcsicmp(a, L"-ca") == 0) {
+            forceCompress = true;
+            sfx = true;
+        }
         else if (_wcsicmp(a, L"-w") == 0 || _wcsicmp(a, L"-W") == 0)
             eachMode = true;
         else if ((a[0] == L'-' || a[0] == L'/') && (a[1] == L'd' || a[1] == L'D')) {
@@ -121,13 +127,13 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
         return result;
     }
     if ((forceCompress || !positional.empty()) && eachMode) {
-        result = app.RunCompressEachMode(positional, SW_HIDE, destDir, typeOverride, methodOverride);
+        result = app.RunCompressEachMode(positional, SW_HIDE, destDir, typeOverride, methodOverride, sfx);
         if (hConcurrentSem) { ReleaseSemaphore(hConcurrentSem, 1, nullptr); CloseHandle(hConcurrentSem); }
         app.Shutdown();
         return result;
     }
     if (forceCompress && !positional.empty()) {
-        result = app.RunCompressMode(positional, SW_HIDE, destDir, typeOverride, methodOverride);
+        result = app.RunCompressMode(positional, SW_HIDE, destDir, typeOverride, methodOverride, sfx);
         if (hConcurrentSem) { ReleaseSemaphore(hConcurrentSem, 1, nullptr); CloseHandle(hConcurrentSem); }
         app.Shutdown();
         return result;

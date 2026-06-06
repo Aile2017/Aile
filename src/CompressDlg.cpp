@@ -84,6 +84,15 @@ void CompressDlg::OnInit(HWND hwnd) {
     SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, m_params.outputPath.c_str());
 
     OnFormatChange(hwnd);
+
+    // Pre-check SFX if requested (e.g. -ca flag); only when the format supports it.
+    if (m_params.sfx) {
+        HWND hSfx = GetDlgItem(hwnd, IDC_CREATE_SFX);
+        if (IsWindowEnabled(hSfx)) {
+            SendMessageW(hSfx, BM_SETCHECK, BST_CHECKED, 0);
+            OnSfxChange(hwnd);
+        }
+    }
 }
 
 void CompressDlg::UpdateOutputExt(HWND hwnd, const wchar_t* fmtId) {
