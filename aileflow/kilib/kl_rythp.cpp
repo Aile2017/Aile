@@ -74,8 +74,14 @@ kiRythpVM::kiRythpVM()
 
 char* kiRythpVM::split_tonext( char* p )
 {
-	while( *p!='\0' && ( *p=='\t' || *p==' ' || *p=='\r' || *p=='\n' ) )
-		p++;
+	for(;;) {
+		while( *p!='\0' && ( *p=='\t' || *p==' ' || *p=='\r' || *p=='\n' ) )
+			p++;
+		if( *p!=';' )
+			break;
+		while( *p && *p!='\n' && *p!='\r' )
+			p++;
+	}
 	return (*p=='\0' ? NULL : p);
 }
 

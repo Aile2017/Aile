@@ -58,6 +58,16 @@ bool CArcB2e::v_ver( kiStr& str )
 
 //------------------- Load script & eval( load: ) -------------------
 
+static bool isSectionEmpty( const char* p )
+{
+	for(;;) {
+		while( *p=='\t' || *p==' ' || *p=='\r' || *p=='\n' ) p++;
+		if( !*p ) return true;
+		if( *p==';' ) { while( *p && *p!='\n' && *p!='\r' ) p++; }
+		else return false;
+	}
+}
+
 bool CArcB2e::load_module( const char* name )
 {
 	exe = new CArcModule( name );
@@ -110,6 +120,16 @@ int CArcB2e::v_load()
 			if( *p=='\0' )
 				break;
 		}
+
+		//-- Treat sections that contain only whitespace/comments as absent
+		if( m_LoadScr && isSectionEmpty(m_LoadScr) ) m_LoadScr = NULL;
+		if( m_EncScr  && isSectionEmpty(m_EncScr)  ) m_EncScr  = NULL;
+		if( m_DecScr  && isSectionEmpty(m_DecScr)  ) m_DecScr  = NULL;
+		if( m_SfxScr  && isSectionEmpty(m_SfxScr)  ) m_SfxScr  = NULL;
+		if( m_DcEScr  && isSectionEmpty(m_DcEScr)  ) m_DcEScr  = NULL;
+		if( m_LstScr  && isSectionEmpty(m_LstScr)  ) m_LstScr  = NULL;
+		if( m_TstScr  && isSectionEmpty(m_TstScr)  ) m_TstScr  = NULL;
+		if( m_DelScr  && isSectionEmpty(m_DelScr)  ) m_DelScr  = NULL;
 
 		//-- Execute [load:]!
 		if( m_LoadScr )
