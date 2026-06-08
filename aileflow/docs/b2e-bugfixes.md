@@ -129,6 +129,114 @@ or a UI path that does not populate the index from the actual B2E type list) is 
 
 ---
 
+## Bug 3 — Archive list disabled when `decode1:` section is absent
+
+### Symptom
+
+An archive file cannot be opened with AileFlow when its `.b2e` script lacks a `decode1:` section,
+even if the `decode:` section is present. The error `アーカイブを開けませんでした。(0x80004005)` 
+(`Archive could not be opened. (0x80004005)`) is displayed.
+
+| Configuration | decode: | decode1: | Result |
+|---|---|---|---|
+| ✅ Works | ✓ | ✓ | Archive opens |
+| ❌ Fails | ✓ | ✗ | `E_FAIL (0x80004005)` |
+
+### Root cause
+
+The `v_load()` method in `ArcB2e.cpp:150` computes a capability bitmask (`m_Able`) that gates
+whether the list operation is available:
+
+```cpp
+return (m_DecScr ? aMelt | (m_DcEScr ? aList | aMeltEach : 0) : 0) ...
+```
+
+- If `decode:` is present → `aMelt` flag set
+- If `decode1:` **is also** present → `aList | aMeltEach` flags additionally set
+- If `decode1:` is **absent** → `aList` flag is **not** set
+
+Later, when the user attempts to open an archive, `CArchiver::list()` checks for the `aList` flag:
+
+```cpp
+// Archiver.h:114
+inline bool CArchiver::list( const arcname& aname, aflArray& files )
+{
+    ensure_loaded();
+    return (m_Able & aList) ? v_list(aname, files) : false;  // Returns false if aList absent
+}
+```
+
+If the flag is absent, `v_list()` is never called and `false` is returned, triggering the error
+in `B2eBridge.cpp:470`:
+
+```cpp
+const std::string* scriptFile = FindScript(path.c_str());
+if (!scriptFile) return E_NOTIMPL;  // But we get E_FAIL instead because v_list() returns false
+```
+
+### Why this is a design defect
+
+**`decode1:` is for selective (partial) extraction of files.** It is logically orthogonal to the
+list operation:
+
+- **`list:` section** — parses the archive and populates the file list in the UI
+- **`decode:` section** — extracts the entire archive (should allow listing)
+- **`decode1:` section** — extracts only selected files (should allow listing)
+
+The current logic conflates these concerns: listing is impossible unless selective extraction is
+supported, which is incorrect.
+
+**Expected behavior:** If `decode:` is present, listing should work regardless of `decode1:` 
+presence, because full extraction is already possible.
+
+### Example: zpaq.b2e
+
+`zpaq.b2e.bak` (with `decode1:`) opens successfully.  
+`zpaq.b2e` (without `decode1:`) fails to open.
+
+Both contain:
+```lisp
+load:
+ (name zpaq64.exe)
+ (type zpaq Store *Method1 Method2 Method3 Method4 Method5)
+
+encode: ...
+decode:
+ (cmd x (arc))
+list:
+ (scan "- " 0 "" 1 41 l (arc))
+```
+
+Only `zpaq.b2e.bak` additionally contains:
+```lisp
+decode1:
+ (cmd x (arc) (list))
+```
+
+### Workaround
+
+Include a `decode1:` section even if the tool does not support selective extraction. The section
+can be empty or contain a placeholder command.
+
+### Fix
+
+Modify the capability check in `ArcB2e::v_load()` to decouple `aList` from `aList | aMeltEach`:
+
+```cpp
+// Before (line 150):
+return (m_DecScr ? aMelt | (m_DcEScr ? aList | aMeltEach : 0) : 0) ...
+
+// After: aList should be independent of aList | aMeltEach
+return (m_DecScr ? aMelt | aList | (m_DcEScr ? aMeltEach : 0) : 0) ...
+```
+
+Rationale:
+- If `decode:` is present, full archive listing becomes possible (supported by `list:` section).
+- If `decode1:` is **also** present, selective extraction is possible (add `aMeltEach` flag).
+- List capability should not depend on selective extraction capability.
+
+---
+
 ## Affected `.b2e` files (reference)
 
 | Script | Formats | Has `password` entry | GUI tool in `encode:` |
