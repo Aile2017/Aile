@@ -1,0 +1,24 @@
+load:
+ (name zpaq64.exe)
+ (type zpaq Store *Method1 Method2 Method3 Method4 Method5)
+
+encode:
+ (if (method 1) (cmd a -m0 (arc.zpaq) (resp@ (listr))))
+ (if (method 2) (cmd a -m1 (arc.zpaq) (resp@ (listr))))
+ (if (method 3) (cmd a -m2 (arc.zpaq) (resp@ (listr))))
+ (if (method 4) (cmd a -m3 (arc.zpaq) (resp@ (listr))))
+ (if (method 5) (cmd a -m5 (arc.zpaq) (resp@ (listr))))
+
+decode:
+ (cmd x (arc))
+
+decode1:
+ (cmd x (arc) (list))
+
+delete:
+
+test:
+ (cmd x (arc) -test)
+
+list:
+ (scan "- " 0 "" 1 41 l (arc))
