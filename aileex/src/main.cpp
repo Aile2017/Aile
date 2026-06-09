@@ -61,7 +61,11 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
 
     bool forceExtract  = false;
     bool forceCompress = false;
+    bool eachMode      = false;
     std::wstring destDir;
+    std::wstring typeOverride;    // -t<format>
+    std::wstring methodOverride;  // -m<method>
+    std::wstring levelOverride;   // -l<level>
     std::vector<std::wstring> positional;
     for (int i = 1; i < argc; ++i) {
         const wchar_t* a = argv[i];
@@ -69,6 +73,16 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
             forceExtract = true;
         else if (_wcsicmp(a, L"-a") == 0)
             forceCompress = true;
+        else if (_wcsicmp(a, L"-w") == 0 || _wcsicmp(a, L"-W") == 0)
+            eachMode = true;
+        else if ((a[0] == L'-' || a[0] == L'/') && (a[1] == L't' || a[1] == L'T') && a[2]) {
+            typeOverride = a + 2;
+            for (auto& c : typeOverride) c = (wchar_t)towlower(c);
+        }
+        else if ((a[0] == L'-' || a[0] == L'/') && (a[1] == L'm' || a[1] == L'M') && a[2])
+            methodOverride = a + 2;
+        else if ((a[0] == L'-' || a[0] == L'/') && (a[1] == L'l' || a[1] == L'L') && a[2])
+            levelOverride = a + 2;
         else if ((a[0] == L'-' || a[0] == L'/') && (a[1] == L'd' || a[1] == L'D')) {
             std::wstring rawValue, remainder;
             if (a[2] != L'\0') {
@@ -98,8 +112,15 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
         app.Shutdown();
         return result;
     }
+    if ((forceCompress || !positional.empty()) && eachMode) {
+        result = app.RunCompressEachMode(positional, SW_HIDE, destDir,
+                                         typeOverride, methodOverride, levelOverride);
+        app.Shutdown();
+        return result;
+    }
     if (forceCompress && !positional.empty()) {
-        result = app.RunCompressMode(positional, SW_HIDE, destDir);
+        result = app.RunCompressMode(positional, SW_HIDE, destDir,
+                                     typeOverride, methodOverride, levelOverride);
         app.Shutdown();
         return result;
     }
@@ -117,7 +138,8 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
     }
 
     if (!regularFiles.empty()) {
-        result = app.RunCompressMode(regularFiles, nCmdShow);
+        result = app.RunCompressMode(regularFiles, nCmdShow, L"",
+                                     typeOverride, methodOverride, levelOverride);
     } else if (!archiveFiles.empty()) {
         result = app.RunBrowseMode(archiveFiles, nCmdShow, destDir);
     } else {

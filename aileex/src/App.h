@@ -25,7 +25,16 @@ public:
     int RunBrowseMode(const std::vector<std::wstring>& archivePaths, int nCmdShow,
                       const std::wstring& destDir = L"");
     int RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdShow,
-                        const std::wstring& destDir = L"");
+                        const std::wstring& destDir        = L"",
+                        const std::wstring& typeOverride   = L"",
+                        const std::wstring& methodOverride = L"",
+                        const std::wstring& levelOverride  = L"");
+    // -w/-W: compress each input file into its own archive.
+    int RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCmdShow,
+                            const std::wstring& destDir        = L"",
+                            const std::wstring& typeOverride   = L"",
+                            const std::wstring& methodOverride = L"",
+                            const std::wstring& levelOverride  = L"");
     int RunExtractDialogMode(const std::wstring& archivePath, int nCmdShow,
                              const std::wstring& destDir = L"");
     int RunEmpty(int nCmdShow);

@@ -26,12 +26,23 @@ The operating mode is determined by command-line arguments to `AileEx.exe`.
 | Mixed | Compress mode takes priority |
 | `-x <archive>` | Forced extract mode — show extract destination dialog directly, skipping the list view. Non-archive extensions are rejected before opening. |
 | `-a <file...>` | Forced compress mode — show compression dialog directly (equivalent to dropping regular files). |
+| `-w <file...>` | Each-file compress mode — compress each input file into its own separate archive. The compression dialog appears once (for the first file); the chosen format/method/level is applied to all remaining files. Can be combined with `-a` (e.g. `-a -w`) or used standalone when positional arguments are regular files. |
 
-`-d <dir>` (also `-d<dir>`) can be combined with either flag to override the destination:
+The following options preset the compression dialog. They are ignored in extract and browse modes.
+
+| Option | Description |
+|---|---|
+| `-t<format>` | Override archive format (e.g. `-t7z`, `-tzip`, `-trar`). With `-a`/`-w`, skips the dialog and compresses directly. In auto-detect mode, the dialog opens with the format pre-selected. |
+| `-m<method>` | Override compression method (e.g. `-mlzma2`, `-mdeflate`). Applies to 7z and zip only; ignored for RAR (no method concept) and stream formats. Always pre-sets the dialog; does not skip it alone. |
+| `-l<level>` | Override compression level. 7z / zip: `0`–`9`. RAR: `0`–`5` or named levels (`store`/`fastest`/`fast`/`normal`/`good`/`best`, case-insensitive). Ignored for stream formats. Always pre-sets the dialog; does not skip it alone. |
+
+Dialog skip behavior: the compression dialog is skipped **only** when `-t` is combined with `-a` or `-w`. In auto-detect mode the dialog always appears, with any specified values pre-set.
+
+`-d <dir>` (also `-d<dir>`) can be combined with any of the above flags to override the destination:
 - With `-x`: skips the folder picker and extracts directly to `<dir>` (MkDir policy still applied).
-- With `-a`: presets the output path field in the compression dialog to `<dir>`.
+- With `-a` / `-w`: presets the output path field in the compression dialog to `<dir>`.
 
-Both `-x` and `-a` suppress the main window (`SW_HIDE`). The `-x` / `-a` flags take priority over auto-detection.
+`-x`, `-a`, and `-w` suppress the main window (`SW_HIDE`). These flags take priority over auto-detection.
 
 Recognized extensions (treated as archives): `7z`, `zip`, `rar`, `tar`, `gz`, `bz2`, `xz`, `cab`, `iso`, `jar`, `wim`, `lzma`, `lzh`, `arj` and other formats dynamically enumerated by 7z.dll. Split volume 1 names such as `archive.7z.001` are also treated as archives when the preceding extension is recognized.
 

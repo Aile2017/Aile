@@ -104,17 +104,62 @@ int App::RunBrowseMode(const std::vector<std::wstring>& archivePaths, int nCmdSh
     return (int)msg.wParam;
 }
 
+// Apply -t/-m/-l command-line overrides to params before showing/skipping the dialog.
+// Must be called after LoadFromSettings so format is known before level conversion.
+static void ApplyOverrides(CompressDlg::Params& params,
+                            const std::wstring& typeOverride,
+                            const std::wstring& methodOverride,
+                            const std::wstring& levelOverride) {
+    if (!typeOverride.empty()) {
+        params.format = typeOverride;
+        // When format is overridden, clear the default method so 7-Zip picks the
+        // format's own default. LZMA2 (the Params default) is invalid for zip/tar/etc.
+        if (methodOverride.empty())
+            params.method.clear();
+    }
+
+    // -m applies to 7z/zip only; RAR has no method concept
+    if (!methodOverride.empty() && params.format != L"rar")
+        params.method = methodOverride;
+
+    if (!levelOverride.empty()) {
+        if (params.format == L"rar") {
+            static const struct { const wchar_t* name; int lv; } kRar[] = {
+                {L"store",0},{L"fastest",1},{L"fast",2},{L"normal",3},{L"good",4},{L"best",5},
+            };
+            std::wstring lo = levelOverride;
+            for (auto& c : lo) c = (wchar_t)towlower(c);
+            int found = -1;
+            for (auto& e : kRar)
+                if (lo == e.name) { found = e.lv; break; }
+            if (found < 0 && lo.size() == 1 && iswdigit(lo[0])) {
+                int v = lo[0] - L'0';
+                if (v <= 5) found = v;
+            }
+            if (found >= 0) params.level = params.rarLevel = found;
+        } else if (levelOverride.size() == 1 && iswdigit(levelOverride[0])) {
+            params.level = levelOverride[0] - L'0';
+        }
+    }
+
+    // rar.exe expects -mN; sync method = level digit whenever format is RAR
+    if (params.format == L"rar")
+        params.method = std::to_wstring(params.rarLevel);
+}
+
 int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdShow,
-                         const std::wstring& destDir) {
+                         const std::wstring& destDir,
+                         const std::wstring& typeOverride,
+                         const std::wstring& methodOverride,
+                         const std::wstring& levelOverride) {
     MainWindow wnd;
     if (!wnd.Create(m_hInst, nCmdShow)) return 1;
 
     CompressDlg::Params params;
     params.inputFiles = filePaths;
     params.LoadFromSettings(m_settings);
-    {
-        params.outputPath = Settings::ComputeDefaultOutputPath(m_settings, filePaths, destDir);
-    }
+    params.outputPath = Settings::ComputeDefaultOutputPath(m_settings, filePaths, destDir);
+    ApplyOverrides(params, typeOverride, methodOverride, levelOverride);
 
     if (!m_sevenZip.IsLoaded()) {
         MessageBoxW(wnd.Hwnd(), I18n::Tr(IDS_ERR_7Z_NOT_LOADED).c_str(),
@@ -122,17 +167,26 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
         return 0;
     }
 
-    CompressDlg dlg;
     const auto* enc = &m_sevenZip.GetEncoderNames();
     const auto* wf  = &m_sevenZip.GetWritableFormats();
     const bool rarAvailable = !m_settings.GetRarExePath().empty()
         ? (PathFileExistsW(m_settings.GetRarExePath().c_str()) == TRUE)
         : !RarProcess::FindRarExe().empty();
-    if (!dlg.Show(wnd.Hwnd(), params, enc, wf, rarAvailable)) {
-        return 0;
+
+    // Skip dialog only when -t is given in forced (-a/-w) mode (SW_HIDE).
+    // In auto-detect mode (nCmdShow != SW_HIDE) always show dialog with presets.
+    const bool skipDialog = !typeOverride.empty() && (nCmdShow == SW_HIDE);
+    if (skipDialog) {
+        params.sfxMode.clear(); // SFX not controllable via CLI yet
+        if (params.outputPath.find(L'.') == std::wstring::npos)
+            params.outputPath += L"." + params.format;
+    } else {
+        CompressDlg dlg;
+        if (!dlg.Show(wnd.Hwnd(), params, enc, wf, rarAvailable))
+            return 0;
+        params.SaveToSettings(m_settings);
+        m_settings.Save();
     }
-    params.SaveToSettings(m_settings);
-    m_settings.Save();
 
     ProgressDlg progDlg;
     progDlg.Show(wnd.Hwnd(), I18n::Tr(IDS_PROGRESS_COMPRESSING).c_str());
@@ -179,9 +233,117 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
                                params.encryptHeaders);
         }, wnd.Hwnd(), WM_APP_DONE);
 
-        progDlg.RunMessageLoop();
+        HRESULT hr = progDlg.RunMessageLoop();
         worker.Wait();
         delete sink;
+        if (FAILED(hr) && hr != E_ABORT)
+            MessageBoxW(wnd.Hwnd(), I18n::Tr(IDS_ERR_COMPRESS_FAILED).c_str(),
+                        I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
+    }
+    return 0;
+}
+
+int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCmdShow,
+                             const std::wstring& destDir,
+                             const std::wstring& typeOverride,
+                             const std::wstring& methodOverride,
+                             const std::wstring& levelOverride) {
+    if (filePaths.empty()) return 0;
+
+    MainWindow wnd;
+    if (!wnd.Create(m_hInst, SW_HIDE)) return 1;
+
+    if (!m_sevenZip.IsLoaded()) {
+        MessageBoxW(wnd.Hwnd(), I18n::Tr(IDS_ERR_7Z_NOT_LOADED).c_str(),
+                    I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
+        return 0;
+    }
+
+    // Show dialog once for the first file; apply chosen settings to all files.
+    CompressDlg::Params baseParams;
+    baseParams.inputFiles = { filePaths[0] };
+    baseParams.LoadFromSettings(m_settings);
+    baseParams.outputPath = Settings::ComputeDefaultOutputPath(m_settings, { filePaths[0] }, destDir);
+    ApplyOverrides(baseParams, typeOverride, methodOverride, levelOverride);
+
+    const auto* enc = &m_sevenZip.GetEncoderNames();
+    const auto* wf  = &m_sevenZip.GetWritableFormats();
+    const bool rarAvailable = !m_settings.GetRarExePath().empty()
+        ? (PathFileExistsW(m_settings.GetRarExePath().c_str()) == TRUE)
+        : !RarProcess::FindRarExe().empty();
+
+    // RunCompressEachMode is only called from -w (always SW_HIDE), so skip dialog when -t given.
+    const bool skipDialog = !typeOverride.empty() && (nCmdShow == SW_HIDE);
+    if (skipDialog) {
+        baseParams.sfxMode.clear();
+    } else {
+        CompressDlg dlg;
+        if (!dlg.Show(wnd.Hwnd(), baseParams, enc, wf, rarAvailable)) return 0;
+        baseParams.SaveToSettings(m_settings);
+        m_settings.Save();
+    }
+
+    // Resolve 7z SFX module once (reused for all files).
+    std::wstring sfxModulePath;
+    if (!baseParams.sfxMode.empty() && baseParams.format != L"rar") {
+        sfxModulePath = Resolve7zSfxModulePath(
+            m_sevenZip.GetLoadedPath().c_str(), baseParams.sfxMode.c_str());
+        if (sfxModulePath.empty()) {
+            const wchar_t* leaf = (baseParams.sfxMode == L"console") ? L"7zCon.sfx" : L"7z.sfx";
+            std::wstring msg = I18n::TrFmt(IDS_FMT_SFX_NOT_FOUND_7Z, leaf);
+            MessageBoxW(wnd.Hwnd(), msg.c_str(), I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
+            return 0;
+        }
+    }
+
+    for (const auto& file : filePaths) {
+        CompressDlg::Params params = baseParams;
+        params.inputFiles = { file };
+        params.outputPath = Settings::ComputeDefaultOutputPath(m_settings, { file }, destDir);
+        if (!params.sfxMode.empty()) {
+            params.outputPath += L".exe";
+        } else {
+            params.outputPath += L"." + params.format;
+        }
+
+        ProgressDlg progDlg;
+        progDlg.Show(wnd.Hwnd(), I18n::Tr(IDS_PROGRESS_COMPRESSING).c_str());
+
+        if (params.format == L"rar") {
+            auto* sink = new ProgressPostSink(wnd.Hwnd(), WM_APP_PROGRESS, WM_APP_DONE);
+            RunRarCompressSync(wnd.Hwnd(), params,
+                               m_settings.GetRarExePath().c_str(),
+                               progDlg, sink);
+            delete sink;
+        } else {
+            auto* sink = new ProgressPostSink(wnd.Hwnd(), WM_APP_PROGRESS, WM_APP_DONE);
+            auto& sz   = m_sevenZip;
+            progDlg.SetSink(sink);
+
+            WorkerThread worker;
+            worker.Start([&sz, params, sink, sfxModulePath]() -> HRESULT {
+                const wchar_t* pw = params.password.empty() ? nullptr : params.password.c_str();
+                CompressAdvanced adv;
+                adv.dictSize      = params.dictSize;
+                adv.wordSize      = params.wordSize;
+                adv.solidBlock    = params.solidBlock;
+                adv.threads       = params.threads;
+                adv.extra         = params.extra;
+                adv.volumeSize    = params.volumeSize;
+                adv.sfxModulePath = sfxModulePath;
+                return sz.Compress(params.inputFiles, params.outputPath.c_str(),
+                                   params.format.c_str(), params.level,
+                                   params.method.c_str(), pw, sink, &adv,
+                                   params.encryptHeaders);
+            }, wnd.Hwnd(), WM_APP_DONE);
+
+            HRESULT hr = progDlg.RunMessageLoop();
+            worker.Wait();
+            delete sink;
+            if (FAILED(hr) && hr != E_ABORT)
+                MessageBoxW(wnd.Hwnd(), I18n::Tr(IDS_ERR_COMPRESS_FAILED).c_str(),
+                            I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
+        }
     }
     return 0;
 }

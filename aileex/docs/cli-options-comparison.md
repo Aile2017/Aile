@@ -93,61 +93,89 @@ AileFlow.exe -dC:\output
 
 ---
 
-### `-w` / `-W` — ファイル別圧縮（AileFlow のみ）
+### `-w` / `-W` — ファイル別圧縮
 
 | 項目 | AileEx | AileFlow |
 |------|--------|----------|
-| **機能** | ❌ なし | ✅ 各ファイルを個別アーカイブに圧縮 |
-| **書式** | — | `-w` or `-W` |
-| **説明** | — | 複数ファイル入力時、各々を個別ファイルとして圧縮 |
-| **実装** | — | `main.cpp:91-92` |
+| **機能** | ✅ 各ファイルを個別アーカイブに圧縮 | ✅ 各ファイルを個別アーカイブに圧縮 |
+| **書式** | `-w` or `-W` | `-w` or `-W` |
+| **説明** | ダイアログを最初の1回だけ表示、設定を全ファイルに適用 | 同じ |
+| **RAR 対応** | ✅ | ❌（B2E 経由のため RAR なし） |
+| **実装** | `main.cpp`, `App.cpp:RunCompressEachMode` | `main.cpp:91-92`, `App.cpp:RunCompressEachMode` |
 
 **例：**
 ```powershell
 # file1.7z, file2.7z, file3.7z を生成
+AileEx.exe -w -a file1.txt file2.txt file3.txt -d C:\output
 AileFlow.exe -w -a file1.txt file2.txt file3.txt -d C:\output
+
+# -a なしでも動作（通常ファイルのみの場合）
+AileEx.exe -w file1.txt file2.txt file3.txt
 ```
 
 ---
 
-### `-t` — アーカイブ形式指定（AileFlow のみ）
+### `-t` — アーカイブ形式指定
 
 | 項目 | AileEx | AileFlow |
 |------|--------|----------|
-| **機能** | ❌ なし | ✅ アーカイブ形式をオーバーライド |
-| **書式** | — | `-t<format>` |
-| **値例** | — | `-t7z`, `-tzip`, `-ttar`, `-tlzh`, `-tcab` |
-| **説明** | — | 圧縮ダイアログの形式プリセット |
-| **実装** | — | `main.cpp:103-104` |
+| **機能** | ⏳ 実装予定 | ✅ アーカイブ形式をオーバーライド |
+| **書式** | `-t<format>` | `-t<format>` |
+| **値例** | `-t7z`, `-tzip`, `-ttar`, `-trar` など | `-t7z`, `-tzip`, `-ttar`, `-tlzh`, `-tcab` |
+| **ダイアログ** | `-t` あり → スキップ | `-t` あり → スキップ |
+| **スコープ** | `-a` / `-w` との組み合わせのみ | `-a` / `-w` / 自動検出も対応 |
+| **実装** | `main.cpp`, `App.cpp` | `main.cpp:103-104` |
 
 **例：**
 ```powershell
-# ZIP 形式で圧縮（形式ダイアログをスキップ）
+# ZIP 形式で圧縮（ダイアログスキップ）
+AileEx.exe -a file.txt -tzip -d C:\output
 AileFlow.exe -a file.txt -tzip -d C:\output
-
-# LZH 形式で圧縮
-AileFlow.exe -a file.txt -tlzh -d C:\output
 ```
 
 ---
 
-### `-m` — 圧縮方式指定（AileFlow のみ）
+### `-m` — 圧縮方式指定
 
 | 項目 | AileEx | AileFlow |
 |------|--------|----------|
-| **機能** | ❌ なし | ✅ 圧縮方式をオーバーライド |
-| **書式** | — | `-m<method>` |
-| **値例** | — | `-mlzma`, `-mdeflate`, `-mzstd` など |
-| **説明** | — | 圧縮ダイアログの方式プリセット |
-| **実装** | — | `main.cpp:105-106` |
+| **機能** | ⏳ 実装予定 | ✅ 圧縮方式をオーバーライド |
+| **書式** | `-m<method>` | `-m<method>` |
+| **値例（7z）** | `lzma2`, `lzma`, `ppmd`, `deflate`, `zstd` ... | 同左 |
+| **値例（zip）** | `deflate`, `deflate64`, `bzip2`, `lzma`, `copy` ... | 同左 |
+| **値例（rar）** | N/A（RAR に方式の概念なし。レベルは `-l` で指定） | N/A（RAR なし） |
+| **`-t` なし時** | ダイアログ表示・方式をプリセット | ダイアログ表示・方式をプリセット |
+| **実装** | `main.cpp`, `App.cpp` | `main.cpp:105-106` |
 
 **例：**
 ```powershell
-# LZMA2 方式で 7z 圧縮（7z がデフォルト）
-AileFlow.exe -a file.txt -mlzma2 -d C:\output
+# Deflate 方式で ZIP 圧縮（ダイアログスキップ）
+AileEx.exe -a file.txt -tzip -mdeflate -d C:\output
 
-# Deflate 方式で ZIP 圧縮
-AileFlow.exe -a file.txt -tzip -mdeflate -d C:\output
+# 方式のみ指定（ダイアログ表示・Deflate プリセット）
+AileEx.exe -a file.txt -mdeflate
+```
+
+---
+
+### `-l` — 圧縮レベル指定（AileEx 予定）
+
+| 項目 | AileEx | AileFlow |
+|------|--------|----------|
+| **機能** | ⏳ 実装予定 | ❌ なし |
+| **書式** | `-l<level>` | — |
+| **値例** | `-l0`〜`-l9` | — |
+| **対象形式** | 7z / zip：`0`〜`9` / RAR：`0`〜`5` または `store`/`fastest`/`fast`/`normal`/`good`/`best` / ストリーム形式：無視 | — |
+| **`-t` なし時** | ダイアログ表示・レベルをプリセット | — |
+| **実装** | `main.cpp`, `App.cpp` | — |
+
+**例：**
+```powershell
+# ZIP, Deflate, レベル9（最高圧縮）
+AileEx.exe -a file.txt -tzip -mdeflate -l9
+
+# レベルのみ指定（ダイアログ表示・レベル9 プリセット）
+AileEx.exe -a file.txt -l9
 ```
 
 ---
