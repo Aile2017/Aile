@@ -226,11 +226,11 @@ void MainWindow::OpenArchive(const wchar_t* path) {
     // Skip password prompt if no backend even attempted to open (e.g. DLL not loaded).
     bool anyBackendTried = app.Get7z().IsLoaded() || (isRar && app.GetUnrar().IsLoaded());
     if (FAILED(hr) && anyBackendTried) {
-        std::wstring pw = PromptPassword();
-        if (!pw.empty()) {
+        // Try the previously known password silently (covers re-open after delete/add
+        // on a header-encrypted archive without forcing the user to re-enter it).
+        auto tryWithPw = [&](const std::wstring& pw) {
             m_items.clear();
             if (preferUnrar) {
-                // User prefers unrar → try unrar first, then 7z
                 if (app.GetUnrar().ListArchive(path, m_items, pw.c_str())) {
                     hr = S_OK;
                     m_openedWithUnrar = true;
@@ -240,10 +240,8 @@ void MainWindow::OpenArchive(const wchar_t* path) {
                     hr = app.Get7z().OpenArchive(path, m_items, pw.c_str(), &m_effectiveArchivePath);
                 }
             } else {
-                // User prefers 7z → try 7z first, then unrar as fallback
-                if (app.Get7z().IsLoaded()) {
+                if (app.Get7z().IsLoaded())
                     hr = app.Get7z().OpenArchive(path, m_items, pw.c_str(), &m_effectiveArchivePath);
-                }
                 if (FAILED(hr) && isRar && app.GetUnrar().IsLoaded()) {
                     m_items.clear();
                     if (app.GetUnrar().ListArchive(path, m_items, pw.c_str())) {
@@ -254,6 +252,13 @@ void MainWindow::OpenArchive(const wchar_t* path) {
             }
             if (SUCCEEDED(hr))
                 m_password = pw;
+        };
+        if (!prevPassword.empty())
+            tryWithPw(prevPassword);
+        if (FAILED(hr)) {
+            std::wstring pw = PromptPassword();
+            if (!pw.empty())
+                tryWithPw(pw);
         }
     }
 
@@ -2055,8 +2060,10 @@ void MainWindow::OnDelete() {
         std::vector<UINT32> deleteIndices(indexSet.begin(), indexSet.end());
         auto& sz = app.Get7z();
         auto allItems = m_items;
-        m_worker.Start([&sz, archivePath, deleteIndices, allItems, sink]() -> HRESULT {
-            return sz.DeleteItems(archivePath.c_str(), deleteIndices, allItems, nullptr, sink);
+        std::wstring password = m_password;
+        m_worker.Start([&sz, archivePath, deleteIndices, allItems, password, sink]() -> HRESULT {
+            return sz.DeleteItems(archivePath.c_str(), deleteIndices, allItems,
+                                  password.empty() ? nullptr : password.c_str(), sink);
         }, m_hwnd, WM_APP_DONE);
         hrDone = progDlg.RunMessageLoop();
         m_worker.Wait();

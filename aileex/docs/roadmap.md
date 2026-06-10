@@ -74,7 +74,7 @@ When adding 3rd+ languages, consider satellite DLL approach (current embedding i
 
 ### 6. ~~CLI execution without UI~~ — Removed (2026-05-14)
 
-Removed in favor of GUI options `-x` / `-a` / `-d` which cover the intended use cases.
+Removed in favor of GUI actions `x` / `a` / `w` with `-d<dir>` which cover the intended use cases.
 
 ---
 
@@ -163,8 +163,6 @@ Individual items overlapping with CLAUDE.md "Remaining tasks":
 
 - **Manual test matrix**: Systematically check browse / compress / extract / cancel / drop / SFX for each format
 - **Error handling comprehensive review**: HRESULT handling, consistency of error messages shown to user
-- **`RarProcess::Delete` cancel path**: Currently can't cancel during `rar.exe d`. Extend `Cancel()` (TerminateProcess) for use in Delete too
-- **Header-encrypted 7z delete password retention**: Currently fails on `Open` (password not retained). Need path to retain password once opened and pass to `DeleteItems`
 
 ---
 

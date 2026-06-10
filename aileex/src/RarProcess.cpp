@@ -127,6 +127,8 @@ DWORD WINAPI RarProcess::WinrarWaiterThread(LPVOID param) {
             break;
         }
     }
+    // Cancel() may terminate the process before the 100ms poll checks the flag.
+    if (!cancelled && *ctx->pCancel) cancelled = true;
     DWORD exitCode = 0;
     GetExitCodeProcess(ctx->hProcess, &exitCode);
     HRESULT hr = cancelled ? E_ABORT : ((exitCode == 0) ? S_OK : E_FAIL);

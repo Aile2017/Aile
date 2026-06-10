@@ -29,6 +29,8 @@ void ProgressDlg::Show(HWND hwndParent, const wchar_t* title) {
     SetForegroundWindow(m_hwnd);
     SetActiveWindow(m_hwnd);
     if (m_hwndCancel) SetFocus(m_hwndCancel);
+    // Periodic timer so the message loop runs even when the worker posts no progress (e.g. rar d).
+    SetTimer(m_hwnd, 1, 200, nullptr);
 }
 
 void ProgressDlg::SetTotal(UINT64 total) {
@@ -53,6 +55,7 @@ void ProgressDlg::SetDone(HRESULT hr) {
 
 void ProgressDlg::Dismiss() {
     if (!m_hwnd) return;
+    KillTimer(m_hwnd, 1);
     if (m_hwndParent) EnableWindow(m_hwndParent, TRUE);
     DestroyWindow(m_hwnd);
     m_hwnd = nullptr;
@@ -61,6 +64,7 @@ void ProgressDlg::Dismiss() {
 
 HRESULT ProgressDlg::RunMessageLoop(std::function<void()> onCancel) {
     HRESULT hr = S_OK;
+    bool cancelFired = false;
     MSG msg;
     while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
         if (msg.message == WM_APP_DONE) {
@@ -70,15 +74,19 @@ HRESULT ProgressDlg::RunMessageLoop(std::function<void()> onCancel) {
             break;
         }
         if (msg.message == WM_APP_PROGRESS) {
-            if (onCancel && m_sink && m_sink->IsCancelled())
-                onCancel();
             SetProgress((int)msg.wParam, (wchar_t*)msg.lParam);
             free((wchar_t*)msg.lParam);
-            continue;
+        } else {
+            if (!IsDialogMessageW(m_hwnd, &msg)) {
+                TranslateMessage(&msg);
+                DispatchMessageW(&msg);
+            }
         }
-        if (!IsDialogMessageW(m_hwnd, &msg)) {
-            TranslateMessage(&msg);
-            DispatchMessageW(&msg);
+        // Propagate cancel once after any message — covers operations that post
+        // no WM_APP_PROGRESS (e.g. rar d), relying on the 200ms timer for liveness.
+        if (!cancelFired && onCancel && m_sink && m_sink->IsCancelled()) {
+            onCancel();
+            cancelFired = true;
         }
     }
     return hr;
