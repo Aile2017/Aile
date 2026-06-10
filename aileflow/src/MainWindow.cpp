@@ -638,16 +638,6 @@ LRESULT MainWindow::HandleMsg(UINT msg, WPARAM wp, LPARAM lp) {
         }
         break;
 
-    case WM_APP_PROGRESS:
-        // fallback: normally unreachable because the inner loop absorbs WM_APP_PROGRESS/DONE
-        OnProgress((int)wp, (wchar_t*)lp);
-        return 0;
-
-    case WM_APP_DONE:
-        // fallback: normally unreachable because the inner loop absorbs WM_APP_PROGRESS/DONE
-        OnDone((HRESULT)wp);
-        return 0;
-
     case WM_DESTROY: {
         // Save window placement and splitter position
         {
@@ -1827,20 +1817,6 @@ void MainWindow::CloseArchive() {
     SetWindowTextW(m_hwnd, L"AileFlow");
     if (m_hStatus) SetWindowTextW(m_hStatus, L"");
     UpdateExtractDestEdit();
-}
-
-void MainWindow::OnProgress(int pct, wchar_t* filename) {
-    wchar_t status[512];
-    swprintf_s(status, L"%d%%  %s", pct, filename ? filename : L"");
-    SetWindowTextW(m_hStatus, status);
-    free(filename);
-}
-
-void MainWindow::OnDone(HRESULT hr) {
-    if (FAILED(hr) && hr != E_ABORT) {
-        ShowError(I18n::Tr(IDS_OP_FAILED).c_str(), hr);
-    }
-    SetWindowTextW(m_hStatus, I18n::Tr(IDS_DONE).c_str());
 }
 
 // ---- Compress flow ----

@@ -51,7 +51,26 @@ std::wstring ParentDir(const std::wstring& path) {
 // Return the initial output path based on OutputDirMode setting and the given source files.
 // Returns "dir\stem" (no extension) so CompressDlg::UpdateOutputExt can append the right one.
 std::wstring DefaultOutputPath(const Settings& s, const std::vector<std::wstring>& srcFiles) {
-    return Settings::ComputeDefaultOutputPath(s, srcFiles);
+    std::wstring dir;
+    if (s.GetOutputDirModeFixed())
+        dir = s.GetDefaultOutputDir();
+    else
+        dir = srcFiles.empty() ? s.GetDefaultOutputDir() : ParentDir(srcFiles[0]);
+
+    if (srcFiles.empty()) return dir;
+
+    std::wstring stem = StemFromPath(srcFiles[0]);
+    return dir.empty() ? stem : dir + L"\\" + stem;
+}
+
+// Return the top-level component of an archive path (handles both / and \ separators).
+static std::wstring TopLevelName(const std::wstring& path) {
+    size_t end = path.size();
+    while (end > 0 && (path[end - 1] == L'/' || path[end - 1] == L'\\')) --end;
+    size_t sep = path.find_first_of(L"/\\");
+    if (sep == std::wstring::npos || sep >= end)
+        return path.substr(0, end);
+    return path.substr(0, sep);
 }
 
 // Return top-level entry count from archive m_items (unique first path components)
@@ -59,8 +78,7 @@ int CountTopLevelEntries(const std::vector<ArchiveItem>& items) {
     std::set<std::wstring> tops;
     for (const auto& item : items) {
         if (item.path.empty()) continue;
-        auto slash = item.path.find(L'/');
-        tops.insert(slash != std::wstring::npos ? item.path.substr(0, slash) : item.path);
+        tops.insert(TopLevelName(item.path));
     }
     return (int)tops.size();
 }

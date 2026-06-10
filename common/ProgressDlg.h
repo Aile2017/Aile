@@ -8,7 +8,6 @@ class ProgressDlg {
 public:
     // Show modeless progress dialog. Parent is disabled until Dismiss().
     void Show(HWND hwndParent, const wchar_t* title);
-    void SetTotal(UINT64 total);
     void SetProgress(int pct, const wchar_t* filename);
     void SetDone(HRESULT hr);
     void Dismiss();
@@ -36,5 +35,4 @@ private:
     HWND              m_hwndLabel  = nullptr;
     HWND              m_hwndCancel = nullptr;
     ProgressPostSink* m_sink       = nullptr;
-    UINT64            m_total      = 0;
 };
