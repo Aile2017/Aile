@@ -9,6 +9,7 @@
 #include "resource.h"
 #include <commctrl.h>
 #include <shlwapi.h>
+#include <map>
 
 App& App::Instance() {
     static App inst;
@@ -109,7 +110,8 @@ int App::RunBrowseMode(const std::vector<std::wstring>& archivePaths, int nCmdSh
 static void ApplyOverrides(CompressDlg::Params& params,
                             const std::wstring& typeOverride,
                             const std::wstring& methodOverride,
-                            const std::wstring& levelOverride) {
+                            const std::wstring& levelOverride,
+                            const std::wstring& sfxOverride) {
     if (!typeOverride.empty()) {
         params.format = typeOverride;
         // When format is overridden, clear the default method so 7-Zip picks the
@@ -145,13 +147,24 @@ static void ApplyOverrides(CompressDlg::Params& params,
     // rar.exe expects -mN; sync method = level digit whenever format is RAR
     if (params.format == L"rar")
         params.method = std::to_wstring(params.rarLevel);
+
+    if (!sfxOverride.empty()) {
+        if (_wcsicmp(params.format.c_str(), L"7z") == 0 || _wcsicmp(params.format.c_str(), L"rar") == 0) {
+            params.sfxMode = sfxOverride;
+        } else {
+            // SFX is not supported for formats other than 7z and rar.
+            // Fallback to normal archive (ignore -ca).
+            params.sfxMode.clear();
+        }
+    }
 }
 
 int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdShow,
                          const std::wstring& destDir,
                          const std::wstring& typeOverride,
                          const std::wstring& methodOverride,
-                         const std::wstring& levelOverride) {
+                         const std::wstring& levelOverride,
+                         const std::wstring& sfxOverride) {
     MainWindow wnd;
     if (!wnd.Create(m_hInst, nCmdShow)) return 1;
 
@@ -159,7 +172,7 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
     params.inputFiles = filePaths;
     params.LoadFromSettings(m_settings);
     params.outputPath = Settings::ComputeDefaultOutputPath(m_settings, filePaths, destDir);
-    ApplyOverrides(params, typeOverride, methodOverride, levelOverride);
+    ApplyOverrides(params, typeOverride, methodOverride, levelOverride, sfxOverride);
 
     if (!m_sevenZip.IsLoaded()) {
         MessageBoxW(wnd.Hwnd(), I18n::Tr(IDS_ERR_7Z_NOT_LOADED).c_str(),
@@ -175,11 +188,16 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
 
     // Skip dialog only when -t is given in forced (-a/-w) mode (SW_HIDE).
     // In auto-detect mode (nCmdShow != SW_HIDE) always show dialog with presets.
-    const bool skipDialog = !typeOverride.empty() && (nCmdShow == SW_HIDE);
+    const bool skipDialog = (!typeOverride.empty() || !sfxOverride.empty()) && (nCmdShow == SW_HIDE);
     if (skipDialog) {
-        params.sfxMode.clear(); // SFX not controllable via CLI yet
-        if (params.outputPath.find(L'.') == std::wstring::npos)
-            params.outputPath += L"." + params.format;
+        if (params.sfxMode.empty()) {
+            if (params.outputPath.find(L'.') == std::wstring::npos)
+                params.outputPath += L"." + params.format;
+        } else {
+            auto dot = params.outputPath.find_last_of(L'.');
+            if (dot != std::wstring::npos) params.outputPath.erase(dot);
+            params.outputPath += L".exe";
+        }
     } else {
         CompressDlg dlg;
         if (!dlg.Show(wnd.Hwnd(), params, enc, wf, rarAvailable))
@@ -247,7 +265,8 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
                              const std::wstring& destDir,
                              const std::wstring& typeOverride,
                              const std::wstring& methodOverride,
-                             const std::wstring& levelOverride) {
+                             const std::wstring& levelOverride,
+                             const std::wstring& sfxOverride) {
     if (filePaths.empty()) return 0;
 
     MainWindow wnd;
@@ -264,7 +283,7 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
     baseParams.inputFiles = { filePaths[0] };
     baseParams.LoadFromSettings(m_settings);
     baseParams.outputPath = Settings::ComputeDefaultOutputPath(m_settings, { filePaths[0] }, destDir);
-    ApplyOverrides(baseParams, typeOverride, methodOverride, levelOverride);
+    ApplyOverrides(baseParams, typeOverride, methodOverride, levelOverride, sfxOverride);
 
     const auto* enc = &m_sevenZip.GetEncoderNames();
     const auto* wf  = &m_sevenZip.GetWritableFormats();
@@ -272,10 +291,12 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
         ? (PathFileExistsW(m_settings.GetRarExePath().c_str()) == TRUE)
         : !RarProcess::FindRarExe().empty();
 
-    // RunCompressEachMode is only called from -w (always SW_HIDE), so skip dialog when -t given.
-    const bool skipDialog = !typeOverride.empty() && (nCmdShow == SW_HIDE);
+    // RunCompressEachMode is only called from -w (always SW_HIDE), so skip dialog when -t/-ca given.
+    const bool skipDialog = (!typeOverride.empty() || !sfxOverride.empty()) && (nCmdShow == SW_HIDE);
     if (skipDialog) {
-        baseParams.sfxMode.clear();
+        if (baseParams.sfxMode.empty()) {
+            baseParams.sfxMode.clear();
+        }
     } else {
         CompressDlg dlg;
         if (!dlg.Show(wnd.Hwnd(), baseParams, enc, wf, rarAvailable)) return 0;
@@ -296,14 +317,24 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
         }
     }
 
+    std::map<std::wstring, std::vector<std::wstring>> groups;
     for (const auto& file : filePaths) {
+        std::wstring baseOutput = Settings::ComputeDefaultOutputPath(m_settings, { file }, destDir);
+        groups[baseOutput].push_back(file);
+    }
+
+    for (const auto& pair : groups) {
         CompressDlg::Params params = baseParams;
-        params.inputFiles = { file };
-        params.outputPath = Settings::ComputeDefaultOutputPath(m_settings, { file }, destDir);
-        if (!params.sfxMode.empty()) {
-            params.outputPath += L".exe";
-        } else {
-            params.outputPath += L"." + params.format;
+        params.inputFiles = pair.second;
+        
+        std::wstring baseOutput = pair.first;
+        std::wstring ext = (!params.sfxMode.empty()) ? L".exe" : (L"." + params.format);
+        params.outputPath = baseOutput + ext;
+
+        int counter = 1;
+        while (PathFileExistsW(params.outputPath.c_str())) {
+            params.outputPath = baseOutput + L"_" + std::to_wstring(counter) + ext;
+            counter++;
         }
 
         ProgressDlg progDlg;

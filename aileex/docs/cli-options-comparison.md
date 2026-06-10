@@ -49,10 +49,10 @@ AileFlow.exe -x archive.7z
 | 項目 | AileEx | AileFlow |
 |------|--------|----------|
 | **基本圧縮** | ✅ `-a` | ✅ `-a` |
-| **SFX 圧縮** | ❌ なし | ✅ `-ca` (SFX 予設定) |
-| **書式** | `-a <file...>` | `-a <file...>` or `-ca <file...>` |
-| **説明** | 圧縮ダイアログ表示 | 圧縮ダイアログ表示、SFX設定オプション |
-| **実装** | `main.cpp:70-71` | `main.cpp:85-90` |
+| **SFX 圧縮** | ✅ `-ca`, `-ca:console` 等 | ✅ `-ca` (SFX 予設定) |
+| **書式** | `-a <file...>`, `-ca <file...>`, `-ca:console <file...>` | `-a <file...>` or `-ca <file...>` |
+| **説明** | `-ca`時はダイアログをスキップしSFX作成（未サポート形式時は`-a`にフォールバック） | 圧縮ダイアログ表示、SFX設定オプション |
+| **実装** | `main.cpp:73-83`, `App.cpp` | `main.cpp:85-90` |
 
 **例：**
 ```powershell
@@ -60,7 +60,9 @@ AileFlow.exe -x archive.7z
 AileEx.exe -a file1.txt file2.txt
 AileFlow.exe -a file1.txt file2.txt
 
-# SFX 圧縮（AileFlow のみ）
+# SFX 圧縮
+AileEx.exe -ca file1.txt file2.txt
+AileEx.exe -ca:console file1.txt file2.txt
 AileFlow.exe -ca file1.txt file2.txt
 ```
 
@@ -99,7 +101,7 @@ AileFlow.exe -dC:\output
 |------|--------|----------|
 | **機能** | ✅ 各ファイルを個別アーカイブに圧縮 | ✅ 各ファイルを個別アーカイブに圧縮 |
 | **書式** | `-w` or `-W` | `-w` or `-W` |
-| **説明** | ダイアログを最初の1回だけ表示、設定を全ファイルに適用 | 同じ |
+| **説明** | ダイアログを最初の1回だけ表示（`-t`, `-ca` 指定時はスキップ）、同じ拡張子を除いたファイル名(stem)を持つ入力ファイルをグループ化して全ファイルに適用 | 同じ（stemグループ化あり） |
 | **RAR 対応** | ✅ | ❌（B2E 経由のため RAR なし） |
 | **実装** | `main.cpp`, `App.cpp:RunCompressEachMode` | `main.cpp:91-92`, `App.cpp:RunCompressEachMode` |
 
@@ -216,6 +218,13 @@ AileEx.exe -a file1.txt file2.txt
 
 # 出力先プリセット（形式・方式は手動選択）
 AileEx.exe -a file1.txt file2.txt -d C:\output
+
+# SFX 圧縮（ダイアログスキップで自己解凍書庫作成）
+AileEx.exe -ca file.txt
+AileEx.exe -ca:console file.txt -t7z
+
+# ファイル別圧縮（各ファイルを個別アーカイブに）
+AileEx.exe -w -ca file1.txt file2.txt file3.txt -d C:\output
 ```
 
 #### AileFlow

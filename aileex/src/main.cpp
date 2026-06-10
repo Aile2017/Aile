@@ -66,6 +66,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
     std::wstring typeOverride;    // -t<format>
     std::wstring methodOverride;  // -m<method>
     std::wstring levelOverride;   // -l<level>
+    std::wstring sfxOverride;     // -ca or -ca:console
     std::vector<std::wstring> positional;
     for (int i = 1; i < argc; ++i) {
         const wchar_t* a = argv[i];
@@ -73,6 +74,14 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
             forceExtract = true;
         else if (_wcsicmp(a, L"-a") == 0)
             forceCompress = true;
+        else if (_wcsicmp(a, L"-ca") == 0) {
+            forceCompress = true;
+            sfxOverride = L"gui"; // Default SFX mode
+        }
+        else if (_wcsnicmp(a, L"-ca:", 4) == 0) {
+            forceCompress = true;
+            sfxOverride = a + 4;
+        }
         else if (_wcsicmp(a, L"-w") == 0 || _wcsicmp(a, L"-W") == 0)
             eachMode = true;
         else if ((a[0] == L'-' || a[0] == L'/') && (a[1] == L't' || a[1] == L'T') && a[2]) {
@@ -114,13 +123,13 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
     }
     if ((forceCompress || !positional.empty()) && eachMode) {
         result = app.RunCompressEachMode(positional, SW_HIDE, destDir,
-                                         typeOverride, methodOverride, levelOverride);
+                                         typeOverride, methodOverride, levelOverride, sfxOverride);
         app.Shutdown();
         return result;
     }
     if (forceCompress && !positional.empty()) {
         result = app.RunCompressMode(positional, SW_HIDE, destDir,
-                                     typeOverride, methodOverride, levelOverride);
+                                     typeOverride, methodOverride, levelOverride, sfxOverride);
         app.Shutdown();
         return result;
     }
@@ -139,7 +148,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
 
     if (!regularFiles.empty()) {
         result = app.RunCompressMode(regularFiles, nCmdShow, L"",
-                                     typeOverride, methodOverride, levelOverride);
+                                     typeOverride, methodOverride, levelOverride, sfxOverride);
     } else if (!archiveFiles.empty()) {
         result = app.RunBrowseMode(archiveFiles, nCmdShow, destDir);
     } else {

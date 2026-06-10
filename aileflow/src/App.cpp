@@ -7,6 +7,10 @@
 #include "resource.h"
 #include <commctrl.h>
 #include <ole2.h>
+#include <map>
+#include <shlwapi.h>
+#include <map>
+#include <shlwapi.h>
 
 App& App::Instance() {
     static App inst;
