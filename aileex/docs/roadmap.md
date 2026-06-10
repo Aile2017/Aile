@@ -163,6 +163,7 @@ Individual items overlapping with CLAUDE.md "Remaining tasks":
 
 - **Manual test matrix**: Systematically check browse / compress / extract / cancel / drop / SFX for each format
 - **Error handling comprehensive review**: HRESULT handling, consistency of error messages shown to user
+- **Write-unsupported format delete error message**: ISO/CAB/JAR etc. fail at `IOutArchive` acquisition (`QueryInterface` → `E_NOINTERFACE`). Current error message is generic; make it explicit that the format does not support deletion.
 
 ---
 
