@@ -40,7 +40,7 @@ uses the richer AileEx UI layer, which introduces some features not in Noah whil
 
 | # | Option | Noah | AileFlow |
 |---|---|---|---|
-| 10 | **`-w` / `-W` (alt/each mode)** | Compresses each input file into its own separate archive. | Implemented. `-w`/`-W` sets `eachMode` in `main.cpp`; routes to `App::RunCompressEachMode()` which compresses each file independently with the same settings. |
+| 10 | **`w` (each mode, formerly `-w`/`-W`)** | Compresses each input file into its own separate archive. | Implemented. `w` action sets `Action::CompressEach` in `main.cpp`; routes to `App::RunCompressEachMode()` which compresses each file independently with the same settings. |
 | 11 | **`-t<ext>` (type) and `-m<method>` (method)** | Directly specifies compression format and method on the command line. | Implemented. `App::RunCompressMode()` and `RunCompressEachMode()` accept `typeOverride` / `methodOverride`; when set, the compression dialog is skipped and compression proceeds immediately. |
 
 ---

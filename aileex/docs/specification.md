@@ -23,26 +23,27 @@ The operating mode is determined by command-line arguments to `AileEx.exe`.
 | No arguments | Show main window (empty state) |
 | Archive file | Browse mode — open archive in main window |
 | Regular file | Compress mode — show compression dialog |
-| Mixed | Compress mode takes priority |
-| `-x <archive>` | Forced extract mode — show extract destination dialog directly, skipping the list view. Non-archive extensions are rejected before opening. |
-| `-a <file...>` | Forced compress mode — show compression dialog directly (equivalent to dropping regular files). |
-| `-w <file...>` | Each-file compress mode — compress each input file into its own separate archive. The compression dialog appears once (for the first file); the chosen format/method/level is applied to all remaining files. Can be combined with `-a` (e.g. `-a -w`) or used standalone when positional arguments are regular files. |
+| Multiple files (any mix) | Compress mode — all files treated as compression targets |
+| `x <archive>` | Forced extract mode — show extract destination dialog directly, skipping the list view. Non-archive extensions are rejected before opening. |
+| `a <file...>` | Forced compress mode — show compression dialog directly (equivalent to dropping regular files). |
+| `w <file...>` | Each-file compress mode — compress each input file into its own separate archive. The compression dialog appears once (for the first file); the chosen format/method/level is applied to all remaining files. |
 
-The following options preset the compression dialog. They are ignored in extract and browse modes.
+The following modifiers preset the compression dialog. They are ignored in extract and browse modes. All modifiers are concatenated (no space between option and value).
 
-| Option | Description |
+| Modifier | Description |
 |---|---|
-| `-t<format>` | Override archive format (e.g. `-t7z`, `-tzip`, `-trar`). With `-a`/`-w`, skips the dialog and compresses directly. In auto-detect mode, the dialog opens with the format pre-selected. |
+| `-t<format>` | Override archive format (e.g. `-t7z`, `-tzip`, `-trar`). With `a`/`w`, skips the dialog and compresses directly. In auto-detect mode, the dialog opens with the format pre-selected. |
 | `-m<method>` | Override compression method (e.g. `-mlzma2`, `-mdeflate`). Applies to 7z and zip only; ignored for RAR (no method concept) and stream formats. Always pre-sets the dialog; does not skip it alone. |
 | `-l<level>` | Override compression level. 7z / zip: `0`–`9`. RAR: `0`–`5` or named levels (`store`/`fastest`/`fast`/`normal`/`good`/`best`, case-insensitive). Ignored for stream formats. Always pre-sets the dialog; does not skip it alone. |
+| `-sfx` / `-sfx:<variant>` | Create self-extracting archive. Valid with `a` and `w`. Default variant is `gui`; use `-sfx:console` for console SFX. Supported for 7z and RAR only. |
 
-Dialog skip behavior: the compression dialog is skipped **only** when `-t` is combined with `-a` or `-w`. In auto-detect mode the dialog always appears, with any specified values pre-set.
+Dialog skip behavior: the compression dialog is skipped **only** when `-t` (or `-sfx`) is combined with `a` or `w`. In auto-detect mode the dialog always appears, with any specified values pre-set.
 
-`-d <dir>` (also `-d<dir>`) can be combined with any of the above flags to override the destination:
-- With `-x`: skips the folder picker and extracts directly to `<dir>` (MkDir policy still applied).
-- With `-a` / `-w`: presets the output path field in the compression dialog to `<dir>`.
+`-d<dir>` can be combined with any action to override the destination:
+- With `x`: skips the folder picker and extracts directly to `<dir>` (MkDir policy still applied).
+- With `a` / `w`: presets the output path field in the compression dialog to `<dir>`.
 
-`-x`, `-a`, and `-w` suppress the main window (`SW_HIDE`). These flags take priority over auto-detection.
+Actions `x`, `a`, and `w` suppress the main window (`SW_HIDE`). They take priority over auto-detection.
 
 Recognized extensions (treated as archives): `7z`, `zip`, `rar`, `tar`, `gz`, `bz2`, `xz`, `cab`, `iso`, `jar`, `wim`, `lzma`, `lzh`, `arj` and other formats dynamically enumerated by 7z.dll. Split volume 1 names such as `archive.7z.001` are also treated as archives when the preceding extension is recognized.
 
@@ -104,7 +105,7 @@ Dynamically updated via `WM_INITMENUPOPUP` based on archive state (open / read-o
 - **Split volume** (`volumeSize`): Supported for 7z / ZIP only. Splits as `archive.7z.001` / `archive.7z.002` ... RAR uses `rar.exe -v<size>`
 - Password protection supported (7z has header encryption option)
 - Output file extension auto-corrected when format changes
-- **After successful compression from the main window**, the resulting archive is automatically opened in the main window. Split volume archives open at `.001`. CLI `-a` mode is unaffected.
+- **After successful compression from the main window**, the resulting archive is automatically opened in the main window. Split volume archives open at `.001`. CLI `a` action is unaffected.
 - Advanced options last-used values persisted in INI
 - **Self-extracting (SFX)**: 7z / RAR only. Select from dropdown in compression dialog: "GUI version (.exe)", "Console version (.exe)", or "None"
   - 7z: Prepend `7z.sfx` (GUI) or `7zCon.sfx` (console) from same directory as 7z.dll to compressed .7z data, generate `.exe`
