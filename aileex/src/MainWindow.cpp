@@ -1149,6 +1149,12 @@ void MainWindow::OnOpenAssoc() {
         return;
     }
 
+    // If password not yet known, check whether target item is encrypted and prompt.
+    if (m_password.empty() && it.encrypted) {
+        m_password = PromptPassword();
+        if (m_password.empty()) return;
+    }
+
     // Create a session-unique temp dir on first use (deleted on exit)
     if (m_tempViewDir.empty()) {
         wchar_t base[MAX_PATH] = {}, buf[MAX_PATH] = {};
