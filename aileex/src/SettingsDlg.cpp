@@ -89,6 +89,8 @@ void SettingsDlg::OnInit(HWND hwnd) {
     // Font — show current name; user opens ChooseFont via "..." button.
     SetDlgItemTextW(hwnd, IDC_FONT_NAME, s.GetFontName().c_str());
 
+    CheckDlgButton(hwnd, IDC_OPEN_FOLDER_AFTER, s.GetOpenFolderAfterExtract() ? BST_CHECKED : BST_UNCHECKED);
+
     // Output dir mode radio buttons
     bool fixedMode = s.GetOutputDirModeFixed();
     CheckRadioButton(hwnd, IDC_OUTDIR_SOURCE, IDC_OUTDIR_FIXED,
@@ -161,6 +163,8 @@ bool SettingsDlg::OnOK(HWND hwnd) {
     wchar_t fontBuf[LF_FACESIZE] = {};
     GetDlgItemTextW(hwnd, IDC_FONT_NAME, fontBuf, LF_FACESIZE);
     s.SetFontName(fontBuf);
+
+    s.SetOpenFolderAfterExtract(IsDlgButtonChecked(hwnd, IDC_OPEN_FOLDER_AFTER) == BST_CHECKED);
 
     wchar_t buf[MAX_PATH] = {};
     GetDlgItemTextW(hwnd, IDC_DEFAULT_DIR, buf, MAX_PATH);

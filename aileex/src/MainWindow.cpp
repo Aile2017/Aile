@@ -25,6 +25,20 @@
 #pragma comment(lib, "version.lib")
 
 namespace {
+
+static std::wstring FormatFileSize(UINT64 bytes) {
+    wchar_t buf[64];
+    if (bytes >= 1024ULL * 1024 * 1024)
+        swprintf_s(buf, L"%.1f GB", bytes / (1024.0 * 1024 * 1024));
+    else if (bytes >= 1024 * 1024)
+        swprintf_s(buf, L"%.1f MB", bytes / (1024.0 * 1024));
+    else if (bytes >= 1024)
+        swprintf_s(buf, L"%.1f KB", bytes / 1024.0);
+    else
+        swprintf_s(buf, L"%llu B", bytes);
+    return buf;
+}
+
 // Force foreground for cases like launcher-spawned processes where parent already exited.
 // SetForegroundWindow alone is restricted and demoted, so attach to foreground app's thread,
 // apply TopMost briefly to push Z-order, then call.
@@ -1346,8 +1360,13 @@ void MainWindow::RunExtraction(std::vector<UINT32> indices, std::set<std::wstrin
     HRESULT hrDone = progDlg.RunMessageLoop();
     m_worker.Wait();
 
-    if (FAILED(hrDone) && hrDone != E_ABORT)
+    if (FAILED(hrDone) && hrDone != E_ABORT) {
         ShowError(I18n::Tr(IDS_ERR_EXTRACT_FAILED).c_str(), hrDone);
+    } else if (SUCCEEDED(hrDone)) {
+        if (app.GetSettings().GetOpenFolderAfterExtract()) {
+            ShellExecuteW(nullptr, L"open", finalDest.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+        }
+    }
 }
 
 void MainWindow::OnContextMenu(HWND /*hwndFrom*/, int x, int y) {
@@ -2434,11 +2453,16 @@ void MainWindow::PopulateList(const std::wstring& folderPath) {
         ListView_InsertItem(m_hListView, &lvi);
 
         // Size column
-        std::wstring sizeStr = it.isDir ? L"" : FormatSize(it.size);
+        std::wstring sizeStr = it.isDir ? L"" : FormatFileSize(it.size);
         ListView_SetItemText(m_hListView, row, 1, const_cast<wchar_t*>(sizeStr.c_str()));
 
         // Packed size
-        std::wstring packedStr = it.isDir ? L"" : FormatSize(it.packedSize);
+        std::wstring packedStr;
+        if (it.isDir || (it.size > 0 && it.packedSize == 0)) {
+            packedStr = L"";
+        } else {
+            packedStr = FormatFileSize(it.packedSize);
+        }
         ListView_SetItemText(m_hListView, row, 2, const_cast<wchar_t*>(packedStr.c_str()));
 
         // Ratio

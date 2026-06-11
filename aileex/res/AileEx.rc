@@ -162,7 +162,7 @@ BEGIN
     PUSHBUTTON      "Cancel",          IDC_CANCEL,     116,  42,   68, 14
 END
 
-IDD_SETTINGS DIALOGEX 0, 0, 280, 310
+IDD_SETTINGS DIALOGEX 0, 0, 280, 340
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Settings"
 FONT 9, "Segoe UI", 400, 0, 0x1
@@ -199,8 +199,11 @@ BEGIN
     EDITTEXT        IDC_RAR_EXE_PATH,   46, 264, 180,  14, ES_AUTOHSCROLL
     PUSHBUTTON      "Browse...",        IDC_BROWSE_RAR, 230, 263,  36,  15
 
-    DEFPUSHBUTTON   "OK",               IDOK,          168, 290,  50,  14
-    PUSHBUTTON      "Cancel",           IDCANCEL,      222, 290,  50,  14
+    GROUPBOX        "Behavior",         IDC_STATIC,     7, 294, 266,  24
+    AUTOCHECKBOX    "Open folder after extraction", IDC_OPEN_FOLDER_AFTER, 14, 305, 200, 9
+
+    DEFPUSHBUTTON   "OK",               IDOK,          168, 322,  50,  14
+    PUSHBUTTON      "Cancel",           IDCANCEL,      222, 322,  50,  14
 END
 
 IDD_INFO DIALOGEX 0, 0, 340, 280
@@ -621,7 +624,7 @@ BEGIN
     PUSHBUTTON      "キャンセル",       IDC_CANCEL,     116,  42,   68, 14
 END
 
-IDD_SETTINGS DIALOGEX 0, 0, 280, 310
+IDD_SETTINGS DIALOGEX 0, 0, 280, 340
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "設定"
 FONT 9, "Segoe UI", 400, 0, 0x1
@@ -658,8 +661,11 @@ BEGIN
     EDITTEXT        IDC_RAR_EXE_PATH,   46, 264, 180,  14, ES_AUTOHSCROLL
     PUSHBUTTON      "参照...",               IDC_BROWSE_RAR, 230, 263,  36,  15
 
-    DEFPUSHBUTTON   "OK",               IDOK,          168, 290,  50,  14
-    PUSHBUTTON      "キャンセル",        IDCANCEL,      222, 290,  50,  14
+    GROUPBOX        "動作",             IDC_STATIC,     7, 294, 266,  24
+    AUTOCHECKBOX    "展開後にフォルダを開く", IDC_OPEN_FOLDER_AFTER, 14, 305, 200, 9
+
+    DEFPUSHBUTTON   "OK",               IDOK,          168, 322,  50,  14
+    PUSHBUTTON      "キャンセル",        IDCANCEL,      222, 322,  50,  14
 END
 
 IDD_INFO DIALOGEX 0, 0, 340, 280

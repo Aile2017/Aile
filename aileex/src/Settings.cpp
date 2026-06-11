@@ -23,6 +23,8 @@ void Settings::Load() {
     m_fontName         = ReadStr(L"General", L"FontName",         L"Segoe UI");
 
     wchar_t buf[16] = {};
+    GetPrivateProfileStringW(L"General", L"OpenFolderAfterExtract", L"0", buf, 16, m_iniPath);
+    m_openFolderAfterExtract = _wtoi(buf) != 0;
     GetPrivateProfileStringW(L"General", L"CompressionLevel", L"5", buf, 16, m_iniPath);
     m_compressionLevel = _wtoi(buf);
     if (m_compressionLevel < 0 || m_compressionLevel > 9) m_compressionLevel = 5;
@@ -89,6 +91,7 @@ void Settings::Save() const {
     WriteStr(L"General", L"UnrarDllPath",     m_unrarDllPath.c_str());
     WriteStr(L"General", L"DefaultSfxMode",   m_defaultSfxMode.c_str());
     WriteStr(L"General", L"FontName",         m_fontName.c_str());
+    WriteStr(L"General", L"OpenFolderAfterExtract", m_openFolderAfterExtract ? L"1" : L"0");
 
     wchar_t buf[16] = {};
     _itow_s(m_compressionLevel, buf, 10);

@@ -1,4 +1,4 @@
-﻿#include "MainWindow.h"
+#include "MainWindow.h"
 #include "App.h"
 #include "CompressDlg.h"
 #include "DialogUtils.h"
@@ -2274,7 +2274,12 @@ void MainWindow::PopulateList(const std::wstring& folderPath) {
         ListView_SetItemText(m_hListView, row, 1, const_cast<wchar_t*>(sizeStr.c_str()));
 
         // Packed size
-        std::wstring packedStr = it.isDir ? L"" : FormatFileSize(it.packedSize);
+        std::wstring packedStr;
+        if (it.isDir || (it.size > 0 && it.packedSize == 0)) {
+            packedStr = L"";
+        } else {
+            packedStr = FormatFileSize(it.packedSize);
+        }
         ListView_SetItemText(m_hListView, row, 2, const_cast<wchar_t*>(packedStr.c_str()));
 
         // Ratio

@@ -70,6 +70,7 @@
 #define IDC_BROWSE_UNRAR    3007
 #define IDC_RAR_EXE_PATH    3008
 #define IDC_BROWSE_RAR      3009
+#define IDC_OPEN_FOLDER_AFTER 3025
 // Extract subfolder creation policy (0=never / 1=single file / 2=multiple files / 3=always)
 #define IDC_MKDIR_0         3010
 #define IDC_MKDIR_1         3011

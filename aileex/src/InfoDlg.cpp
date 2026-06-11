@@ -97,13 +97,13 @@ void InfoDlg::OnInit(HWND hwnd) {
     AddRow(hList, row, I18n::Tr(IDS_INFO_ORIG_SIZE).c_str(),
            it.isDir ? dash.c_str() : FormatSize(it.size).c_str());
     AddRow(hList, row, I18n::Tr(IDS_INFO_PACKED_SIZE).c_str(),
-           (it.isDir || it.packedSize == 0) ? dash.c_str() : FormatSize(it.packedSize).c_str());
+           (it.isDir || (it.size > 0 && it.packedSize == 0)) ? dash.c_str() : FormatSize(it.packedSize).c_str());
 
     // Ratio
     std::wstring ratio = dash;
-    if (!it.isDir && it.size > 0) {
+    if (!it.isDir && it.size > 0 && it.packedSize > 0) {
         wchar_t buf[32];
-        double r = 100.0 - (double)it.packedSize / (double)it.size * 100.0;
+        double r = (double)it.packedSize / (double)it.size * 100.0;
         swprintf_s(buf, L"%.1f%%", r);
         ratio = buf;
     }

@@ -163,7 +163,7 @@ void PropertiesDlg::OnInit(HWND hwnd) {
            packedTotal == 0 ? dash.c_str() : FormatSize(packedTotal).c_str());
 
     if (totalSize > 0 && packedTotal > 0) {
-        double ratio = 100.0 - (double)packedTotal / (double)totalSize * 100.0;
+        double ratio = (double)packedTotal / (double)totalSize * 100.0;
         swprintf_s(buf, L"%.1f%%", ratio);
         AddRow(hList, row, I18n::Tr(IDS_PROPS_RATIO).c_str(), buf);
     } else {
