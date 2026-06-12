@@ -1155,32 +1155,52 @@ void MainWindow::OnOpenAssoc() {
         if (m_password.empty()) return;
     }
 
-    // Create a session-unique temp dir on first use (deleted on exit)
-    if (m_tempViewDir.empty()) {
-        wchar_t base[MAX_PATH] = {}, buf[MAX_PATH] = {};
-        GetTempPathW(MAX_PATH, base);
-        GetTempFileNameW(base, L"aex", 0, buf);
-        DeleteFileW(buf);  // GetTempFileName creates a file; we want a dir
-        m_tempViewDir = std::wstring(buf) + L"\\";
-        SHCreateDirectoryExW(nullptr, m_tempViewDir.c_str(), nullptr);
-    }
-    const std::wstring& tempDir = m_tempViewDir;
+    if (!EnsureTempViewDir(I18n::Tr(IDS_ERR_EXTRACT_FILE_FAILED).c_str())) return;
 
-    // Extract single file to temp dir
-    std::vector<UINT32> indices = { idx };
-    HRESULT hr = app.Get7z().Extract(m_effectiveArchivePath.c_str(), indices,
-                                      tempDir.c_str(),
-                                      m_password.empty() ? nullptr : m_password.c_str(),
-                                      nullptr);
+    // Copy data needed after the worker loop — m_items/m_archivePath may change
+    // if the user opens another archive during message dispatch.
+    std::vector<UINT32> indices    = { idx };
+    std::wstring        itemPath   = it.path;
+    std::wstring        archivePath = m_effectiveArchivePath;
+    std::wstring        password   = m_password;
+    std::wstring        tmpDir     = m_tempViewDir;
+    auto& sz = app.Get7z();
+
+    EnableWindow(m_hwnd, FALSE);
+    m_worker.Start([&sz, archivePath, indices, tmpDir, password]() -> HRESULT {
+        return sz.Extract(archivePath.c_str(), indices, tmpDir.c_str(),
+                          password.empty() ? nullptr : password.c_str(), nullptr);
+    }, m_hwnd, WM_APP_DONE);
+
+    HRESULT hr = S_OK;
+    MSG msg = {};
+    BOOL gmRet;
+    while ((gmRet = GetMessageW(&msg, nullptr, 0, 0)) != 0) {
+        if (gmRet < 0) { hr = E_FAIL; break; }
+        if (msg.message == WM_APP_DONE) { hr = (HRESULT)msg.wParam; break; }
+        if (!IsDialogMessageW(m_hwnd, &msg)) {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+    }
+    m_worker.Wait();
+    EnableWindow(m_hwnd, TRUE);
+
+    if (msg.message == WM_QUIT) {
+        PostQuitMessage((int)msg.wParam);
+        return;
+    }
+    SetForegroundWindow(m_hwnd);
+
     if (FAILED(hr)) {
         ShowError(I18n::Tr(IDS_ERR_EXTRACT_FILE_FAILED).c_str(), hr);
         return;
     }
 
     // Build local path (archive path uses '/', convert to '\')
-    std::wstring relPath = it.path;
+    std::wstring relPath = itemPath;
     for (auto& c : relPath) if (c == L'/') c = L'\\';
-    std::wstring localPath = tempDir + relPath;
+    std::wstring localPath = tmpDir + relPath;
 
     // Open with associated application
     HINSTANCE hi = ShellExecuteW(m_hwnd, L"open", localPath.c_str(),
@@ -2627,4 +2647,10 @@ std::wstring MainWindow::PromptPassword() {
         MAKEINTRESOURCEW(IDD_PASSWORD),
         parent, PwDlg::Proc, (LPARAM)&dlg);
     return (res == IDOK) ? dlg.result : L"";
+}
+
+bool MainWindow::EnsureTempViewDir(const wchar_t* errorMsg) {
+    HRESULT hr = CreateSessionTempDir(&m_tempViewDir);
+    if (FAILED(hr)) { ShowError(errorMsg, hr); return false; }
+    return true;
 }

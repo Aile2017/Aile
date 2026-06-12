@@ -3,10 +3,46 @@
 #include "resource.h"
 #include <windows.h>
 #include <commctrl.h>
+#include <objbase.h>
+#include <shlobj.h>
 #include <shobjidl_core.h>
 #include <commdlg.h>
 #include <string>
 #include <vector>
+
+// ---- Session temp directory ----
+
+// Creates a GUID-named subdirectory under %TEMP% and stores the path in *outDir.
+// Idempotent: returns S_OK immediately if *outDir is already non-empty.
+inline HRESULT CreateSessionTempDir(std::wstring* outDir) {
+    if (!outDir->empty()) return S_OK;
+
+    std::vector<wchar_t> base(32768, L'\0');
+    DWORD baseLen = GetTempPathW((DWORD)base.size(), base.data());
+    if (!baseLen || baseLen >= base.size()) {
+        DWORD err = GetLastError();
+        return HRESULT_FROM_WIN32(err ? err : ERROR_INSUFFICIENT_BUFFER);
+    }
+
+    GUID guid = {};
+    HRESULT hr = CoCreateGuid(&guid);
+    if (FAILED(hr)) return hr;
+
+    wchar_t guidText[40] = {};
+    if (!StringFromGUID2(guid, guidText, _countof(guidText))) return E_FAIL;
+
+    std::wstring tempDir = base.data();
+    tempDir += L"aex";
+    tempDir += guidText;
+    tempDir += L"\\";
+
+    int r = SHCreateDirectoryExW(nullptr, tempDir.c_str(), nullptr);
+    if (r != ERROR_SUCCESS && r != ERROR_ALREADY_EXISTS)
+        return HRESULT_FROM_WIN32(r);
+
+    *outDir = std::move(tempDir);
+    return S_OK;
+}
 
 // ---- Path helpers ----
 

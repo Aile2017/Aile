@@ -10,7 +10,7 @@ encode:
  (if (method 5) (let o "-mx=9 -mm=LZMA"))
  (if (method 6) (let o "-mx=9 -mm=PPMd"))
  (if (method 7) (exec
-    (let p (input "Password"))
+    (let p (inputpw "Password"))
     (let o "-p%p -mx=9 -mm=Deflate")))
  (cmd a -tzip %o (arc.zip) (resp@ (listr)) -scsWIN)
 

@@ -16,7 +16,7 @@ encode:
  (if (method 11) (let o "-mx=22 -myx=9 -m0=lz5"))
  (if (method 12) (let o "-mx=22 -myx=9 -m0=flzma2"))
  (if (method 13) (exec
-    (let p (input "Password"))
+    (let p (inputpw "Password"))
     (let o "-p%p -mx=9 -myx=9 -m0=LZMA2 -mhe")))
  (cmd a -t7z %o -r0 (arc.7z) (resp@ (listr)) -scsWIN)
 
@@ -34,7 +34,7 @@ sfxd:
  (if (method 11) (let o "-mx=22 -myx=9 -m0=lz5"))
  (if (method 12) (let o "-mx=22 -myx=9 -m0=flzma2"))
  (if (method 13) (exec
-    (let p (input "Password"))
+    (let p (inputpw "Password"))
     (let o "-p%p -mx=9 -myx=9 -m0=LZMA2 -mhe")))
  (cmd a -t7z %o -r0 -sfx7z.sfx (arc.exe) (resp@ (listr)) -scsWIN)
 

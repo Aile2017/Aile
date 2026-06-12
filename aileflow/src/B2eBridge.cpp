@@ -241,6 +241,8 @@ static bool GetWfd(const char* path, WIN32_FIND_DATA* fd)
     return false;  // file absent; caller may still proceed
 }
 
+void B2e_SetDialogParent(HWND hwnd) { CArcB2e::SetDialogParent(hwnd); }
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 // Build the b2e directory path (same as CArcB2e::st_base).

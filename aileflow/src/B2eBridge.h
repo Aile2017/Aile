@@ -25,6 +25,11 @@ struct B2eFormatInfo {
     bool         canSfx = false;         // true if the .b2e has an sfx: or sfxd: section
 };
 
+// Set the parent HWND for input/inputpw dialogs shown during B2E script execution.
+// Call from the worker thread lambda before invoking B2e_Compress / B2e_Extract,
+// then clear (pass NULL) after the operation completes.
+void B2e_SetDialogParent(HWND hwnd);
+
 // Dynamically scans the b2e/ directory next to the EXE.
 // Returns every .b2e file that has an encode: section, with its method list parsed
 // from the (type ...) line.  Used by the compression dialog and SevenZip::Load().

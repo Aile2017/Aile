@@ -12,7 +12,7 @@ encode:
     (cmd rr%r (arc.rar))))
  (if (method 5) (cmd r (arc)))
  (if (method 6) (exec
-    (let p (input "Password"))
+    (let p (inputpw "Password"))
     (cmd a -p%p -m5 -s -mm (arc.rar) (resp@ (listr)))))
 
 sfx:

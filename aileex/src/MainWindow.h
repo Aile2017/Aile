@@ -85,6 +85,8 @@ private:
     bool Ensure7zLoaded(bool useUnrar = false);
     // Returns entered password, or empty string if user cancelled.
     std::wstring PromptPassword();
+    // Creates m_tempViewDir on first call; shows error and returns false on failure.
+    bool EnsureTempViewDir(const wchar_t* errorMsg);
     void ApplyFontToControls();
     // Refresh the "Extract to:" edit box to reflect the current archive + settings state.
     void UpdateExtractDestEdit();

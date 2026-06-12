@@ -10,6 +10,7 @@ public: //--<action>--
 	CArcB2e( const char* scriptname );
 	virtual ~CArcB2e();
 	static const char* init_b2e_path();
+	static void SetDialogParent( HWND hwnd );  // set UI-thread HWND for input/inputpw dialog parent
 
 private: //--<CArchiver>--
 
@@ -52,7 +53,8 @@ private: //--<RythpScript>--
 		void arc( const char* opt, const CharArray& a, const BoolArray& b,int c, kiVar* r );
 		void list( const char* opt, const CharArray& a, const BoolArray& b,int c, kiVar* r );
 		void resp( bool needq, const char* opt, const CharArray& a, const BoolArray& b,int c, kiVar* r );
-		void input( const char* msg, const char* defval, kiVar* r );
+		void input(  const char* msg, const char* title, const char* defval, kiVar* r );
+		void inputpw(const char* msg, const char* title, const char* defval, kiVar* r );
 
 		void setPtr( CArcB2e* p, scr_mode m ){x=p;m_mode=m;}
 		CArcB2e* x;

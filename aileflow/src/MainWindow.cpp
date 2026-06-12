@@ -1289,9 +1289,16 @@ void MainWindow::OnOpenAssoc() {
         return;
     }
 
+    // If password not yet known, check whether target item is encrypted and prompt.
+    // Note: in B2E mode B2e_List() never sets ArchiveItem::encrypted, so this is
+    // a no-op for B2E archives. It guards against future non-B2E paths.
+    if (m_password.empty() && it.encrypted) {
+        m_password = PromptPassword();
+        if (m_password.empty()) return;
+    }
+
     // Create a session-unique temp dir on first use (deleted on exit)
     if (!EnsureTempViewDir(I18n::Tr(IDS_ERR_EXTRACT_FILE_FAILED).c_str())) return;
-    const std::wstring& tempDir = m_tempViewDir;
 
     // Copy data needed after the worker loop — m_items/m_archivePath may change
     // if the user opens another archive during message dispatch.
@@ -1299,20 +1306,24 @@ void MainWindow::OnOpenAssoc() {
     std::wstring        itemPath   = it.path;
     std::wstring        archivePath = m_effectiveArchivePath;
     std::wstring        password   = m_password;
-    std::wstring        tmpDir     = tempDir;
+    std::wstring        tmpDir     = m_tempViewDir;
     auto& sz = app.Get7z();
 
-    m_worker.Start([&sz, archivePath, indices, tmpDir, password]() -> HRESULT {
-        int r = SHCreateDirectoryExW(nullptr, tmpDir.c_str(), nullptr);
-        if (r != ERROR_SUCCESS && r != ERROR_ALREADY_EXISTS)
-            return HRESULT_FROM_WIN32(r);
-        return sz.Extract(archivePath.c_str(), indices, tmpDir.c_str(),
-                          password.empty() ? nullptr : password.c_str(), nullptr);
+    HWND uiHwnd = m_hwnd;
+    EnableWindow(m_hwnd, FALSE);
+    m_worker.Start([&sz, archivePath, indices, tmpDir, password, uiHwnd]() -> HRESULT {
+        B2e_SetDialogParent(uiHwnd);
+        HRESULT hr = sz.Extract(archivePath.c_str(), indices, tmpDir.c_str(),
+                                 password.empty() ? nullptr : password.c_str(), nullptr);
+        B2e_SetDialogParent(NULL);
+        return hr;
     }, m_hwnd, WM_APP_DONE);
 
     HRESULT hr = S_OK;
-    MSG msg;
-    while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
+    MSG msg = {};
+    BOOL gmRet;
+    while ((gmRet = GetMessageW(&msg, nullptr, 0, 0)) != 0) {
+        if (gmRet < 0) { hr = E_FAIL; break; }
         if (msg.message == WM_APP_DONE) { hr = (HRESULT)msg.wParam; break; }
         if (!IsDialogMessageW(m_hwnd, &msg)) {
             TranslateMessage(&msg);
@@ -1320,6 +1331,13 @@ void MainWindow::OnOpenAssoc() {
         }
     }
     m_worker.Wait();
+    EnableWindow(m_hwnd, TRUE);
+
+    if (msg.message == WM_QUIT) {
+        PostQuitMessage((int)msg.wParam);
+        return;
+    }
+    SetForegroundWindow(m_hwnd);
 
     if (FAILED(hr)) {
         ShowError(I18n::Tr(IDS_ERR_EXTRACT_FILE_FAILED).c_str(), hr);
@@ -1472,20 +1490,27 @@ void MainWindow::RunExtraction(std::vector<UINT32> indices, std::wstring presetD
     std::wstring password = m_password;
 
     auto& sz = app.Get7z();
-    m_worker.Start([&sz, archivePath, indices, destDir = finalDest, password]() -> HRESULT {
+    HWND uiHwnd = m_hwnd;
+    EnableWindow(m_hwnd, FALSE);
+    m_worker.Start([&sz, archivePath, indices, destDir = finalDest, password, uiHwnd]() -> HRESULT {
         // B2e_Extract relies on SetCurrentDirectory(destDir) to set the extraction target.
         // SetCurrentDirectory fails if the directory does not yet exist, leaving the CWD
         // unchanged and causing extraction to land in the wrong place.  Create it first.
         int r = SHCreateDirectoryExW(nullptr, destDir.c_str(), nullptr);
         if (r != ERROR_SUCCESS && r != ERROR_ALREADY_EXISTS)
             return HRESULT_FROM_WIN32(r);
+        B2e_SetDialogParent(uiHwnd);
         const wchar_t* pw = password.empty() ? nullptr : password.c_str();
-        return sz.Extract(archivePath.c_str(), indices, destDir.c_str(), pw, nullptr);
+        HRESULT hr = sz.Extract(archivePath.c_str(), indices, destDir.c_str(), pw, nullptr);
+        B2e_SetDialogParent(NULL);
+        return hr;
     }, m_hwnd, WM_APP_DONE);
 
     HRESULT hrDone = S_OK;
-    MSG msg;
-    while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
+    MSG msg = {};
+    BOOL gmRet;
+    while ((gmRet = GetMessageW(&msg, nullptr, 0, 0)) != 0) {
+        if (gmRet < 0) { hrDone = E_FAIL; break; }
         if (msg.message == WM_APP_DONE) { hrDone = (HRESULT)msg.wParam; break; }
         if (!IsDialogMessageW(m_hwnd, &msg)) {
             TranslateMessage(&msg);
@@ -1493,6 +1518,9 @@ void MainWindow::RunExtraction(std::vector<UINT32> indices, std::wstring presetD
         }
     }
     m_worker.Wait();
+    EnableWindow(m_hwnd, TRUE);
+
+    if (msg.message == WM_QUIT) { PostQuitMessage((int)msg.wParam); return; }
 
     if (SUCCEEDED(hrDone)) {
         auto& s = App::Instance().GetSettings();
@@ -1978,16 +2006,23 @@ void MainWindow::OnCompress(CompressDlg::Params& params, bool openAfterCompress)
     bool  sfx     = params.sfx;
 
     auto& sz = App::Instance().Get7z();
-    m_worker.Start([&sz, inputs, outPath, format, level, method, sfx]() -> HRESULT {
+    HWND uiHwnd = m_hwnd;
+    EnableWindow(m_hwnd, FALSE);
+    m_worker.Start([&sz, inputs, outPath, format, level, method, sfx, uiHwnd]() -> HRESULT {
         CompressAdvanced adv;
         adv.sfx = sfx;
-        return sz.Compress(inputs, outPath.c_str(), format.c_str(),
-                           level, method.c_str(), nullptr, nullptr, &adv);
+        B2e_SetDialogParent(uiHwnd);
+        HRESULT hr = sz.Compress(inputs, outPath.c_str(), format.c_str(),
+                                  level, method.c_str(), nullptr, nullptr, &adv);
+        B2e_SetDialogParent(NULL);
+        return hr;
     }, m_hwnd, WM_APP_DONE);
 
     HRESULT hrDone = S_OK;
-    MSG msg;
-    while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
+    MSG msg = {};
+    BOOL gmRet;
+    while ((gmRet = GetMessageW(&msg, nullptr, 0, 0)) != 0) {
+        if (gmRet < 0) { hrDone = E_FAIL; break; }
         if (msg.message == WM_APP_DONE) { hrDone = (HRESULT)msg.wParam; break; }
         if (!IsDialogMessageW(m_hwnd, &msg)) {
             TranslateMessage(&msg);
@@ -1995,6 +2030,9 @@ void MainWindow::OnCompress(CompressDlg::Params& params, bool openAfterCompress)
         }
     }
     m_worker.Wait();
+    EnableWindow(m_hwnd, TRUE);
+
+    if (msg.message == WM_QUIT) { PostQuitMessage((int)msg.wParam); return; }
 
     if (FAILED(hrDone) && hrDone != E_ABORT) {
         ShowError(I18n::Tr(IDS_ERR_COMPRESS_FAILED).c_str(), hrDone);
@@ -2400,41 +2438,8 @@ void MainWindow::ShowError(const wchar_t* msg, HRESULT hr) {
 }
 
 bool MainWindow::EnsureTempViewDir(const wchar_t* errorMsg) {
-    if (!m_tempViewDir.empty()) return true;
-
-    std::vector<wchar_t> base(32768, L'\0');
-    DWORD baseLen = GetTempPathW((DWORD)base.size(), base.data());
-    if (!baseLen || baseLen >= base.size()) {
-        DWORD err = GetLastError();
-        ShowError(errorMsg, HRESULT_FROM_WIN32(err ? err : ERROR_INSUFFICIENT_BUFFER));
-        return false;
-    }
-
-    GUID guid = {};
-    HRESULT hr = CoCreateGuid(&guid);
-    if (FAILED(hr)) {
-        ShowError(errorMsg, hr);
-        return false;
-    }
-
-    wchar_t guidText[40] = {};
-    if (!StringFromGUID2(guid, guidText, _countof(guidText))) {
-        ShowError(errorMsg, E_FAIL);
-        return false;
-    }
-
-    std::wstring tempDir = base.data();
-    tempDir += L"aex";
-    tempDir += guidText;
-    tempDir += L"\\";
-
-    int r = SHCreateDirectoryExW(nullptr, tempDir.c_str(), nullptr);
-    if (r != ERROR_SUCCESS && r != ERROR_ALREADY_EXISTS) {
-        ShowError(errorMsg, HRESULT_FROM_WIN32(r));
-        return false;
-    }
-
-    m_tempViewDir = std::move(tempDir);
+    HRESULT hr = CreateSessionTempDir(&m_tempViewDir);
+    if (FAILED(hr)) { ShowError(errorMsg, hr); return false; }
     return true;
 }
 

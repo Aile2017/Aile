@@ -3,12 +3,16 @@
 #include "ArcB2e.h"
 #include "resource.h"
 #include "AileFlowApp.h"
+#include <vector>
+#include <string>
 
 //----------------- ArcB2e class general processing ------------------------------
 
 char CArcB2e::st_base[MAX_PATH];
 int  CArcB2e::st_life=0;
 CArcB2e::CB2eCore* CArcB2e::rvm=NULL;
+static HWND s_dialogParentHwnd = NULL;
+void CArcB2e::SetDialogParent(HWND hwnd) { s_dialogParentHwnd = hwnd; }
 
 const char* CArcB2e::init_b2e_path()
 {
@@ -551,15 +555,31 @@ bool CArcB2e::CB2eCore::exec_function( const kiVar& name, const CharArray& a, co
 		}else if( name=="input" ){
 			processed=true;
 
-			//-------------------------//
-			//-- (input MSG DEFUALT) --//
-			//-------------------------//
-			kiVar msg, defval;
+			//---------------------------------------//
+			//-- (input MSG DEFAULT TITLE) --//
+			//---------------------------------------//
+			kiVar msg, defval, title;
 			if( c>=2 )
 				getarg( a[1],b[1],&msg );
 			if( c>=3 )
 				getarg( a[2],b[2],&defval );
-			input( msg, defval, r );
+			if( c>=4 )
+				getarg( a[3],b[3],&title );
+			input( msg, title, defval, r );
+		}else if( name=="inputpw" ){
+			processed=true;
+
+			//-----------------------------------------//
+			//-- (inputpw MSG DEFAULT TITLE) --//
+			//-----------------------------------------//
+			kiVar msg, defval, title;
+			if( c>=2 )
+				getarg( a[1],b[1],&msg );
+			if( c>=3 )
+				getarg( a[2],b[2],&defval );
+			if( c>=4 )
+				getarg( a[3],b[3],&title );
+			inputpw( msg, title, defval, r );
 		}else if( name=="size" ){
 			processed=true;
 
@@ -889,7 +909,8 @@ void CArcB2e::CB2eCore::resp( bool needq, const char* opt, const CharArray& a, c
 // Dialog data passed via LPARAM to B2eInputDlgProc.
 struct B2eInputData {
 	wchar_t result[512];
-	const wchar_t* title;   // optional window title; null = keep default
+	const wchar_t* msg;          // body label; null = keep RC default
+	const wchar_t* title;        // title bar; null = keep RC default
 	const wchar_t* initialValue;
 };
 
@@ -900,6 +921,8 @@ static INT_PTR CALLBACK B2eInputDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
 		auto* d = reinterpret_cast<B2eInputData*>(lp);
 		if (d && d->title && d->title[0])
 			SetWindowTextW(hwnd, d->title);
+		if (d && d->msg && d->msg[0])
+			SetDlgItemTextW(hwnd, IDC_INPUT_LABEL, d->msg);
 		if (d && d->initialValue && d->initialValue[0])
 			SetDlgItemTextW(hwnd, IDC_PASSWORD_INPUT, d->initialValue);
 		return TRUE;
@@ -916,58 +939,55 @@ static INT_PTR CALLBACK B2eInputDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
 	return FALSE;
 }
 
-void CArcB2e::CB2eCore::input( const char* msg, const char* defval, kiVar* r )
+static void b2e_input_impl(const char* msg, const char* title, const char* defval,
+                            UINT dialogId, kiVar* r)
 {
-	// Convert the script prompt to a dialog title.
-	wchar_t* title = NULL;
-	if (msg && msg[0]) {
-		int needed = MultiByteToWideChar(CP_ACP, 0, msg, -1, nullptr, 0);
-		if (needed > 0) {
-			title = new wchar_t[needed];
-			if (!title || !MultiByteToWideChar(CP_ACP, 0, msg, -1, title, needed)) {
-				delete [] title;
-				title = NULL;
-			}
-		}
-	}
+	auto toWide = [](const char* s) -> std::wstring {
+		if (!s || !s[0]) return {};
+		int needed = MultiByteToWideChar(CP_ACP, 0, s, -1, nullptr, 0);
+		if (needed <= 0) return {};
+		std::vector<wchar_t> buf(needed, L'\0');
+		if (!MultiByteToWideChar(CP_ACP, 0, s, -1, buf.data(), needed)) return {};
+		return std::wstring(buf.data());
+	};
 
-	wchar_t* initialValue = NULL;
-	if (defval && defval[0]) {
-		int needed = MultiByteToWideChar(CP_ACP, 0, defval, -1, nullptr, 0);
-		if (needed > 0) {
-			initialValue = new wchar_t[needed];
-			if (!initialValue || !MultiByteToWideChar(CP_ACP, 0, defval, -1, initialValue, needed)) {
-				delete [] initialValue;
-				initialValue = NULL;
-			}
-		}
-	}
+	std::wstring wMsg   = toWide(msg);
+	std::wstring wTitle = toWide(title);
+	std::wstring wDef   = toWide(defval);
 
 	B2eInputData data = {};
-	data.title = (title && title[0]) ? title : nullptr;
-	data.initialValue = (initialValue && initialValue[0]) ? initialValue : nullptr;
+	data.msg          = wMsg.empty()   ? nullptr : wMsg.c_str();
+	data.title        = wTitle.empty() ? nullptr : wTitle.c_str();
+	data.initialValue = wDef.empty()   ? nullptr : wDef.c_str();
 
+	HWND parent = s_dialogParentHwnd ? s_dialogParentHwnd : GetActiveWindow();
 	INT_PTR res = DialogBoxParamW(
 		GetModuleHandleW(NULL),
-		MAKEINTRESOURCEW(IDD_PASSWORD),
-		GetActiveWindow(), B2eInputDlgProc, (LPARAM)&data);
+		MAKEINTRESOURCEW(dialogId),
+		parent, B2eInputDlgProc, (LPARAM)&data);
 
 	if (res == IDOK) {
 		int needed = WideCharToMultiByte(CP_ACP, 0, data.result, -1, nullptr, 0, NULL, NULL);
 		if (needed > 0) {
-			char* ansi = new char[needed];
-			if (ansi && WideCharToMultiByte(CP_ACP, 0, data.result, -1, ansi, needed, NULL, NULL))
-				*r = ansi;
+			std::vector<char> buf(needed, '\0');
+			if (WideCharToMultiByte(CP_ACP, 0, data.result, -1, buf.data(), needed, NULL, NULL))
+				*r = buf.data();
 			else
 				*r = "";
-			delete [] ansi;
 		} else {
 			*r = "";
 		}
 	} else {
 		*r = defval ? defval : "";
 	}
+}
 
-	delete [] title;
-	delete [] initialValue;
+void CArcB2e::CB2eCore::input(const char* msg, const char* title, const char* defval, kiVar* r)
+{
+	b2e_input_impl(msg, title, defval, IDD_INPUT, r);
+}
+
+void CArcB2e::CB2eCore::inputpw(const char* msg, const char* title, const char* defval, kiVar* r)
+{
+	b2e_input_impl(msg, title, defval, IDD_PASSWORD, r);
 }

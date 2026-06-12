@@ -10,6 +10,7 @@
 #include <commctrl.h>
 #include <shlwapi.h>
 #include <map>
+#include <ole2.h>
 
 App& App::Instance() {
     static App inst;
@@ -25,6 +26,8 @@ bool App::Init(HINSTANCE hInst) {
     InitCommonControlsEx(&icc);
 
     m_settings.Load();
+
+    OleInitialize(nullptr);  // Required for BrowseFolderDialog (CoCreateInstance) and CreateSessionTempDir (CoCreateGuid).
 
     if (!m_sevenZip.Load(m_settings.Get7zDllPath().empty()
                          ? nullptr
@@ -47,6 +50,7 @@ void App::Shutdown() {
     m_sevenZip.Unload();
     m_unrar.Unload();
     m_settings.Save();
+    OleUninitialize();
 }
 
 void App::ReloadDlls() {

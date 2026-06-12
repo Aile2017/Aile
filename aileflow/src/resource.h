@@ -21,6 +21,7 @@
 #define IDD_PASSWORD        207
 #define IDD_ABOUT           208
 #define IDD_TEST_RESULT     209
+#define IDD_INPUT           210
 
 // Compress dialog controls
 #define IDC_OUTPUT_PATH     1001
@@ -64,6 +65,7 @@
 #define IDC_TEST_OUTPUT     9002
 
 #define IDC_PASSWORD_INPUT  8001
+#define IDC_INPUT_LABEL     8002
 
 // About dialog controls
 #define IDC_ABOUT_TITLE     8101
