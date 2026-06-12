@@ -91,12 +91,12 @@ cmake --build build_release
 
 | Feature | Status |
 |---|---|
-| Archive integrity test | Not available |
-| Delete entries from archive | Not available (archives open read-only) |
-| Add files to an existing archive | Not available |
+| Archive integrity test | Format-dependent: available for formats whose `.b2e` has a `test:` section (e.g. 7z, ZIP, RAR); unavailable for TAR, GZ, BZ2 |
+| Delete entries from archive | Format-dependent: available via UI menu for formats whose `.b2e` has a `delete:` section (7z, ZIP, RAR, LZH); unavailable for TAR, CAB variants |
+| Add files to an existing archive | Implemented; files are always added to archive root (destination folder within archive is not selectable) |
 | Archive comment read/write | Not available |
-| Split volume creation | Not available |
-| SFX (self-extracting) creation | Not available |
+| Split volume creation | Not available (volume-size parameter is accepted but B2E scripts lack volume-handling directives) |
+| SFX (self-extracting) creation | Format-dependent: available for formats whose `.b2e` has an `sfx:`/`sfxd:` section (7z, RAR) |
 | Selective extraction | Supported for RAR, LZH, TAR, CAB; falls back to full extraction for 7z and ZIP |
 | Format auto-detection | Extension-based only; files with wrong or missing extensions will not open |
 | Progress reporting | Displayed by the external tool's own window, not AileFlow's progress dialog |

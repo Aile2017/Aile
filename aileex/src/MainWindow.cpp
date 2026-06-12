@@ -1279,6 +1279,27 @@ void MainWindow::OnExtractSelected(const std::wstring& presetDest) {
     RunExtraction(std::move(indices), std::move(rarTargetPaths), presetDest);
 }
 
+static void OpenExtractedFolder(const std::wstring& dir) {
+    const std::wstring& cmd = App::Instance().GetSettings().GetOpenFolderCommand();
+    if (cmd.empty()) {
+        ShellExecuteW(nullptr, L"open", dir.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    } else {
+        std::wstring expanded = cmd;
+        auto pos = expanded.find(L"%1");
+        std::wstring quoted = L"\"" + dir + L"\"";
+        if (pos != std::wstring::npos)
+            expanded.replace(pos, 2, quoted);
+        else
+            expanded += L" " + quoted;
+        SHELLEXECUTEINFOW sei = {};
+        sei.cbSize = sizeof(sei);
+        sei.fMask  = SEE_MASK_FLAG_NO_UI;
+        sei.lpFile = expanded.c_str();
+        sei.nShow  = SW_SHOWNORMAL;
+        ShellExecuteExW(&sei);
+    }
+}
+
 void MainWindow::RunExtraction(std::vector<UINT32> indices, std::set<std::wstring> rarTargetPaths,
                                std::wstring presetDest) {
     App& app = App::Instance();
@@ -1389,9 +1410,8 @@ void MainWindow::RunExtraction(std::vector<UINT32> indices, std::set<std::wstrin
     if (FAILED(hrDone) && hrDone != E_ABORT) {
         ShowError(I18n::Tr(IDS_ERR_EXTRACT_FAILED).c_str(), hrDone);
     } else if (SUCCEEDED(hrDone)) {
-        if (app.GetSettings().GetOpenFolderAfterExtract()) {
-            ShellExecuteW(nullptr, L"open", finalDest.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
-        }
+        if (app.GetSettings().GetOpenFolderAfterExtract())
+            OpenExtractedFolder(finalDest);
     }
 }
 

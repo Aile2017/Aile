@@ -109,6 +109,10 @@ public:
     bool GetOpenFolderAfterExtract() const          { return m_openFolderAfterExtract; }
     void SetOpenFolderAfterExtract(bool v)          { m_openFolderAfterExtract = v; }
 
+    // OpenFolderCommand: INI-only. Empty = use Explorer (ShellExecuteW).
+    const std::wstring& GetOpenFolderCommand() const { return m_openFolderCommand; }
+    void SetOpenFolderCommand(const wchar_t* v)     { m_openFolderCommand = v; }
+
     // MRU (recently used archives) — head is most recent; duplicates removed case-insensitively.
     const std::vector<std::wstring>& GetMruPaths() const { return m_mruPaths; }
     void AddMru(const std::wstring& path);
@@ -153,6 +157,7 @@ private:
     std::wstring m_unrarDllPath;
     std::wstring m_fontName;
     bool         m_openFolderAfterExtract = false;
+    std::wstring m_openFolderCommand;
     std::vector<std::wstring> m_mruPaths;
 
     std::wstring ReadStr(const wchar_t* section, const wchar_t* key, const wchar_t* def) const;

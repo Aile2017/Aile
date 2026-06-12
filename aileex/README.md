@@ -41,12 +41,12 @@ Backed by 7z.dll and implemented with Win32 API / C++17.
 # Debug
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
 cmake --build build
-# Output: build\AileEx.exe
+# Output: build\aileex\AileEx.exe
 
 # Release
 cmake -B build_release -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build_release
-# Output: build_release\AileEx.exe
+# Output: build_release\aileex\AileEx.exe
 ```
 
 ## Launch Modes
@@ -127,11 +127,16 @@ Saved to `AileEx.ini` in the same folder as the EXE. Editable via the settings d
 [General]
 RarExtractor=7z          ; "7z" or "unrar"
 RarExePath=              ; Absolute path to WinRAR.exe / Rar.exe (empty = auto-detect from registry)
-DefaultOutputDir=        ; Default extraction destination
+DefaultOutputDir=        ; Default extraction destination (used when OutputDirMode=fixed)
+OutputDirMode=source     ; "source" = use source file directory; "fixed" = use DefaultOutputDir
 DefaultFormat=7z         ; Default compression format
 CompressionLevel=5       ; 0-9
 RarLevel=3               ; RAR compression level 0-5
 MkDir=2                  ; Subfolder creation on extract: 0=never/1=single/2=multiple(default)/3=always
+DefaultSfxMode=          ; SFX mode "" / "gui" / "console" — last selected in compress dialog
+FontName=Segoe UI        ; Font used in main window controls
+OpenFolderAfterExtract=0 ; Open output folder in Explorer after extraction (0/1)
+OpenFolderCommand=       ; INI-only. Custom command to open folder (%1 = path). Empty = Explorer.
 7zDllPath=               ; Absolute path to 7z.dll (empty = auto-detect from registry)
 UnrarDllPath=            ; Absolute path to unrar.dll (empty = same directory as AileEx.exe)
 
@@ -144,6 +149,8 @@ Maximized=0
 Splitter=220             ; Splitter position
 TreeVisible=1            ; Tree pane visibility toggle
 ToolbarVisible=1         ; Toolbar visibility toggle
+IconsVisible=1           ; File/folder icons in ListView toggle
+MenubarVisible=1         ; Menu bar visibility toggle
 
 [Mru]                    ; Recent archives (up to 10; Path0 is most recent)
 Path0=
@@ -155,6 +162,7 @@ WordSize=
 SolidBlock=
 Threads=
 Extra=
+Volume=                  ; Split volume size e.g. "100m" / "1g" (empty = no split)
 
 [RarAdvanced]            ; Last-used values from the RAR advanced compression dialog
 DictSize=
@@ -180,7 +188,6 @@ main()
 
 ## Limitations
 
-- Multi-volume archive creation and reading are not yet supported
 - Extracting individual files from solid archives is not possible (7z.dll limitation)
 - Shell integration (context menu) is not implemented
 - Simultaneous browsing of multiple archives (tabs, etc.) is not implemented

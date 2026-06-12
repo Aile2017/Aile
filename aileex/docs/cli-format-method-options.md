@@ -158,7 +158,7 @@ AileEx.exe -mdeflate file.txt              # ダイアログが Deflate プリ�
 ```cpp
 std::wstring typeOverride;    // -t
 std::wstring methodOverride;  // -m
-int          levelOverride = -1; // -l  (-1 = 未指定)
+std::wstring levelOverride;   // -l  (空文字 = 未指定)
 
 // パースループ内に追加
 else if ((a[0]==L'-'||a[0]==L'/') && (a[1]==L't'||a[1]==L'T') && a[2]) {
@@ -168,9 +168,8 @@ else if ((a[0]==L'-'||a[0]==L'/') && (a[1]==L't'||a[1]==L'T') && a[2]) {
 else if ((a[0]==L'-'||a[0]==L'/') && (a[1]==L'm'||a[1]==L'M') && a[2]) {
     methodOverride = a + 2;
 }
-else if ((a[0]==L'-'||a[0]==L'/') && (a[1]==L'l'||a[1]==L'L') && a[2] && iswdigit(a[2])) {
-    levelOverride = _wtoi(a + 2);
-    if (levelOverride < 0 || levelOverride > 9) levelOverride = -1;
+else if ((a[0]==L'-'||a[0]==L'/') && (a[1]==L'l'||a[1]==L'L') && a[2] != L'\0') {
+    levelOverride = a + 2;
 }
 
 // a/w アクションのみ渡す（SW_HIDE → ダイアログスキップ判定の起点）
@@ -196,13 +195,13 @@ int RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdShow,
                     const std::wstring& destDir       = L"",
                     const std::wstring& typeOverride  = L"",
                     const std::wstring& methodOverride= L"",
-                    int                 levelOverride = -1);
+                    const std::wstring& levelOverride = L"");
 
 int RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCmdShow,
                         const std::wstring& destDir       = L"",
                         const std::wstring& typeOverride  = L"",
                         const std::wstring& methodOverride= L"",
-                        int                 levelOverride = -1);
+                        const std::wstring& levelOverride = L"");
 ```
 
 ### 4.3 `App.cpp` — オーバーライド適用ロジック
@@ -212,7 +211,7 @@ int RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCmdShow
 params.LoadFromSettings(m_settings);
 if (!typeOverride.empty())   params.format = typeOverride;
 if (!methodOverride.empty()) ApplyMethodOverride(params, methodOverride);
-if (levelOverride >= 0)      params.level  = levelOverride;
+if (!levelOverride.empty())  ApplyLevelOverride(params, levelOverride);
 
 // ダイアログスキップは a/w アクション（SW_HIDE）かつ -t 指定時のみ
 bool skipDialog = !typeOverride.empty() && (nCmdShow == SW_HIDE);
