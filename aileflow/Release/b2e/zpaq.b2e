@@ -3,12 +3,12 @@ load:
  (type zpaq Store *Method1 Method2 Method3 Method4 Method5)
 
 encode:
- (if (method 1) (cmd a (arc.zpaq) (listr) -m0))
- (if (method 2) (cmd a (arc.zpaq) (listr) -m1))
- (if (method 3) (cmd a (arc.zpaq) (listr) -m2))
- (if (method 4) (cmd a (arc.zpaq) (listr) -m3))
- (if (method 5) (cmd a (arc.zpaq) (listr) -m4))
- (if (method 6) (cmd a (arc.zpaq) (listr) -m5))
+ (if (method 1) (cmd a (arc.zpaq) (list) -m0))
+ (if (method 2) (cmd a (arc.zpaq) (list) -m1))
+ (if (method 3) (cmd a (arc.zpaq) (list) -m2))
+ (if (method 4) (cmd a (arc.zpaq) (list) -m3))
+ (if (method 5) (cmd a (arc.zpaq) (list) -m4))
+ (if (method 6) (cmd a (arc.zpaq) (list) -m5))
 
 decode:
  (cmd x (arc))
