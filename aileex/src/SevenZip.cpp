@@ -1904,6 +1904,18 @@ static UInt64 ParseVolumeSize(const std::wstring& s) {
     return num * mult;
 }
 
+// Canonicalize a path (resolve "." / ".." / redundant separators) via GetFullPathNameW.
+// Returns empty string on failure.
+static std::wstring CanonicalizePath(const std::wstring& p) {
+    DWORD need = GetFullPathNameW(p.c_str(), 0, nullptr, nullptr);
+    if (need == 0) return L"";
+    std::wstring out(need, L'\0');
+    DWORD got = GetFullPathNameW(p.c_str(), need, out.data(), nullptr);
+    if (got == 0 || got >= need) return L"";
+    out.resize(got);
+    return out;
+}
+
 // ============================================================
 // CExtractCallback — IArchiveExtractCallback + ICryptoGetTextPassword
 // ============================================================
@@ -1914,6 +1926,12 @@ public:
         : m_archive(archive), m_destDir(destDir), m_sink(sink) {
         if (password) m_password = password;
         archive->AddRef();
+        // Precompute the canonical confinement root (no trailing separator) used to
+        // reject Zip Slip entries whose path escapes the destination directory.
+        m_canonDest = CanonicalizePath(m_destDir);
+        while (!m_canonDest.empty() &&
+               (m_canonDest.back() == L'\\' || m_canonDest.back() == L'/'))
+            m_canonDest.pop_back();
     }
 
     ~CExtractCallback() {
@@ -1976,7 +1994,16 @@ public:
         bool isDir = (prop.vt == VT_BOOL && prop.boolVal != VARIANT_FALSE);
         PropVariantClear(&prop);
 
-        std::wstring fullPath = m_destDir + L"\\" + itemPath;
+        // Zip Slip guard: confine the resolved target within the destination directory.
+        // A crafted archive may contain entries like "..\..\evil.exe" that would otherwise
+        // be written outside m_destDir, enabling arbitrary file write.
+        std::wstring fullPath;
+        if (!ResolveWithinDest(itemPath, fullPath)) {
+            // Skip this entry: provide no stream (7-Zip treats null stream as a skip).
+            m_currentIsDir     = true;   // ensure SetOperationResult performs no stream work
+            m_currentItemIndex = (int)index;
+            return S_OK;
+        }
         m_currentFile = itemPath;
 
         if (isDir) {
@@ -2025,8 +2052,28 @@ public:
     }
 
 private:
+    // Resolve an archive entry path against the destination and verify it stays within it.
+    // Returns false (escape detected → caller must skip) for Zip Slip / absolute-path entries.
+    bool ResolveWithinDest(const std::wstring& itemPath, std::wstring& outFull) const {
+        if (m_canonDest.empty()) return false;  // fail closed if dest couldn't be canonicalized
+        std::wstring candidate = CanonicalizePath(m_destDir + L"\\" + itemPath);
+        if (candidate.empty()) return false;
+        if (candidate.size() < m_canonDest.size()) return false;
+        if (_wcsnicmp(candidate.c_str(), m_canonDest.c_str(), m_canonDest.size()) != 0)
+            return false;
+        // Must be either the root itself or separated by a path boundary (not a sibling
+        // like "C:\dest-evil" sharing the "C:\dest" prefix).
+        if (candidate.size() > m_canonDest.size()) {
+            wchar_t sep = candidate[m_canonDest.size()];
+            if (sep != L'\\' && sep != L'/') return false;
+        }
+        outFull = std::move(candidate);
+        return true;
+    }
+
     IInArchive*           m_archive;
     std::wstring          m_destDir;
+    std::wstring          m_canonDest;
     std::wstring          m_password;
     IExtractProgressSink* m_sink;
     std::wstring          m_currentFile;
