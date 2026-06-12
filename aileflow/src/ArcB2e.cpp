@@ -1,6 +1,7 @@
 
 #include "stdafx.h"
 #include "ArcB2e.h"
+#include "B2eScript.h"
 #include "resource.h"
 #include "AileFlowApp.h"
 #include <vector>
@@ -62,16 +63,6 @@ bool CArcB2e::v_ver( kiStr& str )
 
 //------------------- Load script & eval( load: ) -------------------
 
-static bool isSectionEmpty( const char* p )
-{
-	for(;;) {
-		while( *p=='\t' || *p==' ' || *p=='\r' || *p=='\n' ) p++;
-		if( !*p ) return true;
-		if( *p==';' ) { while( *p && *p!='\n' && *p!='\r' ) p++; }
-		else return false;
-	}
-}
-
 bool CArcB2e::load_module( const char* name )
 {
 	exe = new CArcModule( name );
@@ -82,58 +73,23 @@ int CArcB2e::v_load()
 {
 	//-- Open extended script file
 	kiStr fname( st_base ); fname += mlt_ext();
-	kiFile fp;
-	if( fp.open( fname ) )
+	std::vector<char> scriptBuf;
+	if( B2e_LoadAndPreprocessScriptFile( fname, &scriptBuf ) )
 	{
-		//-- Read entire file
-		unsigned int ln=fp.getSize();
-		m_ScriptBuf = new char[ ln+1 ];
-		ln = fp.read( (unsigned char*)m_ScriptBuf, ln );
-		m_ScriptBuf[ ln ] = '\0';
+		m_ScriptBuf = new char[ scriptBuf.size() ];
+		ki_memcpy( m_ScriptBuf, scriptBuf.data(), scriptBuf.size() );
 
-		//-- Split into sections
-		bool pack1;
-		for( char* p=m_ScriptBuf; *p; p++ )
-		{
-			switch( *p )
-			{
-			case 'c': case 'd': case 'e': case 'l': case 's': case 't':
-				if( ki_memcmp(p,"load:",5) )
-					*p='\0', m_LoadScr = (p+=4)+1;
-				else if( ki_memcmp(p,"encode:",7) )
-					*p='\0', m_EncScr = (p+=6)+1, pack1=false;
-				else if( ki_memcmp(p,"encode1:",8) )
-					*p='\0', m_EncScr = (p+=7)+1, pack1=true;
-				else if( ki_memcmp(p,"decode:",7) )
-					*p='\0', m_DecScr = (p+=6)+1;
-				else if( ki_memcmp(p,"sfx:",4) )
-					*p='\0', m_SfxScr = (p+=3)+1, m_SfxDirect=false;
-				else if( ki_memcmp(p,"sfxd:",5) )
-					*p='\0', m_SfxScr = (p+=4)+1, m_SfxDirect=true;
-				else if( ki_memcmp(p,"decode1:",8) )
-					*p='\0', m_DcEScr = (p+=7)+1;
-				else if( ki_memcmp(p,"list:",5) )
-					*p='\0', m_LstScr = (p+=4)+1;
-				else if( ki_memcmp(p,"test:",5) )
-					*p='\0', m_TstScr = (p+=4)+1;
-				else if( ki_memcmp(p,"delete:",7) )
-					*p='\0', m_DelScr = (p+=6)+1;
-			}
-			while( *p && *p!='\n' && *p!='\r' )
-				p++;
-			if( *p=='\0' )
-				break;
-		}
-
-		//-- Treat sections that contain only whitespace/comments as absent
-		if( m_LoadScr && isSectionEmpty(m_LoadScr) ) m_LoadScr = NULL;
-		if( m_EncScr  && isSectionEmpty(m_EncScr)  ) m_EncScr  = NULL;
-		if( m_DecScr  && isSectionEmpty(m_DecScr)  ) m_DecScr  = NULL;
-		if( m_SfxScr  && isSectionEmpty(m_SfxScr)  ) m_SfxScr  = NULL;
-		if( m_DcEScr  && isSectionEmpty(m_DcEScr)  ) m_DcEScr  = NULL;
-		if( m_LstScr  && isSectionEmpty(m_LstScr)  ) m_LstScr  = NULL;
-		if( m_TstScr  && isSectionEmpty(m_TstScr)  ) m_TstScr  = NULL;
-		if( m_DelScr  && isSectionEmpty(m_DelScr)  ) m_DelScr  = NULL;
+		B2eSections sections;
+		B2e_SplitSectionsInPlace( m_ScriptBuf, &sections );
+		m_LoadScr = sections.load;
+		m_EncScr = sections.encode;
+		m_DecScr = sections.decode;
+		m_SfxScr = sections.sfx;
+		m_DcEScr = sections.decode1;
+		m_LstScr = sections.list;
+		m_TstScr = sections.test;
+		m_DelScr = sections.del;
+		m_SfxDirect = sections.sfxDirect;
 
 		//-- Execute [load:]!
 		if( m_LoadScr )
@@ -152,7 +108,7 @@ int CArcB2e::v_load()
 			//-- Result
 			if( m_Result==0 )
 				return (m_DecScr?aMelt|(m_DcEScr?aList|aMeltEach:0):0)
-					 | (m_EncScr?aCompress|(pack1?0:aArchive)|(m_SfxScr?aSfx:0):0)
+					 | (m_EncScr?aCompress|(sections.pack1?0:aArchive)|(m_SfxScr?aSfx:0):0)
 					 | (m_TstScr?aTest:0)
 					 | (m_DelScr?aDelete:0);
 		}

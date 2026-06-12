@@ -8,6 +8,7 @@
 #include <set>
 #include <strsafe.h>
 #include "ArcB2e.h"
+#include "B2eScript.h"
 #include "B2eBridge.h"
 
 // ── Extension → .b2e mapping (dynamic scan) ──────────────────────────────────
@@ -294,30 +295,15 @@ std::vector<B2eFormatInfo> B2e_GetWritableFormats()
         if (FAILED(StringCchCopyA(path, _countof(path), b2eDir)) ||
             FAILED(StringCchCatA(path, _countof(path), fd.cFileName)))
             continue;
-        HANDLE hf = ::CreateFileA(path, GENERIC_READ, FILE_SHARE_READ,
-                                   nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-        if (hf == INVALID_HANDLE_VALUE) continue;
-        LARGE_INTEGER size = {};
-        if (!::GetFileSizeEx(hf, &size) || size.QuadPart < 0 || size.QuadPart > 0x7ffffffeLL) {
-            ::CloseHandle(hf);
-            continue;
-        }
-        DWORD sz = static_cast<DWORD>(size.QuadPart);
-        std::vector<char> buf(sz + 1, '\0');
-        DWORD rd = 0;
-        if (!::ReadFile(hf, buf.data(), sz, &rd, nullptr) || rd != sz) {
-            ::CloseHandle(hf);
-            continue;
-        }
-        ::CloseHandle(hf);
-        buf[rd] = '\0';
-        const char* content = buf.data();
+        std::vector<char> buf;
+        if (!B2e_LoadAndPreprocessScriptFile(path, &buf)) continue;
 
-        // Must have an encode: section to be writable.
-        if (!strstr(content, "encode:")) continue;
+        B2eSections sections;
+        B2e_SplitSectionsInPlace(buf.data(), &sections);
+        if (!sections.encode || !sections.load) continue;
 
-        // Find (type fmt m1 *m2 ...) in the load: section.
-        const char* p = strstr(content, "(type ");
+        // Find (type fmt m1 *m2 ...) in the load: section only.
+        const char* p = strstr(sections.load, "(type ");
         if (!p) continue;
         p += 6;
         while (*p == ' ' || *p == '\t') ++p;
@@ -376,8 +362,7 @@ std::vector<B2eFormatInfo> B2e_GetWritableFormats()
         }
         info.label   = AToWString(label);
         info.ext     = AToWString(fmtExt.c_str());
-        info.canSfx  = (strstr(content, "sfx:") != nullptr ||
-                        strstr(content, "sfxd:") != nullptr);
+        info.canSfx  = sections.sfx != nullptr;
 
         for (const auto& m : methods) {
             B2eMethodInfo mi;

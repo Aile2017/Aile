@@ -1,34 +1,69 @@
+; ============================================================================
+; rar.b2e — RAR Archive Backend Script
+; ============================================================================
+; This script uses WinRAR.exe / Rar.exe directly.
+;
+; Supported write modes:
+;   1 = Store
+;   2 = Default
+;   3 = Best (default)
+;   4 = RR       - create archive, then add recovery record
+;   5 = Recover  - run WinRAR repair command against an existing archive
+;   6 = password - create encrypted archive
+; ============================================================================
+
 load:
+ ; WinRAR.exe is used as the primary backend for RAR operations.
  (name WinRAR.exe)
+
+ ; Compression and special modes exposed in the AileFlow dialog.
  (type rar Store Default *Best RR Recover password)
 
 encode:
+ ; Method 1: Store only.
  (if (method 1) (cmd a -m0 (arc.rar) (resp@ (listr))))
+
+ ; Method 2: Backend default settings.
  (if (method 2) (cmd a (arc.rar) (resp@ (listr))))
+
+ ; Method 3: Best compression with solid mode enabled.
  (if (method 3) (cmd a -m5 -s (arc.rar) (resp@ (listr))))
+
+ ; Method 4: Ask for recovery record size, then append it after creation.
+ ; -mm keeps multimedia mode enabled as in the original script behavior.
  (if (method 4) (exec
     (let r (input "Recovery record size (1, 2 .. 524288)"))
     (cmd a -m5 -s -mm (arc.rar) (resp@ (listr)))
     (cmd rr%r (arc.rar))))
+
+ ; Method 5: Recover / repair an existing archive.
  (if (method 5) (cmd r (arc)))
+
+ ; Method 6: Password-protected archive.
  (if (method 6) (exec
     (let p (inputpw "Password"))
     (cmd a -p%p -m5 -s -mm (arc.rar) (resp@ (listr)))))
 
 sfx:
+ ; Convert the archive to an SFX archive using WinRAR's built-in SFX support.
  (cmd s -sfx (arc))
 
 decode:
+ ; Extract all files with full directory structure.
  (cmd x (arc))
 
 decode1:
+ ; Extract selected entries only.
  (cmd x -y (arc) (list))
 
 delete:
+ ; Remove selected entries from the archive.
  (cmd d (arc) (list))
 
 test:
+ ; Verify archive integrity.
  (xcmd Rar.exe t (arc))
 
 list:
+ ; Parse verbose RAR listing output.
  (xscan "-----------" 1 "-----------" 1 68 Rar.exe v (arc))

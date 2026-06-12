@@ -1,8 +1,28 @@
+; ============================================================================
+; 0.b2e — Common Helper Registration Script
+; ============================================================================
+; This script is loaded before the format-specific .b2e files.
+; Its role is not to provide a writable format itself, but to register helper
+; executables that other scripts reference via (find ...).
+;
+; Current helpers:
+;   DecCabW.EXE  - CAB self-extracting stub
+;   DecLHaW.EXE  - LZH self-extracting stub
+;   DecZipW.EXE  - ZIP self-extracting stub
+; ============================================================================
+
 load:
+ ; Main backend used for generic listing / testing support.
  (name 7z.exe)
+
+ ; Register CAB SFX stub so cab.b2e can build self-extracting archives.
  (let B DecCabW.EXE)
  (use %B)
+
+ ; Register LZH SFX stub so lzh.b2e can build self-extracting archives.
  (let B DecLHaW.EXE)
  (use %B)
+
+ ; Register ZIP SFX stub so zip.zipx.b2e can build self-extracting archives.
  (let B DecZipW.EXE)
  (use %B)

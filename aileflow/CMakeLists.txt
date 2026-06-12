@@ -30,6 +30,7 @@ set(KILIB_B2E_SOURCES
     src/Archiver.cpp
     src/AileFlowKiLib.cpp
     src/B2eBridge.cpp
+    src/B2eScript.cpp
     kilib/kl_app.cpp
     kilib/kl_cmd.cpp
     kilib/kl_dnd.cpp

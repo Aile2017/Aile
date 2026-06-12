@@ -1,14 +1,27 @@
+; ============================================================================
+; rpm.cpio.b2e — Read-only RPM / CPIO Backend Script
+; ============================================================================
+; This script is intentionally read-only.
+; It relies on 7z.exe / 7zG.exe for listing, extraction, and integrity testing.
+; No encode:, delete:, or sfx: section is provided.
+; ============================================================================
+
 load:
+ ; 7zG.exe is sufficient for extraction of RPM / CPIO-family archives.
  (name 7zG.exe)
 
 decode:
+ ; Extract all files.
  (cmd x (arc))
 
 decode1:
+ ; Extract selected entries only.
  (cmd x -y (arc) (list))
 
 test:
+ ; Verify archive integrity.
  (xcmd 7z.exe t (arc))
 
 list:
+ ; Parse 7z list output for AileFlow's archive view.
  (xscan "------------------" 1 "------------------" 1 53 7z.exe l (arc))

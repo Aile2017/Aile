@@ -1,26 +1,81 @@
+; ============================================================================
+; 7z.b2e — 7-Zip Archive Backend Script
+; ============================================================================
+; This script provides 7z format support for AileFlow through B2E (Bare2 Script
+; Engine). It defines operations for listing, extracting, compressing, and
+; deleting entries in 7-Zip archives via the 7z.exe command-line tool.
+;
+; Supported compression methods are defined in the load: section.
+; Password protection is supported in both encode and sfxd sections.
+; ============================================================================
+
 load:
+ ; Load 7z.exe as the backend tool (7zG.exe is GUI version, but 7z.exe is CLI)
  (name 7zG.exe)
+
+ ; Define compression methods available in AileFlow UI
+ ; Format: (type <format> <method1> <method2> ... <methodN> <flags>)
+ ;   <format>        = output archive format name ("7z")
+ ;   <method>        = compression algorithm, * marks the default
+ ;   <flags>         = optional special flags (e.g., "password")
+ ; Methods are indexed from 1; method index passed to encode: section
  (type 7z Store *LZMA2 LZMA PPMd Bzip2 Deflate zstd brotli lizard lz4 lz5 flzma2 password)
 
 encode:
+ ; Compression section: called when user clicks "Compress..." and selects options
+ ; Variable "method" contains the user's selection (index from type list)
+ ; Variable "o" accumulates 7z.exe command-line options (set by each if-branch)
+ ; Variable "arc.7z" is the output archive filename (provided by AileFlow)
+ ; Variable "listr" expands to the list of files from response file
+
+ ; Method 1: Store (no compression, fastest)
  (if (method 1) (let o "-m0=Copy"))
+
+ ; Method 2: LZMA2 with max compression (default method, marked with *)
  (if (method 2) (let o "-mx=9 -myx=9 -m0=LZMA2"))
+
+ ; Method 3: LZMA (slower, better compression than LZMA2 in some cases)
  (if (method 3) (let o "-mx=9 -myx=9 -m0=LZMA"))
+
+ ; Method 4: PPMd (excellent for text, slower)
  (if (method 4) (let o "-mx=9 -myx=9 -m0=PPMd"))
+
+ ; Method 5: Bzip2 (good for files, slower)
  (if (method 5) (let o "-mx=9 -myx=9 -m0=Bzip2"))
+
+ ; Method 6: Deflate (standard, fast)
  (if (method 6) (let o "-mx=9 -myx=9 -m0=Deflate"))
+
+ ; Methods 7-12: Modern codecs with -mx=22 (higher limit than standard 0-9)
  (if (method 7) (let o "-mx=22 -myx=9 -m0=zstd"))
  (if (method 8) (let o "-mx=22 -myx=9 -m0=brotli"))
  (if (method 9) (let o "-mx=22 -myx=9 -m0=lizard"))
  (if (method 10) (let o "-mx=22 -myx=9 -m0=lz4"))
  (if (method 11) (let o "-mx=22 -myx=9 -m0=lz5"))
  (if (method 12) (let o "-mx=22 -myx=9 -m0=flzma2"))
+
+ ; Method 13: Password-protected LZMA2 (encrypted, no compression method selection)
  (if (method 13) (exec
+    ; Prompt user for password interactively
     (let p (inputpw "Password"))
+    ; Build options: -p<password> applies encryption, -mhe enables header encryption
     (let o "-p%p -mx=9 -myx=9 -m0=LZMA2 -mhe")))
+
+ ; Execute compression: 7z a [options] [archive.7z] [files...]
+ ;   a         = add to archive (create or update)
+ ;   -t7z      = force 7z format (implicit here but shown for clarity)
+ ;   -r0       = recurse into folders with depth limit 0 (unlimited)
+ ;   (arc.7z)  = output archive path (substituted by AileFlow)
+ ;   (listr)   = input file list (substituted via response file)
+ ;   -scsWIN   = set charset to Windows (OEM) for console output
  (cmd a -t7z %o -r0 (arc.7z) (resp@ (listr)) -scsWIN)
 
 sfxd:
+ ; Self-extracting archive (SFX Desktop) section
+ ; Identical to encode: but creates .exe instead of .7z by appending 7z.sfx stub
+ ; The stub file must exist in the same directory as 7z.exe
+
+ ; Methods 1-12: same as encode (Store through flzma2)
  (if (method 1) (let o "-m0=Copy"))
  (if (method 2) (let o "-mx=9 -myx=9 -m0=LZMA2"))
  (if (method 3) (let o "-mx=9 -myx=9 -m0=LZMA"))
@@ -33,22 +88,54 @@ sfxd:
  (if (method 10) (let o "-mx=22 -myx=9 -m0=lz4"))
  (if (method 11) (let o "-mx=22 -myx=9 -m0=lz5"))
  (if (method 12) (let o "-mx=22 -myx=9 -m0=flzma2"))
+
+ ; Method 13: Password-protected SFX
  (if (method 13) (exec
     (let p (inputpw "Password"))
     (let o "-p%p -mx=9 -myx=9 -m0=LZMA2 -mhe")))
+
+ ; Execute SFX creation: same as encode but with -sfx7z.sfx prepended
+ ;   -sfx7z.sfx = embed 7z.sfx stub (Desktop SFX flavor)
+ ;   (arc.exe)  = output .exe file (substituted by AileFlow)
  (cmd a -t7z %o -r0 -sfx7z.sfx (arc.exe) (resp@ (listr)) -scsWIN)
 
 decode:
+ ; Full extraction section: called when user double-clicks archive or clicks "Extract All"
+ ; Extracts all files to the destination directory (interactive prompts handled by 7z.exe UI)
+ ;   x = extract with directory structure
+ ;   (arc) = archive path (substituted by AileFlow)
  (cmd x (arc))
 
 decode1:
+ ; Selective extraction section: called when user selects specific files and clicks "Extract"
+ ; Extracts only the selected files (batch mode, no prompts)
+ ;   x    = extract with directory structure
+ ;   -y   = auto-confirm overwrite (batch mode)
+ ;   (arc) = archive path
+ ;   (list) = selected file list (from user selection)
  (cmd x -y (arc) (list))
 
 delete:
+ ; Delete section: called when user selects files and clicks "Delete"
+ ; Removes specified entries from archive
+ ;   d = delete from archive
+ ;   -y = auto-confirm (batch mode)
  (cmd d -y (arc) (list))
 
 test:
+ ; Verify archive integrity (called from context menu or Tools)
+ ; Uses xcmd (external command, doesn't wait for output)
+ ;   t = test archive
  (xcmd 7z.exe t (arc))
 
 list:
+ ; List archive contents: called when user opens archive or refreshes view
+ ; Parser scans for patterns to extract file info
+ ;   xscan = scan output, extract lines matching delimiters
+ ;   "------------------" = start delimiter (line separator in 7z output)
+ ;   1 = skip 1 line after start delimiter
+ ;   "------------------" = end delimiter
+ ;   1 = skip 1 line after end delimiter
+ ;   53 = column position for parsing (7z uses column 53 for size/flags)
+ ;   7z.exe l (arc) = command to run (list mode)
  (xscan "------------------" 1 "------------------" 1 53 7z.exe l (arc))

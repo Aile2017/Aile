@@ -1,33 +1,73 @@
+; ============================================================================
+; zip.zipx.b2e — ZIP / ZIPX-style Backend Script
+; ============================================================================
+; This script uses 7z.exe / 7zG.exe for all operations.
+;
+; Supported write methods:
+;   1 = Store
+;   2 = Deflate   (default)
+;   3 = Deflate64
+;   4 = BZip2
+;   5 = LZMA
+;   6 = PPMd
+;   7 = password  (Deflate + password prompt)
+; ============================================================================
+
 load:
+ ; 7zG.exe is used as the ZIP backend.
  (name 7zG.exe)
+
+ ; Compression methods shown in the AileFlow dialog.
  (type zip Store *Deflate Deflate64 BZip2 LZMA PPMd password)
 
 encode:
+ ; Method 1: Store only.
  (if (method 1) (let o "-mm=Copy"))
+
+ ; Method 2: Deflate with max level.
  (if (method 2) (let o "-mx=9 -mm=Deflate"))
+
+ ; Method 3: Deflate64 with max level.
  (if (method 3) (let o "-mx=9 -mm=Deflate64"))
+
+ ; Method 4: BZip2.
  (if (method 4) (let o "-mx=9 -mm=BZip2"))
+
+ ; Method 5: LZMA.
  (if (method 5) (let o "-mx=9 -mm=LZMA"))
+
+ ; Method 6: PPMd.
  (if (method 6) (let o "-mx=9 -mm=PPMd"))
+
+ ; Method 7: Password-protected ZIP using Deflate.
  (if (method 7) (exec
     (let p (inputpw "Password"))
     (let o "-p%p -mx=9 -mm=Deflate")))
+
+ ; Create the archive from the response-file-expanded input list.
  (cmd a -tzip %o (arc.zip) (resp@ (listr)) -scsWIN)
 
 sfx:
+ ; Build a simple self-extracting ZIP by concatenating the decoder stub and
+ ; the archive payload.
  (xcmd copy /b (find DecZipW.EXE) + (arc) (arc.exe))
 
 decode:
+ ; Extract all files.
  (cmd x (arc))
 
 decode1:
+ ; Extract selected entries only.
  (cmd x -y (arc) (list))
 
 delete:
+ ; Remove selected entries from the archive.
  (cmd d -y (arc) (list))
 
 test:
+ ; Verify archive integrity.
  (xcmd 7z.exe t (arc))
 
 list:
+ ; Parse 7z list output for AileFlow's archive view.
  (xscan "------------------" 1 "------------------" 1 53 7z.exe l (arc))
