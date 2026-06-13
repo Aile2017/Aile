@@ -38,6 +38,19 @@ void B2e_PreprocessScriptInPlace(char* script)
 
     bool inString = false;
     for (char* p = script; *p; ++p) {
+        // Match the Rythp tokenizer's escape rule: the char after '%' is
+        // literal, so %" must not toggle the string state.
+        if (*p == '%' && p[1]) {
+            ++p;
+            continue;
+        }
+
+        // Rythp strings cannot span lines; confine any state drift to one line.
+        if (*p == '\n' || *p == '\r') {
+            inString = false;
+            continue;
+        }
+
         if (*p == '"') {
             inString = !inString;
             continue;
