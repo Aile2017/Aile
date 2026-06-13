@@ -113,7 +113,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
         else if (positional.size() == 1 && sz7.IsArchivePath(positional[0].c_str()))
             result = app.RunBrowseMode(positional, nCmdShow, destDir);
         else
-            result = app.RunCompressMode(positional, nCmdShow, L"",
+            result = app.RunCompressMode(positional, nCmdShow, destDir,
                                          typeOverride, methodOverride, levelOverride, sfxOverride);
         break;
     }
