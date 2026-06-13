@@ -3,12 +3,62 @@
 Summary of features commonly found in archive managers but not yet implemented in AileEx,
 and features that would be nice to have. Includes implementation hints and effort estimates.
 
-Last updated: 2026-05-10
+Last updated: 2026-06-13
 
 Effort estimates:
 - **S** = half day to 1 day
 - **M** = few days
 - **L** = 1 week or more
+
+---
+
+## Top Priority (Next to implement)
+
+### 0. CLI `t` action — integrity test from command line — `S`
+
+Applies to **both AileEx and AileFlow**.
+
+**Syntax:**
+```
+AileEx.exe   t <archive> [modifiers]
+AileFlow.exe t <archive> [modifiers]
+```
+
+**Behavior by case:**
+
+| Case | Behavior |
+|---|---|
+| No arguments | Same as no-arg launch (`RunEmpty`) |
+| Single valid archive | Open main window hidden (`SW_HIDE`), auto-fire `OnTest()` |
+| Single non-archive file | Show `IDS_ERR_OPEN_ARCHIVE` error → exit(1) |
+| AileFlow only: format with no test support | Show new error string → exit(1) |
+| Multiple files | First file only; rest silently ignored (matches `x` behavior) |
+
+**Result display:**
+- AileEx: progress dialog → result MessageBox (same path as interactive Ctrl+T)
+- AileFlow: `TestResultDlg` with tool output (same path as interactive Ctrl+T)
+
+**Modifiers:** `-d`, `-t`, `-m`, `-l`, `-sfx` are parsed but silently ignored.
+
+**Exit codes:** 0 = passed or cancelled; 1 = failed or argument error.
+
+**New string resource (AileFlow only):**
+
+| ID (proposed) | EN | JA |
+|---|---|---|
+| `IDS_ERR_TEST_NOT_SUPPORTED` | `This format does not support integrity testing.` | `このフォーマットは整合性テストに対応していません。` |
+
+**Implementation delta:**
+
+| File | Change |
+|---|---|
+| `main.cpp` (both) | Add `Test` to `enum Action`; add `t` detection; add `case Action::Test` |
+| `App.h` / `App.cpp` (both) | Add `RunTestMode(archivePath, nCmdShow)` |
+| `MainWindow.h` / `MainWindow.cpp` (both) | Add `TriggerTest()` — thin wrapper that calls `OnTest()` directly |
+| AileFlow `.rc` + `resource.h` | Add `IDS_ERR_TEST_NOT_SUPPORTED` to EN/JA STRINGTABLE blocks |
+
+`RunTestMode` mirrors `RunExtractDialogMode`: `SW_HIDE` create → `OpenArchive` → `TriggerTest`.
+`CanTest()` is evaluated after `OpenArchive` (B2E script must be loaded first).
 
 ---
 
@@ -23,16 +73,61 @@ Add destination folder is under currently selected folder in tree.
 
 ### 2. Shell Integration (Explorer right-click menu) — `L`
 
-Right-click on `.7z` etc. in Explorer → "Open with AileEx", "Extract here", etc.
+Applies to **both AileEx and AileFlow** (separate DLLs, same structure).
 
-Implementation hints:
-- Need DLL implementing COM server (`IShellExtInit` + `IContextMenu`)
-- Install via `regsvr32` or direct write to HKCR/CLSID
-- Standard practice is to implement as separate DLL `AileExShell.dll`, not in main AileEx
-- Make sure to create uninstall path (registry cleanup)
-- If not contained in DLL, can be stub just calling AileEx.exe from Explorer process (lightweight)
+**Menu layout:**
 
-Related files: new `src/shell/`, `installer/` directory
+Right-clicking an archive file:
+```
+AileEx ▶
+├─ 開く / Open              ← AileEx.exe "file.zip"         (no action, browse mode)
+├─ ここに展開 / Extract     ← AileEx.exe x "file.zip"
+└─ 整合性テスト / Test      ← AileEx.exe t "file.zip"
+```
+
+Right-clicking a non-archive file or folder:
+```
+AileEx ▶
+└─ 圧縮 / Compress          ← AileEx.exe a "file.txt"
+```
+
+Same structure for AileFlow (replace `AileEx` with `AileFlow`).
+
+**Registry registration strategy:**
+
+Use `*` (all files) + `Directory` rather than per-extension keys.
+DLL decides menu content by inspecting the target file at runtime.
+
+```
+HKCR\*\shellex\ContextMenuHandlers\AileEx          → {CLSID}
+HKCR\Directory\shellex\ContextMenuHandlers\AileEx  → {CLSID}
+HKCR\CLSID\{CLSID}\InprocServer32                 → path to AileExShell.dll
+```
+
+AileFlow uses its own distinct CLSID.
+
+**DLL interfaces required:**
+
+| Interface | Purpose |
+|---|---|
+| `IClassFactory` | COM object creation (DLL entry point) |
+| `IShellExtInit` | Receive target file path(s) from Explorer |
+| `IContextMenu` | Add menu items and handle command execution |
+| `DllRegisterServer` / `DllUnregisterServer` | Called by `regsvr32` for install/uninstall |
+
+**EXE delegation:**
+
+All actual operations are delegated to the EXE via `ShellExecuteW`. The existing
+`a`/`x`/`t` subcommands map directly; "Open" passes the path with no action prefix.
+No new CLI changes needed (assuming `t` action is implemented per item 0).
+
+**Implementation notes:**
+- DLL runs inside the Explorer process — crashes bring down Explorer. Keep it minimal.
+- Win11 is effectively 64-bit only; a single x64 DLL suffices.
+- `QueryContextMenu` is called synchronously; avoid any blocking I/O here.
+- Installer (or setup script) needed to deploy the DLL and run `regsvr32`.
+
+Related files: new `aileex/src/shell/`, `aileflow/src/shell/`, shared installer script
 
 ### 3. ~~Display/edit archive comments~~ — Implemented (2026-05-09)
 

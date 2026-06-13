@@ -56,6 +56,22 @@ These formats can be added by writing a new `.b2e` script and placing it in `Rel
 
 ## Future Improvements
 
+### Shell Integration (Explorer right-click menu)
+
+See `aileex/docs/roadmap.md` item 2 for the full spec. AileFlow-specific points:
+
+- DLL name: `AileFlowShell.dll`; CLSID must be distinct from AileEx's.
+- Delegates to `AileFlow.exe` with the same `a`/`x`/`t` subcommands.
+- Shares the same registry key structure under a separate `AileFlow` key.
+
+### CLI `t` action (Top Priority)
+
+See `aileex/docs/roadmap.md` item 0 for the full spec. AileFlow-specific points:
+
+- `CanTest()` must be evaluated **after** `OpenArchive` (the B2E script must be loaded first).
+- If `CanTest()` returns false, show `IDS_ERR_TEST_NOT_SUPPORTED` and exit(1).
+- New string resource `IDS_ERR_TEST_NOT_SUPPORTED` needed in EN/JA STRINGTABLE blocks.
+
 ### Richer List Columns
 
 Parsing `7z.exe l -slt` (technical listing) output provides structured fields
