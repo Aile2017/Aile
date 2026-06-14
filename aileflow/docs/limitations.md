@@ -58,11 +58,15 @@ These formats can be added by writing a new `.b2e` script and placing it in `Rel
 
 ### Shell Integration (Explorer right-click menu)
 
-See `aileex/docs/roadmap.md` item 2 for the full spec. AileFlow-specific points:
+See `aileex/docs/roadmap.md` item 2 for the full spec (project structure, registration hives,
+deployment, Win11 caveats). AileFlow-specific points:
 
 - DLL name: `AileFlowShell.dll`; CLSID must be distinct from AileEx's.
 - Delegates to `AileFlow.exe` with the same `a`/`x`/`t` subcommands.
 - Shares the same registry key structure under a separate `AileFlow` key.
+- Implementation code is shared via `common/shell/`; AileFlow only supplies its own
+  `aileflow/shell/AileFlowShellConfig.cpp` (CLSID / exe name / label) and `.def`. The DLL is still
+  built and registered separately from AileEx's.
 
 ### CLI `t` action — Implemented (2026-06-14)
 

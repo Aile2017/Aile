@@ -82,7 +82,33 @@ Add destination folder is under currently selected folder in tree.
 
 ### 2. Shell Integration (Explorer right-click menu) — `L`
 
-Applies to **both AileEx and AileFlow** (separate DLLs, same structure).
+Applies to **both AileEx and AileFlow**. Each app ships its **own DLL with its own CLSID**
+(`AileExShell.dll` / `AileFlowShell.dll`); they cannot share a single DLL because each needs a
+distinct CLSID, registers independently, delegates to a different EXE, and must install/uninstall
+separately (a user may install only one app). However, the **implementation code is shared** — only
+the per-app constants (CLSID, target EXE name, menu label/icon) differ.
+
+**Project structure:**
+
+```
+common/
+  shell/
+    ShellExt.cpp/h     ← IShellExtInit + IContextMenu implementation (shared, bulk of the code)
+    DllMain.cpp        ← DllMain / DllGetClassObject / DllRegisterServer / DllUnregisterServer (shared)
+    ShellConfig.h      ← per-app config interface (CLSID, exe name, label, icon) consumed by the above
+aileex/
+  shell/
+    AileExShellConfig.cpp   ← AileEx-specific constants
+    AileExShell.def         ← COM exports
+aileflow/
+  shell/
+    AileFlowShellConfig.cpp
+    AileFlowShell.def
+```
+
+CMake builds `common/shell/` as an OBJECT library; the two DLL targets each link it together with
+their own `*ShellConfig.cpp`, producing two distinct DLLs. A single shared DLL serving both apps is
+**not viable** (registration conflicts, breakage when only one app is installed).
 
 **Menu layout:**
 
@@ -115,6 +141,18 @@ HKCR\CLSID\{CLSID}\InprocServer32                 → path to AileExShell.dll
 
 AileFlow uses its own distinct CLSID.
 
+`HKCR` is the merged view of `HKLM\Software\Classes` (machine-wide) and `HKCU\Software\Classes`
+(per-user). The DLL's `DllRegisterServer` can target either:
+
+| Target | Scope | Elevation |
+|---|---|---|
+| `HKLM\Software\Classes` (what `regsvr32` writes by default) | All users | **Required** |
+| `HKCU\Software\Classes` | Current user only | **Not required** |
+
+Writing to `HKCU` is recommended to avoid UAC elevation. Since `regsvr32` always writes the HKLM
+side, a per-user install means the DLL must write the HKCU keys itself (still callable via
+`regsvr32`, but the registration routine decides the hive).
+
 **DLL interfaces required:**
 
 | Interface | Purpose |
@@ -128,15 +166,43 @@ AileFlow uses its own distinct CLSID.
 
 All actual operations are delegated to the EXE via `ShellExecuteW`. The existing
 `a`/`x`/`t` subcommands map directly; "Open" passes the path with no action prefix.
-No new CLI changes needed (assuming `t` action is implemented per item 0).
+No new CLI changes needed — the `t` action is implemented (item 0, done 2026-06-14).
+
+**Deployment / registration:**
+
+An installer is **not strictly required**; `regsvr32` (or per-user HKCU registration) is enough for
+development and manual distribution. An installer is the practical choice for end users because it
+bundles "copy DLL → register → reliably unregister + remove on uninstall" (a missed `regsvr32 /u`
+leaves a broken menu entry behind).
+
+```powershell
+# Register (use the 64-bit regsvr32 — Win11 Explorer is x64)
+regsvr32 AileExShell.dll
+# Unregister
+regsvr32 /u AileExShell.dll
+```
+
+- **Dev / manual**: `regsvr32` (HKLM, elevated) or a per-user HKCU registration path (no elevation).
+- **End-user distribution**: installer (Inno Setup / NSIS / WiX) that copies the DLL and registers it.
+- After (un)registering, call `SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, ...)` or restart
+  `explorer.exe` so the menu change takes effect (Explorer caches handlers).
+- The DLL is loaded into and **locked by** `explorer.exe` while in use; updating or unregistering may
+  require restarting Explorer to release the lock.
+
+**Windows 11 caveat (affects design):**
+- A classic `IContextMenu` handler appears only in the **legacy menu** ("Show more options" /
+  Shift+F10), **not** the new Win11 top-level context menu.
+- To appear in the new top-level menu, an `IExplorerCommand` handler packaged as an **MSIX sparse
+  package** (appxmanifest) is required — a meaningfully larger effort. Recommended first pass:
+  legacy `IContextMenu` only; revisit MSIX later if top-level placement is wanted.
 
 **Implementation notes:**
 - DLL runs inside the Explorer process — crashes bring down Explorer. Keep it minimal.
-- Win11 is effectively 64-bit only; a single x64 DLL suffices.
+- Win11 is effectively 64-bit only; a single x64 DLL suffices (and the matching x64 `regsvr32`).
 - `QueryContextMenu` is called synchronously; avoid any blocking I/O here.
-- Installer (or setup script) needed to deploy the DLL and run `regsvr32`.
 
-Related files: new `aileex/src/shell/`, `aileflow/src/shell/`, shared installer script
+Related files: new `common/shell/` (shared core), `aileex/shell/` + `aileflow/shell/` (per-app
+config + `.def`), CMake DLL targets, optional installer script
 
 ### 3. ~~Display/edit archive comments~~ — Implemented (2026-05-09)
 
