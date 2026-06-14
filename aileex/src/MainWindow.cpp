@@ -1457,16 +1457,16 @@ void MainWindow::OnContextMenu(HWND /*hwndFrom*/, int x, int y) {
 }
 
 
-void MainWindow::OnTest() {
+HRESULT MainWindow::OnTest() {
     if (m_archivePath.empty()) {
         MessageBoxW(m_hwnd, I18n::Tr(IDS_INFO_NO_ARCHIVE_TO_TEST).c_str(),
                     I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONINFORMATION);
-        return;
+        return E_FAIL;
     }
 
     App& app = App::Instance();
     bool useUnrar = m_openedWithUnrar;
-    if (!Ensure7zLoaded(useUnrar)) return;
+    if (!Ensure7zLoaded(useUnrar)) return E_FAIL;
 
     ProgressDlg progDlg;
     progDlg.Show(m_hwnd, I18n::Tr(IDS_PROGRESS_TESTING).c_str());
@@ -1499,13 +1499,20 @@ void MainWindow::OnTest() {
     bool wasCancelled = sink->IsCancelled();
 
     if (hrDone == E_ABORT || wasCancelled) {
-        // Silent on cancel
+        // Silent on cancel; treated as success for exit-code purposes.
+        return S_OK;
     } else if (FAILED(hrDone)) {
         ShowError(I18n::Tr(IDS_TEST_FAILED).c_str(), hrDone);
+        return hrDone;
     } else {
         MessageBoxW(m_hwnd, I18n::Tr(IDS_TEST_OK).c_str(),
                     I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONINFORMATION);
+        return S_OK;
     }
+}
+
+HRESULT MainWindow::TriggerTest() {
+    return OnTest();
 }
 
 void MainWindow::OnFileOpen() {

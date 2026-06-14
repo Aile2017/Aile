@@ -251,6 +251,7 @@ BEGIN
     IDS_TITLE_TEST_RESULT           "Test Result"
     IDS_TEST_PASSED                 "OK  — Archive integrity test passed."
     IDS_TEST_FAILED                 "NG  — Archive integrity test failed."
+    IDS_ERR_TEST_NOT_SUPPORTED      "This format does not support integrity testing."
 
     IDS_FMT_DND_PROMPT              "Dropped files:\n%s\nWhat would you like to do?\n\n[Yes]    Add to current archive ""%s""\n[No]     Create a new archive\n[Cancel] Do nothing"
     IDS_DND_ELLIPSIS                "  ...\n"
@@ -519,6 +520,7 @@ BEGIN
     IDS_TITLE_TEST_RESULT           "テスト結果"
     IDS_TEST_PASSED                 "OK  — アーカイブの整合性テストに合格しました。"
     IDS_TEST_FAILED                 "NG  — アーカイブの整合性テストに失敗しました。"
+    IDS_ERR_TEST_NOT_SUPPORTED      "このフォーマットは整合性テストに対応していません。"
 
     IDS_FMT_DND_PROMPT              "ドロップされたファイル:\n%s\nどう処理しますか？\n\n[はい]  現在のアーカイブ「%s」に追加\n[いいえ] 新規アーカイブを作成\n[キャンセル] 何もしない"
     IDS_DND_ELLIPSIS                "  …\n"

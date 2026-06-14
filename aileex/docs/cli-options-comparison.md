@@ -23,6 +23,7 @@
 | `a <file...>` | ✅ | ✅ | 圧縮強制 |
 | `x <archive>` | ✅ | ✅ | 抽出強制 |
 | `w <file...>` | ✅ | ✅ | ファイル別圧縮（各ファイルを個別アーカイブに） |
+| `t <archive>` | ✅ | ✅ | 整合性テスト（ウィンドウ非表示で実行、結果表示） |
 
 ---
 
@@ -208,13 +209,14 @@ AileEx.exe w file1.txt file2.txt -t7z -l5 -dC:\output
 ### 両アプリ共通のパース構造
 
 ```cpp
-enum class Action { None, Extract, Compress, CompressEach };
+enum class Action { None, Extract, Compress, CompressEach, Test };
 Action action = Action::None;
 int argStart = 1;
 if (argc > 1) {
     if      (_wcsicmp(argv[1], L"a") == 0) { action = Action::Compress;     argStart = 2; }
     else if (_wcsicmp(argv[1], L"x") == 0) { action = Action::Extract;      argStart = 2; }
     else if (_wcsicmp(argv[1], L"w") == 0) { action = Action::CompressEach; argStart = 2; }
+    else if (_wcsicmp(argv[1], L"t") == 0) { action = Action::Test;         argStart = 2; }
 }
 // argStart 以降で修飾子をパース → switch(action) でディスパッチ
 ```

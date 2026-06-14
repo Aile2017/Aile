@@ -64,13 +64,15 @@ See `aileex/docs/roadmap.md` item 2 for the full spec. AileFlow-specific points:
 - Delegates to `AileFlow.exe` with the same `a`/`x`/`t` subcommands.
 - Shares the same registry key structure under a separate `AileFlow` key.
 
-### CLI `t` action (Top Priority)
+### CLI `t` action — Implemented (2026-06-14)
 
-See `aileex/docs/roadmap.md` item 0 for the full spec. AileFlow-specific points:
+See `aileex/docs/roadmap.md` item 0 for the full spec. AileFlow-specific points (all implemented):
 
-- `CanTest()` must be evaluated **after** `OpenArchive` (the B2E script must be loaded first).
-- If `CanTest()` returns false, show `IDS_ERR_TEST_NOT_SUPPORTED` and exit(1).
-- New string resource `IDS_ERR_TEST_NOT_SUPPORTED` needed in EN/JA STRINGTABLE blocks.
+- `CanTest()` is evaluated in `MainWindow::TriggerTest()` **after** `OpenArchive` (the B2E script
+  must be loaded first).
+- If the archive could not be opened, shows `IDS_ERR_OPEN_ARCHIVE` and exits 1.
+- If `CanTest()` returns false, shows `IDS_ERR_TEST_NOT_SUPPORTED` and exits 1.
+- New string resource `IDS_ERR_TEST_NOT_SUPPORTED` (11115) added to EN/JA STRINGTABLE blocks.
 
 ### Richer List Columns
 

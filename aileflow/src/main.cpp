@@ -56,7 +56,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
         return result;
     };
 
-    enum class Action { None, Extract, Compress, CompressEach };
+    enum class Action { None, Extract, Compress, CompressEach, Test };
     Action action = Action::None;
     int argStart = 1;
     if (argc > 1) {
@@ -64,6 +64,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
         if      (_wcsicmp(first, L"a") == 0) { action = Action::Compress;     argStart = 2; }
         else if (_wcsicmp(first, L"x") == 0) { action = Action::Extract;      argStart = 2; }
         else if (_wcsicmp(first, L"w") == 0) { action = Action::CompressEach; argStart = 2; }
+        else if (_wcsicmp(first, L"t") == 0) { action = Action::Test;         argStart = 2; }
     }
 
     bool sfx = false;   // -sfx: create SFX
@@ -99,6 +100,23 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
             return 1;
         }
         result = app.RunExtractDialogMode(positional[0], nCmdShow, destDir);
+        break;
+    }
+    case Action::Test: {
+        // Integrity test from CLI. Modifiers (-d/-t/-m/-sfx) are parsed but ignored.
+        if (positional.empty()) {
+            result = app.RunEmpty(nCmdShow);
+            break;
+        }
+        auto& sz7 = app.Get7z();
+        const wchar_t* dot = wcsrchr(positional[0].c_str(), L'.');
+        if (!dot || !sz7.IsArchiveExt(dot + 1)) {
+            MessageBoxW(nullptr, I18n::Tr(IDS_ERR_OPEN_ARCHIVE).c_str(), L"AileEx", MB_ICONERROR);
+            if (hConcurrentSem) { ReleaseSemaphore(hConcurrentSem, 1, nullptr); CloseHandle(hConcurrentSem); }
+            app.Shutdown();
+            return 1;
+        }
+        result = app.RunTestMode(positional[0], nCmdShow);
         break;
     }
     case Action::Compress:

@@ -14,9 +14,18 @@ Effort estimates:
 
 ## Top Priority (Next to implement)
 
-### 0. CLI `t` action — integrity test from command line — `S`
+### 0. ~~CLI `t` action — integrity test from command line~~ — Implemented (2026-06-14)
 
 Applies to **both AileEx and AileFlow**.
+
+Implemented: `Action::Test` + `t` detection in both `main.cpp`; `App::RunTestMode` (mirrors
+`RunExtractDialogMode`, `SW_HIDE` create → `OpenArchive` → `TriggerTest`); `MainWindow::TriggerTest`
+(`OnTest` now returns `HRESULT`). Exit code: 0 = passed/cancelled, 1 = failed / unsupported /
+argument error. Non-archive argument → `IDS_ERR_OPEN_ARCHIVE` → exit(1). AileFlow evaluates
+`CanTest()` after `OpenArchive` and shows the new `IDS_ERR_TEST_NOT_SUPPORTED` string when the
+format has no `test:` section. Modifiers (`-d`/`-t`/`-m`/`-l`/`-sfx`) are parsed but ignored.
+
+Original spec retained below for reference.
 
 **Syntax:**
 ```

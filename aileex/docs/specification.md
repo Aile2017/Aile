@@ -27,6 +27,7 @@ The operating mode is determined by command-line arguments to `AileEx.exe`.
 | `x <archive>` | Forced extract mode — show extract destination dialog directly, skipping the list view. Non-archive extensions are rejected before opening. |
 | `a <file...>` | Forced compress mode — show compression dialog directly (equivalent to dropping regular files). |
 | `w <file...>` | Each-file compress mode — compress each input file into its own separate archive. The compression dialog appears once (for the first file); the chosen format/method/level is applied to all remaining files. |
+| `t <archive>` | Integrity-test mode — open the archive with the list window hidden (`SW_HIDE`) and run the integrity test directly, showing the result. Non-archive extensions are rejected before opening. Exit code: 0 = passed/cancelled, 1 = failed or argument error. Modifiers are parsed but ignored. |
 
 The following modifiers preset the compression dialog. They are ignored in extract and browse modes. All modifiers are concatenated (no space between option and value).
 
@@ -43,7 +44,7 @@ Dialog skip behavior: the compression dialog is skipped **only** when `-t` (or `
 - With `x`: skips the folder picker and extracts directly to `<dir>` (MkDir policy still applied).
 - With `a` / `w`: presets the output path field in the compression dialog to `<dir>`.
 
-Actions `x`, `a`, and `w` suppress the main window (`SW_HIDE`). They take priority over auto-detection.
+Actions `x`, `a`, `w`, and `t` suppress the main window (`SW_HIDE`). They take priority over auto-detection.
 
 Recognized extensions (treated as archives): `7z`, `zip`, `rar`, `tar`, `gz`, `bz2`, `xz`, `cab`, `iso`, `jar`, `wim`, `lzma`, `lzh`, `arj` and other formats dynamically enumerated by 7z.dll. Split volume 1 names such as `archive.7z.001` are also treated as archives when the preceding extension is recognized.
 

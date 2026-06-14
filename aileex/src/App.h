@@ -39,6 +39,9 @@ public:
                             const std::wstring& sfxOverride    = L"");
     int RunExtractDialogMode(const std::wstring& archivePath, int nCmdShow,
                              const std::wstring& destDir = L"");
+    // t: integrity-test a single archive with the list window hidden.
+    // Returns 0 on pass/cancel, 1 on failure (process exit code).
+    int RunTestMode(const std::wstring& archivePath, int nCmdShow);
     int RunEmpty(int nCmdShow);
 
 private:

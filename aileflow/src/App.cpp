@@ -247,6 +247,16 @@ int App::RunExtractDialogMode(const std::wstring& archivePath, int nCmdShow,
     return 0;
 }
 
+int App::RunTestMode(const std::wstring& archivePath, int /*nCmdShow*/) {
+    MainWindow wnd;
+    // SW_HIDE: suppress list window; only the result dialog appears.
+    if (!wnd.Create(m_hInst, SW_HIDE)) return 1;
+    // CanTest() must be evaluated after OpenArchive — the B2E script is loaded there.
+    wnd.OpenArchive(archivePath.c_str());
+    // 0 = passed/cancelled; 1 = failed, unsupported, or archive could not be opened.
+    return SUCCEEDED(wnd.TriggerTest()) ? 0 : 1;
+}
+
 int App::RunEmpty(int nCmdShow) {
     return RunBrowseMode({}, nCmdShow);
 }

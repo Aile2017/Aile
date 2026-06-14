@@ -186,6 +186,7 @@
 #define IDS_TITLE_TEST_RESULT           11112
 #define IDS_TEST_PASSED                 11113
 #define IDS_TEST_FAILED                 11114
+#define IDS_ERR_TEST_NOT_SUPPORTED      11115
 
 // --- Drag & Drop ---
 #define IDS_FMT_DND_PROMPT              11110

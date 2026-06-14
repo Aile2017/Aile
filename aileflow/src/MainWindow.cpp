@@ -1593,8 +1593,8 @@ static INT_PTR CALLBACK TestResultDlgProc(HWND h, UINT msg, WPARAM wp, LPARAM lp
     return FALSE;
 }
 
-void MainWindow::OnTest() {
-    if (m_archivePath.empty() || !App::Instance().Get7z().CanTest()) return;
+HRESULT MainWindow::OnTest() {
+    if (m_archivePath.empty() || !App::Instance().Get7z().CanTest()) return E_FAIL;
 
     std::wstring output;
     HRESULT hr = App::Instance().Get7z().Test(
@@ -1617,6 +1617,23 @@ void MainWindow::OnTest() {
                     MAKEINTRESOURCEW(IDD_TEST_RESULT),
                     m_hwnd, TestResultDlgProc,
                     reinterpret_cast<LPARAM>(&data));
+    return hr;
+}
+
+HRESULT MainWindow::TriggerTest() {
+    // Distinguish "archive could not be opened" from "format has no test support",
+    // so the CLI `t` action can report the right error and exit code.
+    if (m_archivePath.empty()) {
+        MessageBoxW(m_hwnd, I18n::Tr(IDS_ERR_OPEN_ARCHIVE).c_str(),
+                    I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
+        return E_FAIL;
+    }
+    if (!App::Instance().Get7z().CanTest()) {
+        MessageBoxW(m_hwnd, I18n::Tr(IDS_ERR_TEST_NOT_SUPPORTED).c_str(),
+                    I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
+        return E_FAIL;
+    }
+    return OnTest();
 }
 
 

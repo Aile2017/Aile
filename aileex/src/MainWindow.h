@@ -18,6 +18,9 @@ public:
     // Called after OpenArchive when -x option is given; skips the list view entirely.
     // presetDest: if non-empty, skip the folder picker and extract directly to this path.
     void TriggerExtract(const std::wstring& presetDest = L"");
+    // Called after OpenArchive when the `t` action is given; fires the integrity test
+    // directly. Returns the test result HRESULT (S_OK = passed/cancelled).
+    HRESULT TriggerTest();
     HWND Hwnd() const { return m_hwnd; }
     // Call before TranslateAccelerator / IsDialogMessage in the message loop.
     // Returns true if the message was consumed.
@@ -49,7 +52,7 @@ private:
     void RunExtraction(std::vector<UINT32> indices, std::set<std::wstring> rarTargetPaths,
                        std::wstring presetDest = L"");
     void OnContextMenu(HWND hwndFrom, int x, int y);
-    void OnTest();
+    HRESULT OnTest();
     void OnOpenAssoc();
     void OnAddFiles();
     void OnAddFilesToCurrentArchive();
