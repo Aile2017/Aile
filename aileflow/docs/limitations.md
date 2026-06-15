@@ -56,17 +56,17 @@ These formats can be added by writing a new `.b2e` script and placing it in `Rel
 
 ## Future Improvements
 
-### Shell Integration (Explorer right-click menu)
+### Shell Integration (Explorer right-click menu) — Implemented (2026-06-15)
 
-See `aileex/docs/roadmap.md` item 2 for the full spec (project structure, registration hives,
-deployment, Win11 caveats). AileFlow-specific points:
+See `aileex/docs/roadmap.md` item 2 for the full design. AileFlow ships `AileFlowShell.dll`:
 
-- DLL name: `AileFlowShell.dll`; CLSID must be distinct from AileEx's.
-- Delegates to `AileFlow.exe` with the same `a`/`x`/`t` subcommands.
-- Shares the same registry key structure under a separate `AileFlow` key.
-- Implementation code is shared via `common/shell/`; AileFlow only supplies its own
-  `aileflow/shell/AileFlowShellConfig.cpp` (CLSID / exe name / label) and `.def`. The DLL is still
-  built and registered separately from AileEx's.
+- Distinct CLSID `{62EF5960-FE49-490D-BC9B-ADCCE789A7B3}`; handler/label `AileFlow`.
+- Delegates to `AileFlow.exe` with the same `a`/`x`/`t` subcommands via `ShellExecuteW`.
+- Implementation is shared via `common/shell/`; AileFlow only supplies
+  `aileflow/shell/AileFlowShellConfig.cpp` (CLSID / exe name / label) and `.def`. Built and
+  registered (per-user HKCU via `regsvr32`) separately from AileEx's DLL.
+- First pass is the legacy `IContextMenu` handler (Win11: "Show more options"). The new Win11
+  top-level menu (`IExplorerCommand` + MSIX) remains future work.
 
 ### CLI `t` action — Implemented (2026-06-14)
 

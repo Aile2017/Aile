@@ -92,3 +92,30 @@ if(IPO_OK)
 else()
     message(STATUS "IPO/LTO not supported: ${IPO_ERR}")
 endif()
+
+# ── Shell extension DLL (Explorer right-click menu) ──────────────────────────
+# Shared COM core from common/shell + AileEx-specific config. Delegates to
+# AileEx.exe via the a/x/t CLI subcommands. Registers per-user (HKCU).
+add_library(AileExShell SHARED
+    ${COMMON_DIR}/shell/ShellExt.cpp
+    ${COMMON_DIR}/shell/DllMain.cpp
+    shell/AileExShellConfig.cpp
+)
+target_include_directories(AileExShell PRIVATE
+    ${COMMON_DIR}
+    ${COMMON_DIR}/shell
+)
+target_compile_definitions(AileExShell PRIVATE
+    WIN32_LEAN_AND_MEAN UNICODE _UNICODE NOMINMAX _CRT_SECURE_NO_WARNINGS
+)
+target_link_libraries(AileExShell PRIVATE
+    ole32 oleaut32 shlwapi shell32 advapi32 user32 uuid
+)
+set_target_properties(AileExShell PROPERTIES OUTPUT_NAME "AileExShell")
+if(MSVC)
+    target_compile_options(AileExShell PRIVATE /W3 /utf-8)
+    target_link_options(AileExShell PRIVATE
+        "/MANIFEST:NO"
+        "/DEF:${CMAKE_CURRENT_SOURCE_DIR}/shell/AileExShell.def"
+    )
+endif()

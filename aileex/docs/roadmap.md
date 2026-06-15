@@ -80,7 +80,20 @@ Implemented `SevenZip::AddToArchive` (`CAddCallback` mixing existing copy + new 
 UI: "Add to current archive" menu (Ctrl+U) and confirmation dialog on drag-drop.
 Add destination folder is under currently selected folder in tree.
 
-### 2. Shell Integration (Explorer right-click menu) — `L`
+### 2. ~~Shell Integration (Explorer right-click menu)~~ — Implemented (2026-06-15)
+
+Implemented per the spec below. Shared COM core in `common/shell/`
+(`ShellExt.cpp/h` = `IShellExtInit`+`IContextMenu`, `DllMain.cpp` = class factory + 4 exports +
+HKCU register/unregister, `ShellConfig.h` = per-app constants interface, `ArchiveClassify.h` =
+static archive detection that mirrors `SevenZip::IsArchivePath` so 7z.dll is never loaded inside
+Explorer). Two separate DLLs `AileExShell.dll` (CLSID `{A50BB570-A951-4D73-A1B2-CA2B709FFD34}`) and
+`AileFlowShell.dll` (CLSID `{62EF5960-FE49-490D-BC9B-ADCCE789A7B3}`), each linking the shared core +
+its own `*ShellConfig.cpp` + `.def` (built directly per target, not via an OBJECT library). Menu
+delegates to the app EXE (resolved as the DLL's sibling) via `ShellExecuteW` using the `a`/`x`/`t`
+subcommands. Registers per-user (HKCU, no elevation) via `regsvr32`; deploy as a sibling of the EXE.
+
+First pass is the **legacy `IContextMenu`** handler only (Win11: "Show more options"); the new Win11
+top-level menu (`IExplorerCommand` + MSIX sparse package) is deferred. Original spec retained below.
 
 Applies to **both AileEx and AileFlow**. Each app ships its **own DLL with its own CLSID**
 (`AileExShell.dll` / `AileFlowShell.dll`); they cannot share a single DLL because each needs a

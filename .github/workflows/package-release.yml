@@ -84,6 +84,10 @@ jobs:
           Copy-Item $vendor\7z.sfx      pkg_aileex\bin\7z.sfx
           Copy-Item $vendor\7zCon.sfx   pkg_aileex\bin\7zCon.sfx
           Copy-Item $vendor\License.txt pkg_aileex\bin\License.txt
+          # Explorer shell-extension DLL — must sit next to AileEx.exe (resolves it as sibling).
+          Copy-Item build_release\aileex\AileExShell.dll pkg_aileex\AileExShell.dll
+          Copy-Item aileex\shell\register.bat            pkg_aileex\register-shell.bat
+          Copy-Item aileex\shell\unregister.bat          pkg_aileex\unregister-shell.bat
           Compress-Archive -Path pkg_aileex\* -DestinationPath "${tag}.zip"
           Write-Host "Created: ${tag}.zip ($([Math]::Round((Get-Item "${tag}.zip").Length/1KB)) KB)"
 
@@ -105,6 +109,10 @@ jobs:
           Copy-Item $vendor\7z.dll      pkg_aileflow\bin\7z.dll
           Copy-Item $vendor\7z.sfx      pkg_aileflow\bin\7z.sfx
           Copy-Item $vendor\License.txt pkg_aileflow\bin\License.txt
+          # Explorer shell-extension DLL — must sit next to AileFlow.exe (resolves it as sibling).
+          Copy-Item build_release\aileflow\AileFlowShell.dll pkg_aileflow\AileFlowShell.dll
+          Copy-Item aileflow\shell\register.bat              pkg_aileflow\register-shell.bat
+          Copy-Item aileflow\shell\unregister.bat            pkg_aileflow\unregister-shell.bat
           Compress-Archive -Path pkg_aileflow\* -DestinationPath "${tag}.zip"
           Write-Host "Created: ${tag}.zip ($([Math]::Round((Get-Item "${tag}.zip").Length/1KB)) KB)"
 
@@ -154,12 +162,15 @@ jobs:
 
             | File | Description |
             |---|---|
-            | `AileEx.exe`      | Executable (MSVC x64 Release) |
-            | `README.md`       | Overview and usage |
-            | `bin\7z.dll`      | 7-Zip ZS (zstd fork) x64 backend |
-            | `bin\7z.sfx`      | SFX stub (Desktop) |
-            | `bin\7zCon.sfx`   | SFX stub (console) |
-            | `bin\License.txt` | 7-Zip license |
+            | `AileEx.exe`           | Executable (MSVC x64 Release) |
+            | `README.md`            | Overview and usage |
+            | `AileExShell.dll`      | Explorer right-click menu handler |
+            | `register-shell.bat`   | Enable the right-click menu (per-user) |
+            | `unregister-shell.bat` | Disable the right-click menu |
+            | `bin\7z.dll`           | 7-Zip ZS (zstd fork) x64 backend |
+            | `bin\7z.sfx`           | SFX stub (Desktop) |
+            | `bin\7zCon.sfx`        | SFX stub (console) |
+            | `bin\License.txt`      | 7-Zip license |
 
             > `7z.dll`（zstd 対応 x64 ビルド）を `bin\` に同梱しています。別途インストール不要です。
             > Visual C++ Redistributable 2015–2022（`VCRUNTIME140.dll`, `MSVCP140.dll`）は必要です。
@@ -200,14 +211,17 @@ jobs:
 
             | File | Description |
             |---|---|
-            | `AileFlow.exe`    | Executable (MSVC x64 Release) |
-            | `README.md`       | Overview and usage |
-            | `b2e/`            | B2E archive handler scripts |
-            | `bin\7z.exe`      | 7-Zip ZS (zstd fork) x64 CLI front-end |
-            | `bin\7zG.exe`     | 7-Zip ZS (zstd fork) x64 GUI front-end |
-            | `bin\7z.dll`      | Codec/format engine (required by 7z.exe / 7zG.exe) |
-            | `bin\7z.sfx`      | SFX stub (Desktop) |
-            | `bin\License.txt` | 7-Zip license |
+            | `AileFlow.exe`         | Executable (MSVC x64 Release) |
+            | `README.md`            | Overview and usage |
+            | `b2e/`                 | B2E archive handler scripts |
+            | `AileFlowShell.dll`    | Explorer right-click menu handler |
+            | `register-shell.bat`   | Enable the right-click menu (per-user) |
+            | `unregister-shell.bat` | Disable the right-click menu |
+            | `bin\7z.exe`           | 7-Zip ZS (zstd fork) x64 CLI front-end |
+            | `bin\7zG.exe`          | 7-Zip ZS (zstd fork) x64 GUI front-end |
+            | `bin\7z.dll`           | Codec/format engine (required by 7z.exe / 7zG.exe) |
+            | `bin\7z.sfx`           | SFX stub (Desktop) |
+            | `bin\License.txt`      | 7-Zip license |
 
             > 7-Zip ZS（zstd 対応 x64 ビルド）の `7z.exe` / `7zG.exe` を `bin\` に同梱しています。7z 系フォーマットは別途インストール不要です。
             > Visual C++ Redistributable 2015–2022（`VCRUNTIME140.dll`, `MSVCP140.dll`）は必要です。

@@ -113,6 +113,33 @@ else()
     message(STATUS "IPO/LTO not supported: ${IPO_ERR}")
 endif()
 
+# ── Shell extension DLL (Explorer right-click menu) ──────────────────────────
+# Shared COM core from common/shell + AileFlow-specific config. Pure UNICODE
+# Win32/COM — no kilib/B2E dependency. Delegates to AileFlow.exe via a/x/t.
+add_library(AileFlowShell SHARED
+    ${COMMON_DIR}/shell/ShellExt.cpp
+    ${COMMON_DIR}/shell/DllMain.cpp
+    shell/AileFlowShellConfig.cpp
+)
+target_include_directories(AileFlowShell PRIVATE
+    ${COMMON_DIR}
+    ${COMMON_DIR}/shell
+)
+target_compile_definitions(AileFlowShell PRIVATE
+    WIN32_LEAN_AND_MEAN UNICODE _UNICODE NOMINMAX _CRT_SECURE_NO_WARNINGS
+)
+target_link_libraries(AileFlowShell PRIVATE
+    ole32 oleaut32 shlwapi shell32 advapi32 user32 uuid
+)
+set_target_properties(AileFlowShell PROPERTIES OUTPUT_NAME "AileFlowShell")
+if(MSVC)
+    target_compile_options(AileFlowShell PRIVATE /W3 /utf-8)
+    target_link_options(AileFlowShell PRIVATE
+        "/MANIFEST:NO"
+        "/DEF:${CMAKE_CURRENT_SOURCE_DIR}/shell/AileFlowShell.def"
+    )
+endif()
+
 # Copy b2e scripts next to the exe after every build so the engine can find them.
 add_custom_command(TARGET AileFlow POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:AileFlow>/b2e"
