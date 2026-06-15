@@ -26,12 +26,15 @@ struct Labels {
     const wchar_t* help;
 };
 const Labels& L() {
+    // "..." marks verbs that open a dialog before acting (extract folder picker,
+    // compress options). Open shows the archive directly and Test runs at once,
+    // so they carry no ellipsis.
     static const Labels ja = {
-        L"開く", L"ここに展開", L"整合性テスト", L"圧縮",
+        L"開く", L"展開...", L"整合性テスト", L"圧縮...",
         L"選択した項目をアーカイブで処理します"
     };
     static const Labels en = {
-        L"Open", L"Extract Here", L"Test Integrity", L"Compress",
+        L"Open", L"Extract...", L"Test Integrity", L"Compress...",
         L"Handle the selected items with this archiver"
     };
     return IsJa() ? ja : en;
@@ -123,7 +126,7 @@ IFACEMETHODIMP CShellExt::QueryContextMenu(HMENU hMenu, UINT indexMenu,
     mii.fMask = MIIM_SUBMENU | MIIM_STRING | MIIM_ID;
     mii.wID = idCmdFirst + offset;   // id for the popup itself (not invoked)
     mii.hSubMenu = sub;
-    mii.dwTypeData = const_cast<wchar_t*>(g_shellConfig.handlerName);
+    mii.dwTypeData = const_cast<wchar_t*>(g_shellConfig.menuLabel);
     InsertMenuItemW(hMenu, indexMenu, TRUE, &mii);
 
     // Number of command ids consumed (verbs + the popup id).

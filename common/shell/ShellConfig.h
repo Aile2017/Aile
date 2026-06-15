@@ -15,8 +15,12 @@ struct ShellExtConfig {
     // Sibling executable the menu delegates to, e.g. L"AileEx.exe".
     // Resolved relative to the shell DLL's own directory (same folder).
     const wchar_t* exeName;
-    // ContextMenuHandlers subkey name and submenu label, e.g. L"AileEx".
+    // ContextMenuHandlers registry subkey name, e.g. L"AileEx". Must stay free of
+    // mnemonic '&' since it becomes a registry key name.
     const wchar_t* handlerName;
+    // Submenu display label, e.g. L"Aile&Ex" (the '&' marks the access key).
+    // Separate from handlerName so the registry key isn't polluted by '&'.
+    const wchar_t* menuLabel;
     // Human-readable CLSID registration description.
     const wchar_t* friendlyName;
 };

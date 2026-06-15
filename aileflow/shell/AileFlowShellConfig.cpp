@@ -7,5 +7,6 @@ const ShellExtConfig g_shellConfig = {
       { 0xbc, 0x9b, 0xad, 0xcc, 0xe7, 0x89, 0xa7, 0xb3 } },
     L"AileFlow.exe",
     L"AileFlow",
+    L"Aile&Flow",
     L"AileFlow Shell Extension",
 };
