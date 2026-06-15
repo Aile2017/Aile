@@ -75,9 +75,15 @@ jobs:
         shell: pwsh
         run: |
           $tag = "${{ steps.names.outputs.aileex_tag }}"
-          New-Item -ItemType Directory -Force pkg_aileex | Out-Null
+          New-Item -ItemType Directory -Force pkg_aileex\bin | Out-Null
           Copy-Item build_release\aileex\AileEx.exe pkg_aileex\AileEx.exe
           Copy-Item aileex\README.md               pkg_aileex\README.md
+          # Vendored 7-Zip ZS (x64) backend — apps search exe\bin\ automatically.
+          $vendor = "third_party\7zip-zstd"
+          Copy-Item $vendor\7z.dll      pkg_aileex\bin\7z.dll
+          Copy-Item $vendor\7z.sfx      pkg_aileex\bin\7z.sfx
+          Copy-Item $vendor\7zCon.sfx   pkg_aileex\bin\7zCon.sfx
+          Copy-Item $vendor\License.txt pkg_aileex\bin\License.txt
           Compress-Archive -Path pkg_aileex\* -DestinationPath "${tag}.zip"
           Write-Host "Created: ${tag}.zip ($([Math]::Round((Get-Item "${tag}.zip").Length/1KB)) KB)"
 
@@ -86,10 +92,19 @@ jobs:
         shell: pwsh
         run: |
           $tag = "${{ steps.names.outputs.aileflow_tag }}"
-          New-Item -ItemType Directory -Force pkg_aileflow | Out-Null
+          New-Item -ItemType Directory -Force pkg_aileflow\bin | Out-Null
           Copy-Item build_release\aileflow\AileFlow.exe pkg_aileflow\AileFlow.exe
           Copy-Item aileflow\README.md                  pkg_aileflow\README.md
           Copy-Item -Recurse aileflow\Release\b2e       pkg_aileflow\b2e
+          # Vendored 7-Zip ZS (x64) backend — apps search exe\bin\ automatically.
+          # 7z.exe / 7zG.exe are thin front-ends; they load 7z.dll as the codec/format
+          # engine from their own folder, so 7z.dll must ship alongside them.
+          $vendor = "third_party\7zip-zstd"
+          Copy-Item $vendor\7z.exe      pkg_aileflow\bin\7z.exe
+          Copy-Item $vendor\7zG.exe     pkg_aileflow\bin\7zG.exe
+          Copy-Item $vendor\7z.dll      pkg_aileflow\bin\7z.dll
+          Copy-Item $vendor\7z.sfx      pkg_aileflow\bin\7z.sfx
+          Copy-Item $vendor\License.txt pkg_aileflow\bin\License.txt
           Compress-Archive -Path pkg_aileflow\* -DestinationPath "${tag}.zip"
           Write-Host "Created: ${tag}.zip ($([Math]::Round((Get-Item "${tag}.zip").Length/1KB)) KB)"
 
@@ -139,12 +154,16 @@ jobs:
 
             | File | Description |
             |---|---|
-            | `AileEx.exe` | Executable (MSVC x64 Release) |
-            | `README.md`  | Overview and usage |
+            | `AileEx.exe`      | Executable (MSVC x64 Release) |
+            | `README.md`       | Overview and usage |
+            | `bin\7z.dll`      | 7-Zip ZS (zstd fork) x64 backend |
+            | `bin\7z.sfx`      | SFX stub (Desktop) |
+            | `bin\7zCon.sfx`   | SFX stub (console) |
+            | `bin\License.txt` | 7-Zip license |
 
-            > **実行時の依存 DLL / EXE** は同梱していません。
-            > Visual C++ Redistributable 2015–2022（`VCRUNTIME140.dll`, `MSVCP140.dll`）と `7z.dll` が必要です。
-            > RAR 機能は `WinRAR.exe` / `Rar.exe` または `unrar.dll` も参照します。詳細は README を参照してください。
+            > `7z.dll`（zstd 対応 x64 ビルド）を `bin\` に同梱しています。別途インストール不要です。
+            > Visual C++ Redistributable 2015–2022（`VCRUNTIME140.dll`, `MSVCP140.dll`）は必要です。
+            > RAR 機能は別途 `WinRAR.exe` / `Rar.exe` または `unrar.dll` を参照します（同梱なし）。詳細は README を参照してください。
           files: dist/${{ needs.build.outputs.aileex_tag }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -181,13 +200,18 @@ jobs:
 
             | File | Description |
             |---|---|
-            | `AileFlow.exe` | Executable (MSVC x64 Release) |
-            | `README.md`    | Overview and usage |
-            | `b2e/`         | B2E archive handler scripts |
+            | `AileFlow.exe`    | Executable (MSVC x64 Release) |
+            | `README.md`       | Overview and usage |
+            | `b2e/`            | B2E archive handler scripts |
+            | `bin\7z.exe`      | 7-Zip ZS (zstd fork) x64 CLI front-end |
+            | `bin\7zG.exe`     | 7-Zip ZS (zstd fork) x64 GUI front-end |
+            | `bin\7z.dll`      | Codec/format engine (required by 7z.exe / 7zG.exe) |
+            | `bin\7z.sfx`      | SFX stub (Desktop) |
+            | `bin\License.txt` | 7-Zip license |
 
-            > **実行時の依存 EXE** は同梱していません。
-            > Visual C++ Redistributable 2015–2022（`VCRUNTIME140.dll`, `MSVCP140.dll`）と、
-            > 各フォーマットに対応した外部ツール（7z.exe / WinRAR.exe 等）が必要です。詳細は README を参照してください。
+            > 7-Zip ZS（zstd 対応 x64 ビルド）の `7z.exe` / `7zG.exe` を `bin\` に同梱しています。7z 系フォーマットは別途インストール不要です。
+            > Visual C++ Redistributable 2015–2022（`VCRUNTIME140.dll`, `MSVCP140.dll`）は必要です。
+            > RAR 等その他フォーマットは対応外部ツール（`WinRAR.exe` 等）を別途参照します（同梱なし）。詳細は README を参照してください。
           files: dist/${{ needs.build.outputs.aileflow_tag }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -11,6 +11,9 @@ out/
 *.exp
 *.lib
 
+# Vendored 7-Zip ZS binaries (shipped in release packages — track despite *.exe rule)
+!third_party/7zip-zstd/*.exe
+
 # CMake
 CMakeCache.txt
 CMakeFiles/

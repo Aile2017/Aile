@@ -1,0 +1,4 @@
+# Vendored 7-Zip binaries — treat as binary, never apply CRLF/LF conversion.
+*.dll binary
+*.exe binary
+*.sfx binary
