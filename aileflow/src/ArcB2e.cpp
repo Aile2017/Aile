@@ -822,17 +822,18 @@ void CArcB2e::CB2eCore::resp( bool needq, const wchar_t* opt, const CharArray& a
 	if( !fp.open( rspfile,false ) )
 		return;
 
-	// The response file is consumed by the external tool, which still expects
-	// its current (ANSI / CP_ACP) encoding.  Convert each segment to CP_ACP
-	// before writing.  (Switching this + the tool's -scs to UTF-8 is the later
-	// step that makes non-ASCII names lossless.)
-	auto writeAnsi = [&]( const wchar_t* w, int wlen )
+	// The response file is consumed by the external tool.  Write it as UTF-8;
+	// the 7z-family .b2e scripts pass -scsUTF-8 so 7-Zip reads the list file as
+	// UTF-8, making non-ASCII names lossless.  (Tools that do not understand
+	// -scsUTF-8, e.g. cabarc, still read ASCII names correctly since UTF-8 is an
+	// ASCII superset; non-ASCII names for those tools are out of scope here.)
+	auto writeUtf8 = [&]( const wchar_t* w, int wlen )
 	{
 		if( wlen<=0 ) return;
-		int n = ::WideCharToMultiByte( CP_ACP, 0, w, wlen, NULL, 0, NULL, NULL );
+		int n = ::WideCharToMultiByte( CP_UTF8, 0, w, wlen, NULL, 0, NULL, NULL );
 		if( n<=0 ) return;
 		std::vector<char> abuf( n );
-		::WideCharToMultiByte( CP_ACP, 0, w, wlen, abuf.data(), n, NULL, NULL );
+		::WideCharToMultiByte( CP_UTF8, 0, w, wlen, abuf.data(), n, NULL, NULL );
 		fp.write( abuf.data(), (unsigned long)n );
 	};
 
@@ -864,7 +865,7 @@ void CArcB2e::CB2eCore::resp( bool needq, const wchar_t* opt, const CharArray& a
 					p--;
 			}
 
-			writeAnsi( s, static_cast<int>(p-s) );
+			writeUtf8( s, static_cast<int>(p-s) );
 			fp.write( "\r\n", 2 );
 
 			// Quote balancing fix #2

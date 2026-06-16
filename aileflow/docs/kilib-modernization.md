@@ -128,28 +128,33 @@ kilib コア層＋エンジン層（`Archiver`/`ArcB2e`/`B2eScript`/`B2eBridge`/
 gate 16 項目 PASS / 0 fail。コマンドラインは `CreateProcessW` で可逆化。境界（stdout 復号・
 レスポンスファイル）は当面 CP_ACP のままなので非 ASCII カナリア（`日本語_😀.txt` の
 listing / selective-extract）は WARN 据置＝非回帰。
+（→ その後 2026-06-16 の **最終段** で境界を UTF-8 化し、両カナリアとも PASS 化済み。下記参照。）
 
-**最終段（残・別作業）= 非 ASCII カナリア WARN→PASS**: 境界 CP を CP_ACP→UTF-8 へ。
-`Archiver` の stdout 復号（`lst_exe`/`tst_exe`）と `resp` 書き出しを UTF-8 化し、`.b2e` の
-list/test/resp コマンドに 7-Zip の `-scc`/`-scs`（UTF-8）スイッチを付与。
+**✅ 最終段 完了（2026-06-16）= 非 ASCII カナリア WARN→PASS**: 境界 CP を CP_ACP→UTF-8 へ。
+`Archiver` の stdout 復号（`lst_exe`/`tst_exe`）と `resp` 書き出しを UTF-8 化し、**7z 系の
+`.b2e`**（7z/zip/cab/lzh/rpm.cpio/tar系/0）の list/test に `-sccUTF-8`、resp 利用の encode に
+`-scsUTF-8` を付与。ハーネス **20 passed / 0 failed**（`日本語_😀.txt` の一覧・選択解凍が
+両カナリアとも PASS）。AileFlow Debug/Release ともビルド緑。
 
-### ▶ 次回の最初の一手（resume here）
+実施内容:
+1. `Archiver.cpp` `lst_exe`/`tst_exe`: stdout 復号を `MultiByteToWideChar(CP_UTF8, …)` に（2 箇所）。
+2. `ArcB2e.cpp` `resp`: `writeAnsi`→`writeUtf8`、`WideCharToMultiByte(CP_UTF8, …)` に。
+3. `.b2e`（7z 系一括）: list の `7z.exe l` と test の `7z.exe t` に `-sccUTF-8`、
+   resp を使う encode/sfxd の `-scsWIN`→`-scsUTF-8`。
 
-現状: `refactor/kilib-wide-modernization @ 409add7`、ビルド緑・実機スモーク合格。
-最終段の具体手順:
-1. `Archiver.cpp` の `lst_exe`/`tst_exe`: stdout 復号の `MultiByteToWideChar(CP_ACP, …)` を
-   `CP_UTF8` に変更（2 箇所）。
-2. `ArcB2e.cpp` の `resp`: `writeAnsi` ラムダの `WideCharToMultiByte(CP_ACP, …)` を `CP_UTF8` に。
-3. `.b2e` スクリプト（まず `7z.b2e` / `zip.zipx.b2e`）の list/test/encode コマンドに 7-Zip の
-   `-sccUTF-8`（コンソール出力）/`-scsUTF-8`（リスト/レスポンスファイル）を付与。
-   ※どのフォーマットまで対応するかは作業前にユーザーと方針確認。
-4. 検証: `cmake --build build --target AileFlowHarness` → 実行し、
-   `listed entry present: 日本語_😀.txt` と `selective-extract locate: 日本語_😀.txt` が
-   **WARN→PASS** になること。ASCII ゲート 16 は緑維持。
-5. GUI 実機で日本語名アーカイブの一覧・展開を確認。
+スコープ判断（ユーザー確認済み「7z.exe 系を一括対応」）: stdout 復号はグローバルなので 7z 系を
+一括 UTF-8 化。**非 7z ツール**（cab の `cabarc.exe`・`rar.b2e` の `Rar.exe`・`zpaq64.exe`）は
+今回対象外。特に **CAB 作成（cabarc）は resp が UTF-8 になるため非 ASCII 名が壊れ得る**
+（ASCII は無事）。詳細は `limitations.md`「Non-ASCII Filenames (UTF-8 boundary)」参照。
 
-注意: 7-Zip 版により `-scc/-scs` の対応可否・既定挙動が異なるため、まず 7z 単体で挙動確認すると安全。
-[[既存]] のハーネスがそのまま回帰ゲートになる。
+### ▶ 残課題（後続・任意）
+
+- **非 7z ツールの UTF-8 化**: `rar.b2e`（Rar.exe の charset スイッチ）・`zpaq.b2e`・cab 作成。
+  本格対応は「`.b2e` にコードページヒントを持たせ、パイプ境界で参照して復号」設計
+  （本ファイル「stdout 復号の方針」節）に接続するのが筋。
+- **ロードマップ 7「ブリッジ撤去」**: `B2eBridge` を passthrough 化 → 削除し
+  `SevenZipB2e` から直接呼び出し。境界変換が消えた今、縮小余地が大きい。
+- GUI 実機で日本語名アーカイブの一覧・展開・圧縮のスモーク（ユーザー検証）。
 
 以下は作業当時のコア層メモ（履歴）。
 

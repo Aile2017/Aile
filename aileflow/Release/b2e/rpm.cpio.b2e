@@ -20,8 +20,8 @@ decode1:
 
 test:
  ; Verify archive integrity.
- (xcmd 7z.exe t (arc))
+ (xcmd 7z.exe t -sccUTF-8 (arc))
 
 list:
  ; Parse 7z list output for AileFlow's archive view.
- (xscan "------------------" 1 "------------------" 1 53 7z.exe l (arc))
+ (xscan "------------------" 1 "------------------" 1 53 7z.exe l -sccUTF-8 (arc))

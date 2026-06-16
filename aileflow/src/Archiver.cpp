@@ -188,16 +188,16 @@ bool CArcModule::lst_exe( const wchar_t* lstcmd, aflArray& files,
 	::CloseHandle( pi.hProcess );
 	::CloseHandle( rp );
 
-	// Decode to UTF-16.  CP_ACP for now (lossy for non-ANSI names); switches to
-	// CP_UTF8 once the .b2e tools are told to emit UTF-8 (-scc).
+	// Decode to UTF-16.  The 7z-family .b2e list commands now pass -sccUTF-8, so
+	// the console output is UTF-8 and non-ANSI names survive the round-trip.
 	std::wstring wtext;
 	if( !bytes.empty() )
 	{
-		int need = ::MultiByteToWideChar( CP_ACP, 0, bytes.data(), (int)bytes.size(), NULL, 0 );
+		int need = ::MultiByteToWideChar( CP_UTF8, 0, bytes.data(), (int)bytes.size(), NULL, 0 );
 		if( need>0 )
 		{
 			wtext.resize( need );
-			::MultiByteToWideChar( CP_ACP, 0, bytes.data(), (int)bytes.size(), &wtext[0], need );
+			::MultiByteToWideChar( CP_UTF8, 0, bytes.data(), (int)bytes.size(), &wtext[0], need );
 		}
 	}
 
@@ -376,14 +376,14 @@ int CArcModule::tst_exe( const wchar_t* tstcmd, kiStr& output )
 		}
 	}
 
-	// Decode to UTF-16 (CP_ACP for now; see lst_exe).
+	// Decode to UTF-16 (CP_UTF8; see lst_exe — tools emit UTF-8 via -sccUTF-8).
 	if( !bytes.empty() )
 	{
-		int need = ::MultiByteToWideChar( CP_ACP, 0, bytes.data(), (int)bytes.size(), NULL, 0 );
+		int need = ::MultiByteToWideChar( CP_UTF8, 0, bytes.data(), (int)bytes.size(), NULL, 0 );
 		if( need>0 )
 		{
 			std::wstring w; w.resize( need );
-			::MultiByteToWideChar( CP_ACP, 0, bytes.data(), (int)bytes.size(), &w[0], need );
+			::MultiByteToWideChar( CP_UTF8, 0, bytes.data(), (int)bytes.size(), &w[0], need );
 			output += w.c_str();
 		}
 	}
