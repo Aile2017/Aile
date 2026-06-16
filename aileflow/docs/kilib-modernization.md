@@ -226,13 +226,26 @@ listing / selective-extract）は WARN 据置＝非回帰。
 → **`.b2e` にコードページヒントを持たせ、パイプ境界で参照して復号する**設計に収束させる。
    これで残存 narrow ポイントが「指定 CP で stdout を復号する1関数」だけになる。
 
-## ⚠ 注意: kl_app.cpp の load-bearing スキャフォールディング
+## ✅ kl_app.cpp のグローバルアロケータ撤去（2026-06-16 完了）
 
-`kl_app.cpp` は **グローバル `operator new/delete`（`new[]`/`delete[]` 含む）を
-`GlobalAlloc`/`GlobalFree` で置き換えている**。これはプロセス全体に効くため、UI 層・
-ブリッジの STL アロケーションもこの経路を通る可能性がある。`__cxa_pure_virtual` と
-ダミー `int main()` も同様にリンク時スキャフォールディング。**死にコード削除では触れず温存**。
-このアロケータ差し替えの撤去は単独で切り出し、十分なテストを伴って行うこと（高リスク）。
+`kl_app.cpp` はかつて **グローバル `operator new/delete`（`new[]`/`delete[]` 含む）を
+`GlobalAlloc`/`GlobalFree` で置き換えていた**（プロセス全体に作用＝UI 層・ブリッジの STL
+アロケーションも経由）。これを撤去し**標準 CRT の operator new/delete に統一**した。
+
+撤去前に確認した安全性:
+- **解放ミスマッチ無し**: `operator new` と `GlobalFree`/`GlobalLock` を混在させる箇所は皆無。
+  Global*/Local* の使用は全て自己完結したペア（`MainWindow.cpp` の D&D 用 DROPFILES の
+  `GlobalAlloc(GHND)`↔`GlobalFree`、`CommandLineToArgvW`→`LocalFree`、`FormatMessage`→`LocalFree`）。
+- **NULL 依存無し**: kilib は `new[]` の結果を NULL チェックせず即使用（例 `(m_pBuf=new wchar_t[...])[0]=…`）。
+  よって「OOM 時に NULL を返す（旧）vs std::bad_alloc を throw（新）」の差は OOM 時のみで、
+  どちらも致命的＝機能的退行なし。むしろ標準化で GlobalAlloc(GMEM_FIXED) の毎回オーバーヘッドが消える。
+
+検証: AileFlow Debug/Release・ハーネス全ビルド緑、ハーネス 20/20・exit 0（STL＋kilib の
+`new[]`/`delete[]` 実経路を通過）。**要 GUI 実機スモーク**（特に D&D・大量ファイル操作）。
+
+残るスキャフォールディング（**温存**）: `extern "C" __cxa_pure_virtual()`（純粋仮想呼び出しの
+リンク用）とダミー `int main()`（`/ENTRY` 無しビルドのリンクエラー回避）。これらは
+アロケータとは別物で、AileFlow は `wWinMain` 起点のため実行はされない。
 
 ## 進行順（ロードマップ）
 

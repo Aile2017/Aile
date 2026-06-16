@@ -13,41 +13,18 @@ kiApp* app()
 	return kiApp::st_pApp;
 }
 
-//-------------------- Allocator / runtime scaffolding ------------------------//
+//-------------------- Runtime scaffolding ------------------------------------//
 // AileFlow enters through wWinMain, not kilib's kilib_startUp(), so the original
 // startup routine (which drove kiWindow and app()->run()) has been removed along
-// with the kilib windowing framework.  The global operator new/delete overrides
-// below remain process-wide and load-bearing, so they are intentionally kept.
-
-void* operator new( size_t siz )
-{
-	return (void*)::GlobalAlloc( GMEM_FIXED, siz );
-}
-
-void* operator new[]( size_t siz )
-{
-	return (void*)::GlobalAlloc( GMEM_FIXED, siz );
-}
-
-void operator delete( void* ptr )
-{
-	::GlobalFree( (HGLOBAL)ptr );
-}
-
-void operator delete( void* ptr, size_t )
-{
-	::GlobalFree( (HGLOBAL)ptr );
-}
-
-void operator delete[]( void* ptr )
-{
-	::GlobalFree( (HGLOBAL)ptr );
-}
-
-void operator delete[]( void* ptr, size_t )
-{
-	::GlobalFree( (HGLOBAL)ptr );
-}
+// with the kilib windowing framework.
+//
+// The legacy global operator new/delete overrides (which routed every allocation
+// in the process through GlobalAlloc/GlobalFree) have been removed: the standard
+// CRT operator new/delete are used everywhere now.  This is safe because nothing
+// pairs operator new with GlobalFree/GlobalLock (the only Global*/Local* uses are
+// self-contained HGLOBAL handles for drag-drop and Win32 API buffers), and kilib
+// never null-checks a new[] result (so the only behavioral difference — throwing
+// std::bad_alloc instead of returning NULL on OOM — is moot; both are fatal).
 
 extern "C" void __cxa_pure_virtual()
 {
