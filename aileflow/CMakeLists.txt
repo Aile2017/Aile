@@ -32,7 +32,6 @@ set(KILIB_B2E_SOURCES
     src/B2eBridge.cpp
     src/B2eScript.cpp
     kilib/kl_app.cpp
-    kilib/kl_cmd.cpp
     kilib/kl_file.cpp
     kilib/kl_find.cpp
     kilib/kl_rythp.cpp

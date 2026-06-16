@@ -74,11 +74,6 @@ public: //-- Public interface --------------------------
 		}
 #endif
 
-protected: //-- For derived classes -----------------------------
-
-	// Function called at startup. Required.
-	virtual void run( kiCmdParser& cmd ) = 0;
-
 protected: //-- Internal processing -----------------------------------
 
 	kiApp()

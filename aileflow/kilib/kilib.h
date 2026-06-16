@@ -6,7 +6,6 @@
 
 #include "kl_str.h"
 #include "kl_misc.h"
-#include "kl_cmd.h"
 #include "kl_file.h"
 #include "kl_app.h"
 #include "kl_find.h"

@@ -8,10 +8,7 @@
 
 // --- Minimal kiApp subclass so that kilib's app() returns a valid pointer ---
 
-class AileFlowKiApp : public kiApp {
-protected:
-    void run(kiCmdParser&) override {}  // never called; AileFlow uses its own message loop
-};
+class AileFlowKiApp : public kiApp {};
 
 inline AileFlowKiApp& aileflow_kiapp() {
     static AileFlowKiApp s_instance;
