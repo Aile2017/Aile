@@ -168,6 +168,28 @@ void RunFormat(const std::wstring& root,
         bool ok = FileExists(out) && ReadFileBytes(out, &got) && got == e.content;
         Check(ok, e.gate, (L"round-trip content: " + e.name).c_str());
     }
+
+    // Selective extraction: this is the path that round-trips a name *back into*
+    // the engine (index -> WToA -> szFileName), i.e. the most encoding-sensitive
+    // operation.  Extract each entry on its own and confirm only it appears.
+    for (const auto& e : entries) {
+        // Find the listed item whose leaf matches this entry.
+        const ArchiveItem* match = nullptr;
+        for (const auto& it : items)
+            if (!it.isDir && (it.name == e.name || it.path == e.name)) { match = &it; break; }
+        if (!match) {
+            // Name was lost in listing (non-ASCII pre-flip); cannot target it.
+            Check(false, e.gate, (L"selective-extract locate: " + e.name).c_str());
+            continue;
+        }
+        const std::wstring selDir = JoinPath(root, L"sel_" + fmtExt + L"_" + std::to_wstring(match->index));
+        ::CreateDirectoryW(selDir.c_str(), nullptr);
+        HRESULT shr = B2e_Extract(archive.c_str(), { match->index }, items, selDir.c_str(), nullptr);
+        std::wstring out = JoinPath(selDir, e.name);
+        std::string got;
+        bool ok = SUCCEEDED(shr) && FileExists(out) && ReadFileBytes(out, &got) && got == e.content;
+        Check(ok, e.gate, (L"selective-extract round-trip: " + e.name).c_str());
+    }
 }
 
 } // namespace
