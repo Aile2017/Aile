@@ -10,10 +10,8 @@
 #include "kl_wnd.h"
 #include "kl_file.h"
 #include "kl_app.h"
-#include "kl_reg.h"
 #include "kl_find.h"
 #include "kl_wcmn.h"
-#include "kl_dnd.h"
 
 extern kiApp* app();
 extern void kilib_create_new_app();

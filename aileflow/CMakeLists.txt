@@ -33,10 +33,8 @@ set(KILIB_B2E_SOURCES
     src/B2eScript.cpp
     kilib/kl_app.cpp
     kilib/kl_cmd.cpp
-    kilib/kl_dnd.cpp
     kilib/kl_file.cpp
     kilib/kl_find.cpp
-    kilib/kl_reg.cpp
     kilib/kl_rythp.cpp
     kilib/kl_str.cpp
     kilib/kl_wnd.cpp
