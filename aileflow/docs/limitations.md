@@ -23,7 +23,7 @@ Format-specific support depends on whether the `.b2e` script has the correspondi
 | Feature | AileEx behavior | AileFlow behavior |
 |---|---|---|
 | **Integrity test** | Percentage + filename in `ProgressDlg` via `IArchiveExtractCallback` | Implemented: result shown in message box. Test availability depends on `.b2e` script. Some formats (TAR, GZ, BZ2) have no `test:` section. |
-| **Delete entries** | Menu enabled for all writable formats; all entries support deletion | Implemented: available via UI menu. Format support depends on `.b2e` script (7z, ZIP, RAR, LZH have `delete:`; TAR, CAB variants do not). |
+| **Delete entries** | Menu enabled for all writable formats; all entries support deletion | Implemented: available via UI menu. Format support depends on `.b2e` script (7z, ZIP, RAR have `delete:`; CAB, LZH, TAR variants do not — CAB/LZH are read-only, see below). |
 | **SFX creation** | Format-aware SFX option in compression dialog (7z/RAR) | Implemented: SFX checkbox dynamically enabled based on format's `sfx:`/`sfxd:` section. 7z and RAR support SFX output. |
 | **File list columns** | Name / Size / Compressed / Type / Modified — all populated via `IInArchive::GetProperty` | Name / Info (raw `7z.exe l` output line). Size, date, method columns absent initially. |
 | **Password on encrypted archives** | AileFlow's own password dialog shown before the list appears | Password dialog shown by the B2E engine's `input()` callback when the `.b2e` script requests it. Timing and appearance depend on the script; not all formats prompt consistently. |
@@ -45,7 +45,9 @@ After the kilib UTF-16 modernization, the external-tool I/O boundary uses **UTF-
 response (list) file as UTF-8, and the **7z-family `.b2e` scripts** pass `-sccUTF-8`
 (console output) / `-scsUTF-8` (list file) so 7-Zip emits and reads UTF-8. This makes
 listing, selective extraction, and compression of non-ASCII names (incl. emoji) lossless
-for the 7z-family backends (7z, zip, cab, lzh, rpm/cpio, tar-family, generic).
+for the 7z-family backends (7z, zip, tar-family, generic). CAB and LZH are listing /
+extraction / test only (read-only — see below), so the non-ASCII concern there is
+limited to reading, which 7-Zip handles losslessly.
 
 **RAR** is also UTF-8 across the boundary: `rar.b2e` passes `-scfr` (UTF-8 for
 redirected/console output) on `Rar.exe v`/`t` and `-scfl` (UTF-8 for `@list` files) on
@@ -56,7 +58,7 @@ Remaining hard limits (tool-side, not fixable by a switch):
 
 | Path | Behavior |
 |---|---|
-| **CAB creation (cabarc.exe)** — *known regression, intentionally accepted* | `cab.b2e` `encode:` feeds the response file to `cabarc.exe`, which is **ANSI-only** and has no UTF-8 list-file switch. Now that the response file is UTF-8, cabarc misreads the bytes as the local ANSI codepage and `FCIAddFile()` fails to open the listed files, so **creating a CAB with non-ASCII names no longer works** — including CP932-representable Japanese names, which *did* work before the UTF-8 boundary change (old CP_ACP response ↔ ANSI cabarc). Emoji/astral names never worked (outside CP932). A fix is known and verified (switch the `encode:` line from `(resp@ (listr))` to `(list)`, so the names ride the `CreateProcessW` command line and are down-converted to CP932 for the ANSI tool), but it was **intentionally not applied**: CAB creation is niche and `(list)` reintroduces the command-line length limit for very large file counts. ASCII CAB creation, and listing/testing/extracting *any* CAB via `7z.exe`, are unaffected. |
+| **CAB / LZH creation — removed (now read-only)** | The legacy writers (`cabarc.exe` for CAB, `lha32.exe` for LZH) are **ANSI-only** with no UTF-8 list-file switch. Once the boundary moved to UTF-8, cabarc misread the response-file bytes as the local codepage and `FCIAddFile()` failed to open the listed files, so **CAB creation with non-ASCII names (incl. CP932-representable Japanese, which worked before) silently produced nothing**; lha32 shares the same hazard. Rather than carry a half-broken niche writer, CAB and LZH were **folded into the read-only `cab.lzh.rpm.cpio.b2e` viewer** (7-Zip-backed) and the separate `cab.b2e` / `lzh.b2e` were deleted. Both formats no longer appear in the compression dialog. Listing, **per-entry selective extraction**, and integrity testing of any CAB/LZH via 7-Zip are unaffected (and CAB/LZH now gain real selective extraction, which the old scripts lacked). The known `(list)`-based cabarc fix was deliberately not pursued: CAB creation is niche and `(list)` reintroduces a command-line length limit for very large file counts. |
 | **zpaq (zpaq64.exe)** | `zpaq64.exe l` emits BMP characters as proper UTF-8 (e.g. `日本語` lists correctly under the global UTF-8 decode), but encodes astral/non-BMP characters (e.g. emoji `😀`) as **CESU-8** (UTF-8-encoded surrogate halves, `ED A0 BD ED B8 80` instead of `F0 9F 98 80`). zpaq exposes no charset switch, so **emoji/astral names show replacement characters in the listing**. BMP non-ASCII names work. |
 
 ASCII names work for all backends in every path. The regression harness

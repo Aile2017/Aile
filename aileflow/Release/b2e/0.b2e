@@ -2,27 +2,19 @@
 ; 0.b2e — Common Helper Registration Script
 ; ============================================================================
 ; This script is loaded before the format-specific .b2e files.
-; Its role is not to provide a writable format itself, but to register helper
-; executables that other scripts reference via (find ...).
+; It does not provide a writable format itself; it registers auxiliary tools
+; (via `use`) so their versions are collected for the About / component-version
+; listing.  (`use` only feeds the version report — it is not what makes
+; `(find ...)` resolve; find searches the exe dir, bin\, and PATH directly.)
 ;
 ; Current helpers:
-;   DecCabW.EXE  - CAB self-extracting stub
-;   DecLHaW.EXE  - LZH self-extracting stub
-;   DecZipW.EXE  - ZIP self-extracting stub
+;   Rar.exe      - console RAR used by rar.b2e for its v / t (list / test) paths,
+;                  which the default (name WinRAR.exe) module does not cover.
 ; ============================================================================
 
 load:
  ; Main backend used for generic listing / testing support.
  (name 7z.exe)
 
- ; Register CAB SFX stub so cab.b2e can build self-extracting archives.
- (let B DecCabW.EXE)
- (use %B)
-
- ; Register LZH SFX stub so lzh.b2e can build self-extracting archives.
- (let B DecLHaW.EXE)
- (use %B)
-
- ; Register ZIP SFX stub so zip.zipx.b2e can build self-extracting archives.
- (let B DecZipW.EXE)
- (use %B)
+ ; Track the console RAR tool so its version shows up next to WinRAR.exe.
+ (use Rar.exe)

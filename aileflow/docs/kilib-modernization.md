@@ -165,6 +165,24 @@ listing / selective-extract）は WARN 据置＝非回帰。
 → 修正可能だったのは RAR のみ。zpaq/cab はツール側の根本制約として `limitations.md`
   「Non-ASCII Filenames (UTF-8 boundary)」に記録。
 
+### ✅ CAB / LZH の書き込み廃止（2026-06-16, 後続判断）
+
+cab（`cabarc.exe`）に加え LZH（`lha32.exe`）も同じ ANSI 専用ツールで非 ASCII 境界の
+ハザードを持つ。半端に壊れたニッチな書き込み経路を抱えるより read-only 化する方が単純、
+との判断で **`cab.b2e` / `lzh.b2e` を削除し、read-only の `rpm.cpio.b2e` を
+`cab.lzh.rpm.cpio.b2e` にリネーム**して 4 拡張子を 7-Zip 委譲の単一ビューアに集約。
+`encode:` が消えたことで `B2eBridge::BuildWritableFormats`（`!sections.encode` で skip）が
+両形式を圧縮ダイアログから自動的に除外する。一覧/テスト/展開は不変で、CAB/LZH は
+むしろ選択展開（`decode1` の `(list)`）を新たに獲得。cabarc/lha32 への依存も完全に解消。
+`0.b2e` の DecCabW/DecLHaW SFX stub 登録も除去。
+
+ついでの b2e 整理: **ZIP の `sfx:` も削除**（DecZipW.EXE スタブ結合方式の自己解凍を廃止）し、
+`0.b2e` から DecZipW 登録も除去。これで SFX stub 登録は 0 本に。代わりに、rar.b2e が
+`v`/`t`（list/test）で使う **`Rar.exe` を `0.b2e` に `(use)` 登録**して About のコンポーネント
+バージョン一覧に載るように（既定モジュールの `WinRAR.exe` は載るが Rar.exe は漏れていた）。
+備考: `(use)`/`m_subFile` は `ver()` の版列挙専用で、`(find)`（SearchPathW: exe→bin\→PATH）の
+解決には無関係。SFX は 7z / RAR のみ対応に整理された。
+
 ### ▶ 残課題（後続・任意）
 
 - **ロードマップ 7「ブリッジ撤去」**: `B2eBridge` を passthrough 化 → 削除し

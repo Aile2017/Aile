@@ -1,13 +1,19 @@
 ; ============================================================================
-; rpm.cpio.b2e — Read-only RPM / CPIO Backend Script
+; cab.lzh.rpm.cpio.b2e — Read-only CAB / LZH / RPM / CPIO Backend Script
 ; ============================================================================
 ; This script is intentionally read-only.
 ; It relies on 7z.exe / 7zG.exe for listing, extraction, and integrity testing.
 ; No encode:, delete:, or sfx: section is provided.
+;
+; CAB and LZH creation was dropped here: their legacy ANSI writers (cabarc.exe /
+; lha32.exe) corrupt non-ASCII (incl. CP932 Japanese) entry paths once the I/O
+; boundary moved to UTF-8.  Folding both extensions into this 7-Zip-backed
+; viewer keeps full read access (and gains real selective extraction) while
+; removing the broken write path and the cabarc/lha32 dependency entirely.
 ; ============================================================================
 
 load:
- ; 7zG.exe is sufficient for extraction of RPM / CPIO-family archives.
+ ; 7zG.exe is sufficient for extraction of the whole CAB/LZH/RPM/CPIO family.
  (name 7zG.exe)
 
 decode:

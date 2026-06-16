@@ -56,11 +56,8 @@ script-based backend, so no archive DLLs are bundled with the application itself
 - Windows (Vista or later)
 - Visual C++ Redistributable 2015–2022 (`VCRUNTIME140.dll`, `MSVCP140.dll`)
 - External tools reachable from the same directory as `AileFlow.exe` or via `PATH`:
-  - **7-Zip** — `7z.exe`, `7zG.exe` (for 7z, ZIP, TAR, and other formats)
-  - **WinRAR** — `WinRAR.exe` (for RAR)
-  - `DecCabW.EXE` (for CAB)
-  - `DecLHaW.EXE` (for LZH)
-  - `DecZipW.EXE` (alternative ZIP extractor)
+  - **7-Zip** — `7z.exe`, `7zG.exe` (for 7z, ZIP, TAR, CAB, LZH, RPM/CPIO, and other formats)
+  - **WinRAR** — `WinRAR.exe`, `Rar.exe` (for RAR)
 
 ### Build
 

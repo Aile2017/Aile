@@ -61,9 +61,7 @@ AileFlow/
       zip.zipx.b2e
       rar.b2e
       tar.gz.bz2.xz.zst.liz.lz4.lz5.br.b2e
-      lzh.b2e
-      cab.b2e
-      rpm.cpio.b2e
+      cab.lzh.rpm.cpio.b2e          … read-only viewer (CAB/LZH/RPM/CPIO via 7-Zip)
       0.b2e
   res/                          … [A] Resources (icons, RC file — from AileEx)
   docs/
@@ -235,7 +233,7 @@ User opens About dialog
   → About dialog displays:
       Application name: AileFlow Archive Manager
       URL: https://github.com/Aile2017/AileFlow
-      Component versions: 7z.exe, DecCabW.EXE, DecLHaW.EXE, DecZipW.EXE, WinRAR.exe, ...
+      Component versions: 7z.exe, WinRAR.exe, Rar.exe, ...
 ```
 
 ---
