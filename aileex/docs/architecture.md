@@ -179,3 +179,58 @@ After `Settings::Save()`, call `App::ReloadDlls()` to reload with new DLL paths.
 | `CreateAcceleratorTable` | Keyboard shortcuts |
 | `SetProcessDpiAwarenessContext` | DPI support (PerMonitorV2) |
 | `IFileOpenDialog` (Shell) | Folder selection dialog (extract destination, settings dialog) |
+
+## Object-Oriented Review Notes (2026-06)
+
+This section records refactoring concerns identified during a source review so they can
+be revisited without re-running the whole analysis.
+
+### Main concerns
+
+1. **`MainWindow` is a controller-heavy god object.**
+   It owns window layout and message handling, but also archive open/extract/test/add/delete
+   workflows, password prompting, MRU updates, temporary file lifecycle, and backend selection.
+   The current structure works, but it makes behavior changes risky because UI concerns and
+   archive-domain concerns are modified in the same class.
+
+2. **`App` acts as a singleton service locator plus startup orchestrator.**
+   `App::Instance()` exposes `Settings`, `SevenZip`, and `UnrarDll` globally, while `App.cpp`
+   also owns message-loop startup modes (`browse`, `compress`, `extract`, `test`). This keeps
+   call sites short, but hides dependencies and makes isolated testing or backend substitution harder.
+
+3. **`SevenZip` is wider than a normal backend wrapper.**
+   Besides 7z.dll loading, it also owns format enumeration, split-volume handling, RAR fallback,
+   temp-file unwrap logic, item caching, comment/property helpers, and many COM callback classes.
+   The result is a useful but broad abstraction whose internal compatibility rules leak into callers
+   through concepts such as `effectivePath`, cache invalidation, and format-specific caveats.
+
+4. **Archive backend behavior is selected by flags instead of polymorphism.**
+   `MainWindow` relies on flags such as `m_openedWithUnrar`, `m_isReadOnly`, and the distinction
+   between display path and operative path. This effectively encodes backend/session state in booleans
+   rather than in separate archive-session objects with explicit capabilities.
+
+5. **RAR and 7z backends duplicate responsibilities without sharing a common interface.**
+   `UnrarDll` and `SevenZip` both provide load/list/extract/test style functionality, but they are
+   consumed through ad-hoc branching instead of a shared archive backend contract. This keeps each
+   implementation simple locally, but increases drift and cross-backend conditionals in `MainWindow`.
+
+6. **Dialogs contain business rules in addition to presentation.**
+   `CompressDlg` and related dialogs do more than gather input: they also decide extension rewriting,
+   default format/method policy, and settings persistence behavior. That logic is legitimate, but it
+   ties archive policy changes to dialog code changes.
+
+### Refactoring priority
+
+- First priority: split archive operation orchestration out of `MainWindow` into smaller services
+  or session objects.
+- Second priority: define a clearer backend capability model (`canExtract`, `canDelete`, `canComment`,
+  etc.) rather than deriving behavior from several booleans.
+- Third priority: reduce `SevenZip` scope by separating pure 7z.dll adaptation from higher-level
+  archive session features such as split unwrap and caching.
+
+### Existing strengths worth preserving
+
+- `IExtractProgressSink` / `ProgressPostSink` keep worker-thread progress reporting separate from
+  archive implementations.
+- The internal callback/helper classes in `SevenZip.cpp` use localized ownership and RAII patterns,
+  which helps contain COM/Win32 lifetime complexity even though the file is large.
