@@ -1,5 +1,5 @@
 //--- K.I.LIB ---
-// kl_cmd.h : commandline parser
+// kl_cmd.h : commandline parser (UTF-16)
 
 #include "stdafx.h"
 #include "kilib.h"
@@ -8,19 +8,19 @@
 //------------------------ String memory processing etc. -----------------------//
 
 
-kiCmdParser::kiCmdParser( char* cmd, bool ignoreFirst )
+kiCmdParser::kiCmdParser( wchar_t* cmd, bool ignoreFirst )
 {
 	m_Buffer = NULL;
 	if( cmd )
 		doit( cmd, ignoreFirst );
 }
 
-kiCmdParser::kiCmdParser( const char* cmd, bool ignoreFirst )
+kiCmdParser::kiCmdParser( const wchar_t* cmd, bool ignoreFirst )
 {
 	m_Buffer=NULL;
 	if( cmd )
 	{
-		m_Buffer = new char[ ki_strlen(cmd)+1 ];
+		m_Buffer = new wchar_t[ ki_strlen(cmd)+1 ];
 		ki_strcpy( m_Buffer, cmd );
 		doit( m_Buffer, ignoreFirst );
 	}
@@ -35,26 +35,26 @@ kiCmdParser::~kiCmdParser()
 //---------------------------- Splitting processing -----------------------------//
 
 
-void kiCmdParser::doit( char* start, bool ignoreFirst )
+void kiCmdParser::doit( wchar_t* start, bool ignoreFirst )
 {
-	char* p=start;
-	char endc;
+	wchar_t* p=start;
+	wchar_t endc;
 	bool first = true;
 
-	while( *p!='\0' )
+	while( *p!=L'\0' )
 	{
 		// Skip extra whitespace
-		while( *p==' ' ) //|| *p=='\t' || *p=='\r' || *p=='\n' )
+		while( *p==L' ' ) //|| *p=='\t' || *p=='\r' || *p=='\n' )
 			p++;
 
 		// If '"', record it and advance one more
-		if( *p=='"' )
-			endc='"', p++;
+		if( *p==L'"' )
+			endc=L'"', p++;
 		else
-			endc=' ';
+			endc=L' ';
 
 		// If end-of-text, finish
-		if( *p=='\0' )
+		if( *p==L'\0' )
 			break;
 
 		if( first && ignoreFirst )
@@ -62,18 +62,18 @@ void kiCmdParser::doit( char* start, bool ignoreFirst )
 		else
 		{
 			// Save argument
-			if( *p=='-' )
+			if( *p==L'-' )
 				m_Switch.add( p );
 			else
 				m_Param.add( p );
 		}
 
 		// Move toward end of argument...
-		while( *p!=endc && *p!='\0' )
+		while( *p!=endc && *p!=L'\0' )
 			p++;
 
 		// Terminate with '\0' to delimit argument
-		if( *p!='\0' )
-			*(p++) = '\0';
+		if( *p!=L'\0' )
+			*(p++) = L'\0';
 	}
 }

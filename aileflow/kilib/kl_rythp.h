@@ -11,10 +11,10 @@ class kiVar : public kiStr
 {
 public:
 	kiVar() : kiStr(20) {}
-	explicit kiVar( const char* s ) : kiStr( s, 20 ){}
+	explicit kiVar( const wchar_t* s ) : kiStr( s, 20 ){}
 	explicit kiVar( const kiStr& s ) : kiStr( s, 20 ){}
 	explicit kiVar( const kiVar& s ) : kiStr( s, 20 ){}
-	void operator = ( const char* s ){ kiStr::operator =(s); }
+	void operator = ( const wchar_t* s ){ kiStr::operator =(s); }
 
 	int getInt();
 	kiVar& quote();
@@ -32,11 +32,11 @@ public:
 
 public:
 	// eval
-	void eval( char* str, kiVar* ans=NULL );
+	void eval( wchar_t* str, kiVar* ans=NULL );
 
 protected:
 	// Get arguments with eval and variable substitution applied
-	void getarg( char* a, bool b, kiVar* arg );
+	void getarg( wchar_t* a, bool b, kiVar* arg );
 
 	// Execute function. [ bool=handled?, name=function name, a,b,c=args, r=return value ]
 	virtual bool exec_function( const kiVar& name,
@@ -47,9 +47,9 @@ private:
 	kiVar ele[256];
 
 	// Parameter splitting
-	static char* split_tonext( char* p );
-	static char* split_toend( char* p );
-	static bool split( char* buf, CharArray& argv, BoolArray& argb, int& argc );
+	static wchar_t* split_tonext( wchar_t* p );
+	static wchar_t* split_toend( wchar_t* p );
+	static bool split( wchar_t* buf, CharArray& argv, BoolArray& argb, int& argc );
 };
 
 #endif

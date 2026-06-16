@@ -1,18 +1,18 @@
 //--- K.I.LIB ---
-// kl_find.h : FindFirstFile wrapper
+// kl_find.h : FindFirstFile wrapper (UTF-16)
 
 #include "stdafx.h"
 #include "kilib.h"
 
-#define isDots(p) (*p=='.' && (p[1]=='\0' || (p[1]=='.' && p[2]=='\0')))
+#define isDots(p) (*p==L'.' && (p[1]==L'\0' || (p[1]==L'.' && p[2]==L'\0')))
 
-bool kiFindFile::findfirst( const char* wild, WIN32_FIND_DATA* pfd )
+bool kiFindFile::findfirst( const wchar_t* wild, WIN32_FIND_DATAW* pfd )
 {
-	HANDLE xh = ::FindFirstFile( wild, pfd );
+	HANDLE xh = ::FindFirstFileW( wild, pfd );
 	if( xh==INVALID_HANDLE_VALUE )
 		return false;
 	while( isDots(pfd->cFileName) )
-		if( !::FindNextFile( xh, pfd ) )
+		if( !::FindNextFileW( xh, pfd ) )
 		{
 			::FindClose( xh );
 			return false;
@@ -30,15 +30,15 @@ void kiFindFile::close()
 	}
 }
 
-bool kiFindFile::begin( const char* wild )
+bool kiFindFile::begin( const wchar_t* wild )
 {
 	close();
 
-	h = ::FindFirstFile( wild, &fd );
+	h = ::FindFirstFileW( wild, &fd );
 	if( h==INVALID_HANDLE_VALUE )
 		return false;
 	while( isDots(fd.cFileName) )
-		if( !::FindNextFile( h, &fd ) )
+		if( !::FindNextFileW( h, &fd ) )
 		{
 			close();
 			return false;
@@ -46,7 +46,7 @@ bool kiFindFile::begin( const char* wild )
 	return true;
 }
 
-bool kiFindFile::next( WIN32_FIND_DATA* pfd )
+bool kiFindFile::next( WIN32_FIND_DATAW* pfd )
 {
 	if( h==INVALID_HANDLE_VALUE )
 		return false;
@@ -56,10 +56,10 @@ bool kiFindFile::next( WIN32_FIND_DATA* pfd )
 		ki_memcpy( pfd, &fd, sizeof(fd) );
 		return true;
 	}
-	if( !::FindNextFile( h, pfd ) )
+	if( !::FindNextFileW( h, pfd ) )
 		return false;
 	while( isDots(pfd->cFileName) )
-		if( !::FindNextFile( h, pfd ) )
+		if( !::FindNextFileW( h, pfd ) )
 			return false;
 	return true;
 }

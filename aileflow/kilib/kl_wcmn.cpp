@@ -1,20 +1,20 @@
 //--- K.I.LIB ---
-// kl_wcmn.h : windows-common-interface operatin
+// kl_wcmn.h : windows-common-interface operatin (UTF-16)
 
 #include "stdafx.h"
 #include "kilib.h"
 
 void kiSUtil::switchCurDirToExeDir()
 {
-	char exepath[MAX_PATH+50];
-	GetModuleFileName( NULL, exepath, MAX_PATH );
-	char* lastslash = 0;
-	for( char* p=exepath; *p; p=CharNext(p) )
-		if( *p=='\\' || *p=='/' )
+	wchar_t exepath[MAX_PATH+50];
+	GetModuleFileNameW( NULL, exepath, MAX_PATH );
+	wchar_t* lastslash = 0;
+	for( wchar_t* p=exepath; *p; p=kiStr::next(p) )
+		if( *p==L'\\' || *p==L'/' )
 			lastslash = p;
 	if(lastslash)
-		*lastslash = '\0';
-	SetCurrentDirectory(exepath);
+		*lastslash = L'\0';
+	SetCurrentDirectoryW(exepath);
 }
 
 static int CALLBACK __ki__ofp( HWND w, UINT m, LPARAM l, LPARAM d )
@@ -24,7 +24,7 @@ static int CALLBACK __ki__ofp( HWND w, UINT m, LPARAM l, LPARAM d )
 	return 0;
 }
 
-bool kiSUtil::getFolderDlg( char* buf, HWND par, const char* title, const char* def )
+bool kiSUtil::getFolderDlg( wchar_t* buf, HWND par, const wchar_t* title, const wchar_t* def )
 {
 	// Use IFileOpenDialog (Vista+)
 	IFileOpenDialog* pfd = NULL;
@@ -37,18 +37,12 @@ bool kiSUtil::getFolderDlg( char* buf, HWND par, const char* title, const char* 
 		pfd->SetOptions( opts | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM );
 
 		if( title && *title )
-		{
-			WCHAR wtitle[256];
-			::MultiByteToWideChar( CP_ACP, 0, title, -1, wtitle, 256 );
-			pfd->SetTitle( wtitle );
-		}
+			pfd->SetTitle( title );
 
 		if( def && *def )
 		{
-			WCHAR wdef[MAX_PATH];
-			::MultiByteToWideChar( CP_ACP, 0, def, -1, wdef, MAX_PATH );
 			IShellItem* psi = NULL;
-			if( SUCCEEDED(::SHCreateItemFromParsingName( wdef, NULL, IID_IShellItem, (void**)&psi )) )
+			if( SUCCEEDED(::SHCreateItemFromParsingName( def, NULL, IID_IShellItem, (void**)&psi )) )
 			{
 				pfd->SetFolder( psi );
 				psi->Release();
@@ -64,7 +58,7 @@ bool kiSUtil::getFolderDlg( char* buf, HWND par, const char* title, const char* 
 				LPWSTR pszPath = NULL;
 				if( SUCCEEDED(psi->GetDisplayName( SIGDN_FILESYSPATH, &pszPath )) )
 				{
-					::WideCharToMultiByte( CP_ACP, 0, pszPath, -1, buf, MAX_PATH, NULL, NULL );
+					ki_strcpy( buf, pszPath );
 					::CoTaskMemFree( pszPath );
 					ok = true;
 				}
@@ -76,7 +70,7 @@ bool kiSUtil::getFolderDlg( char* buf, HWND par, const char* title, const char* 
 	}
 
 	// Fallback: legacy SHBrowseForFolder
-	BROWSEINFO bi;
+	BROWSEINFOW bi;
 	ki_memzero( &bi, sizeof(bi) );
 	bi.hwndOwner      = par;
 	bi.pszDisplayName = buf;
@@ -85,48 +79,48 @@ bool kiSUtil::getFolderDlg( char* buf, HWND par, const char* title, const char* 
 	bi.lpfn           = __ki__ofp;
 	bi.lParam         = reinterpret_cast<LPARAM>(def);
 
-	LPITEMIDLIST id = ::SHBrowseForFolder( &bi );
+	LPITEMIDLIST id = ::SHBrowseForFolderW( &bi );
 	if( id==NULL )
 		return false;
-	::SHGetPathFromIDList( id, buf );
+	::SHGetPathFromIDListW( id, buf );
 	app()->shellFree( id );
 	return true;
 }
 
-void kiSUtil::getFolderDlgOfEditBox( HWND wnd, HWND par, const char* title )
+void kiSUtil::getFolderDlgOfEditBox( HWND wnd, HWND par, const wchar_t* title )
 {
-	char str[MAX_PATH];
-	::SendMessage( wnd, WM_GETTEXT, MAX_PATH, (LPARAM)str );
-	char* l = str;
-	for( char* x=str; *x; x=kiStr::next(x) )
+	wchar_t str[MAX_PATH];
+	::SendMessageW( wnd, WM_GETTEXT, MAX_PATH, (LPARAM)str );
+	wchar_t* l = str;
+	for( wchar_t* x=str; *x; x=kiStr::next(x) )
 		l=x;
-	if( *l=='\\' || *l=='/' )
-		*l='\0';
+	if( *l==L'\\' || *l==L'/' )
+		*l=L'\0';
 	if( getFolderDlg( str, par, title, str ) )
-		::SendMessage( wnd, WM_SETTEXT, 0, (LPARAM)str );
+		::SendMessageW( wnd, WM_SETTEXT, 0, (LPARAM)str );
 }
 
-void kiSUtil::msgLastError( const char* msg )
+void kiSUtil::msgLastError( const wchar_t* msg )
 {
-	char* pMsg;
-	::FormatMessage( 
+	wchar_t* pMsg;
+	::FormatMessageW(
 		FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_IGNORE_INSERTS,
-		NULL,::GetLastError(),MAKELANGID(LANG_NEUTRAL,SUBLANG_DEFAULT),(LPTSTR)&pMsg,0,NULL );
+		NULL,::GetLastError(),MAKELANGID(LANG_NEUTRAL,SUBLANG_DEFAULT),(LPWSTR)&pMsg,0,NULL );
 	if( msg )
-		app()->msgBox( kiStr(msg) + "\r\n\r\n" + pMsg );
+		app()->msgBox( kiStr(msg) + L"\r\n\r\n" + pMsg );
 	else
 		app()->msgBox( pMsg );
 	::LocalFree( pMsg );
 }
 
-bool kiSUtil::exist( const char* fname )
+bool kiSUtil::exist( const wchar_t* fname )
 {
-	return 0xffffffff != ::GetFileAttributes( fname );
+	return 0xffffffff != ::GetFileAttributesW( fname );
 }
 
-bool kiSUtil::isdir( const char* fname )
+bool kiSUtil::isdir( const wchar_t* fname )
 {
-	DWORD attr = ::GetFileAttributes( fname );
+	DWORD attr = ::GetFileAttributesW( fname );
 	return attr!=0xffffffff && (attr&FILE_ATTRIBUTE_DIRECTORY);
 }
 
@@ -136,11 +130,11 @@ bool kiSUtil::isJapaneseLocale()
 	return PRIMARYLANGID(lid) == LANG_JAPANESE;
 }
 
-const char* kiSUtil::getLocalizedString( int id )
+const wchar_t* kiSUtil::getLocalizedString( int id )
 {
-	static char buf[256];
+	static wchar_t buf[256];
 	kiStr s;
 	s.loadRsrc( id );
-	strcpy_s( buf, sizeof(buf), (const char*)s );
+	wcscpy_s( buf, _countof(buf), (const wchar_t*)s );
 	return buf;
 }

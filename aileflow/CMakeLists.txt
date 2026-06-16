@@ -77,11 +77,13 @@ if(MSVC)
     # Disable auto-manifest; the manifest is embedded via AileFlow.rc (1 RT_MANIFEST)
     target_link_options(AileFlow PRIVATE "/MANIFEST:NO")
 
-    # kilib + ArcB2e: ANSI narrow-char library — undefine UNICODE and WIN32_LEAN_AND_MEAN
-    # so Win32 macros expand to A-variants (CharLowerA, MessageBoxA, etc.) matching char*.
-    # Removing WIN32_LEAN_AND_MEAN restores shellapi.h (needed for HDROP in kl_wnd.h).
+    # kilib + ArcB2e: now a wide (UTF-16) library.  Compiled as UNICODE so the
+    # ki_str* macros (::lstr*) and the generic Win32 calls resolve to the W
+    # variants matching the wchar_t buffers.  Exceptions/RTTI stay disabled
+    # (kilib convention); WIN32_LEAN_AND_MEAN is still undefined so shellapi.h
+    # is available.
     set_source_files_properties(${KILIB_B2E_SOURCES} PROPERTIES
-        COMPILE_OPTIONS "/EHs-c-;/GR-;/UUNICODE;/U_UNICODE;/UWIN32_LEAN_AND_MEAN"
+        COMPILE_OPTIONS "/EHs-c-;/GR-;/UWIN32_LEAN_AND_MEAN"
     )
 
     # Release build optimizations:

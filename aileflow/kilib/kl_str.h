@@ -1,59 +1,54 @@
 //--- K.I.LIB ---
-// kl_str.h : string classes for K.I.LIB
+// kl_str.h : string classes for K.I.LIB (UTF-16 / wchar_t)
 
 #ifndef AFX_KISTR_H__1932CA2C_ACA6_4606_B57A_ACD0B7D1D35B__INCLUDED_
 #define AFX_KISTR_H__1932CA2C_ACA6_4606_B57A_ACD0B7D1D35B__INCLUDED_
 
 /*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*/
-// kiStr : Simple string
+// kiStr : Simple string (wide / UTF-16)
 
 class kiStr
 {
-private: //-- Global initialization etc. ---------------------
+public: //-- Character advance ---------------------------
 
-	// Populates st_lb[] (MBCS lead-byte table).  Invoked via standalone_init()
-	// from AileFlow's wWinMain startup.
-	static void init();
-
-public: //-- Public interface --------------------------
-
-	// Speed up 2-byte character processing (or at least feel like it)
-	static char* next( char* p )
-		{ return p+st_lb[(*p)&0xff]; }
-	static const char* next( const char* p )
-		{ return p+st_lb[(*p)&0xff]; }
-	static bool isLeadByte( char c )
-		{ return st_lb[c&0xff]==2; }
+	// With UTF-16 every code unit is fixed width, so advancing is trivial.
+	// (The historical MBCS lead-byte table is gone.)
+	static wchar_t* next( wchar_t* p )
+		{ return p+1; }
+	static const wchar_t* next( const wchar_t* p )
+		{ return p+1; }
+	static bool isLeadByte( wchar_t )
+		{ return false; }
 
 	// Initialize
 	kiStr( int start_size = 100 );
-	kiStr( const char* s, int min_size = 100 );
+	kiStr( const wchar_t* s, int min_size = 100 );
 	explicit kiStr( const kiStr& s );
 
 	// Operators
 	kiStr& operator = ( const kiStr& );
-	kiStr& operator = ( const char* s );
-	kiStr& operator += ( const char* s );
-	kiStr& operator += ( char c );
-	bool operator == ( const char* s ) const;
-	bool equalsIgnoreCase( const char* s ) const;
-	operator const char*()             const;
+	kiStr& operator = ( const wchar_t* s );
+	kiStr& operator += ( const wchar_t* s );
+	kiStr& operator += ( wchar_t c );
+	bool operator == ( const wchar_t* s ) const;
+	bool equalsIgnoreCase( const wchar_t* s ) const;
+	operator const wchar_t*()          const;
 	int len()                          const;
 	void lower()
-		{ ::CharLower(m_pBuf); }
+		{ ::CharLowerW(m_pBuf); }
 	void upper()
-		{ ::CharUpper(m_pBuf); }
+		{ ::CharUpperW(m_pBuf); }
 	kiStr& setInt( int n, bool cm=false );
 	void replaceToSlash() {
-		for(char* p=m_pBuf; *p; p=next(p))
-			if(*p=='\\')
-				*p='/';
+		for(wchar_t* p=m_pBuf; *p; p=next(p))
+			if(*p==L'\\')
+				*p=L'/';
 	}
 	void replaceToBackslash() { replaceToBackslash(m_pBuf); }
-	static void replaceToBackslash(char* p) {
+	static void replaceToBackslash(wchar_t* p) {
 		for(; *p; p=next(p))
-			if(*p=='/')
-				*p='\\';
+			if(*p==L'/')
+				*p=L'\\';
 	}
 
 	// Load from resource
@@ -61,18 +56,14 @@ public: //-- Public interface --------------------------
 
 	kiStr& removeTrailWS();
 
-	// Called by AileFlow startup to initialize the MBCS character-advance table
-	// (st_lb[]).  Replaces the private kilib_startUp() path when using wWinMain.
-	static void standalone_init() { init(); }
+	// Retained as a no-op for call sites (AileFlowKiLib.cpp): the MBCS
+	// lead-byte table it used to populate no longer exists under UTF-16.
+	static void standalone_init() {}
 
 protected: //-- For derived classes -----------------------------
 
-	char* m_pBuf;
-	int   m_ALen;
-
-private: //-- Internal processing -------------------------------------
-
-	static char st_lb[256];
+	wchar_t* m_pBuf;
+	int      m_ALen;
 
 public:
 
@@ -81,9 +72,9 @@ public:
 
 inline const kiStr operator+(const kiStr& x, const kiStr& y)
 	{ return kiStr(x) += y; }
-inline const kiStr operator+(const char* x, const kiStr& y)
+inline const kiStr operator+(const wchar_t* x, const kiStr& y)
 	{ return kiStr(x) += y; }
-inline const kiStr operator+(const kiStr& x, const char* y)
+inline const kiStr operator+(const kiStr& x, const wchar_t* y)
 	{ return kiStr(x) += y; }
 
 /*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*/
@@ -95,7 +86,7 @@ public: //-- Public interface --------------------------
 
 	// Initialize
 	kiPath() : kiStr( MAX_PATH ){}
-	explicit kiPath( const char* s ) : kiStr( s, MAX_PATH ){}
+	explicit kiPath( const wchar_t* s ) : kiStr( s, MAX_PATH ){}
 	explicit kiPath( const kiStr& s ) : kiStr( s, MAX_PATH ){}
 	explicit kiPath( const kiPath& s ) : kiStr( s, MAX_PATH ){}
 	kiPath( int nPATH, bool bs = true ) : kiStr( MAX_PATH )
@@ -106,7 +97,7 @@ public: //-- Public interface --------------------------
 		}
 
 	// operator
-	void operator = ( const char* s ){ kiStr::operator =(s); }
+	void operator = ( const wchar_t* s ){ kiStr::operator =(s); }
 
 	// Get special path
 	void beSpecialPath( int nPATH );
@@ -134,21 +125,21 @@ public: //-- Public interface --------------------------
 	// Drive type
 	UINT getDriveType() const;
 	// Whether in the same directory
-	bool isInSameDir(const char* r) const;
+	bool isInSameDir(const wchar_t* r) const;
 
 	// [static] Extract filename only, without directory info
-	static const char* name( const char* str );
+	static const wchar_t* name( const wchar_t* str );
 	// [static] Last extension. NULL if none.
-	static const char* ext( const char* str );
+	static const wchar_t* ext( const wchar_t* str );
 	// [static] All extensions. NULL if none.
-	static const char* ext_all( const char* str );
+	static const wchar_t* ext_all( const wchar_t* str );
 
 	// non-static-ver
-	const char* name() const
+	const wchar_t* name() const
 		{ return name(m_pBuf); }
-	const char* ext() const
+	const wchar_t* ext() const
 		{ return ext(m_pBuf); }
-	const char* ext_all() const
+	const wchar_t* ext_all() const
 		{ return ext_all(m_pBuf); }
 };
 

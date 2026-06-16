@@ -29,10 +29,9 @@ typedef struct {
 	WORD	wRatio;
 	WORD	wDate;
 	WORD	wTime;
-	char	szFileName[FNAME_MAX32 + 1];
-	char	dummy1[3];
-	char	szAttribute[8];
-	char	szMode[8];
+	wchar_t	szFileName[FNAME_MAX32 + 1];
+	wchar_t	szAttribute[8];
+	wchar_t	szMode[8];
 } INDIVIDUALINFO, FAR *LPINDIVIDUALINFO;
 
 #if !defined(__BORLANDC__)

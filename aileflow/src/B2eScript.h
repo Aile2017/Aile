@@ -3,19 +3,19 @@
 #include <vector>
 
 struct B2eSections {
-    char* load = nullptr;
-    char* encode = nullptr;
-    char* decode = nullptr;
-    char* sfx = nullptr;
-    char* decode1 = nullptr;
-    char* list = nullptr;
-    char* test = nullptr;
-    char* del = nullptr;
+    wchar_t* load = nullptr;
+    wchar_t* encode = nullptr;
+    wchar_t* decode = nullptr;
+    wchar_t* sfx = nullptr;
+    wchar_t* decode1 = nullptr;
+    wchar_t* list = nullptr;
+    wchar_t* test = nullptr;
+    wchar_t* del = nullptr;
     bool  sfxDirect = false;
     bool  pack1 = false;
 };
 
-bool B2e_LoadAndPreprocessScriptFile(const char* path, std::vector<char>* buffer);
-void B2e_PreprocessScriptInPlace(char* script);
-void B2e_SplitSectionsInPlace(char* script, B2eSections* sections);
-bool B2e_IsSectionEmpty(const char* section);
+bool B2e_LoadAndPreprocessScriptFile(const wchar_t* path, std::vector<wchar_t>* buffer);
+void B2e_PreprocessScriptInPlace(wchar_t* script);
+void B2e_SplitSectionsInPlace(wchar_t* script, B2eSections* sections);
+bool B2e_IsSectionEmpty(const wchar_t* section);

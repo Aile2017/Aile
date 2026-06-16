@@ -12,8 +12,8 @@ class kiCmdParser
 public: //-- Public interface --------------------------
 
 	// Initialize with string
-	kiCmdParser( char* cmd, bool ignoreFirst=false );
-	kiCmdParser( const char* cmd, bool ignoreFirst=false );
+	kiCmdParser( wchar_t* cmd, bool ignoreFirst=false );
+	kiCmdParser( const wchar_t* cmd, bool ignoreFirst=false );
 
 	// Array of switch strings
 	cCharArray& option()
@@ -25,10 +25,10 @@ public: //-- Public interface --------------------------
 
 private: //-- Internal processing -----------------------------------
 
-	void doit( char* start, bool ignoreFirst );
+	void doit( wchar_t* start, bool ignoreFirst );
 	cCharArray m_Param;
 	cCharArray m_Switch;
-	char* m_Buffer;
+	wchar_t* m_Buffer;
 
 public:
 

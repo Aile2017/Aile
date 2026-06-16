@@ -33,9 +33,9 @@ public: //-- Public interface --------------------------
 		}
 
 	// Message box
-	int msgBox( const char* msg, const char* caption=NULL, UINT type=MB_OK )
+	int msgBox( const wchar_t* msg, const wchar_t* caption=NULL, UINT type=MB_OK )
 		{
-			return ::MessageBox( mainhwnd(), msg, caption, type );
+			return ::MessageBoxW( mainhwnd(), msg, caption, type );
 		}
 
 	// Free memory using the shell allocator

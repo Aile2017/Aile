@@ -14,21 +14,21 @@ public:
 	static void switchCurDirToExeDir();
 
 	// "Select Folder" dialog
-	static bool getFolderDlg( char* buf, HWND par, const char* title, const char* def );
-	static void getFolderDlgOfEditBox( HWND wnd, HWND par, const char* title );
+	static bool getFolderDlg( wchar_t* buf, HWND par, const wchar_t* title, const wchar_t* def );
+	static void getFolderDlgOfEditBox( HWND wnd, HWND par, const wchar_t* title );
 
 	// Display last error
-	static void msgLastError( const char* msg = NULL );
+	static void msgLastError( const wchar_t* msg = NULL );
 
 	// Does the file exist?
-	static bool exist( const char* fname );
-	static bool isdir( const char* fname );
+	static bool exist( const wchar_t* fname );
+	static bool isdir( const wchar_t* fname );
 
 	// Check if system locale is Japanese
 	static bool isJapaneseLocale();
 
 	// Get localized string (Japanese or English)
-	static const char* getLocalizedString( int id );
+	static const wchar_t* getLocalizedString( int id );
 };
 
 #endif
