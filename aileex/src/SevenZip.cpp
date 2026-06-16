@@ -10,6 +10,27 @@
 #include <wctype.h>
 #include <set>
 
+namespace {
+// 7-Zip returns integer properties (kpidSize / kpidPackSize) with a width that
+// depends on the format: 7z/zip use VT_UI8, but 32-bit formats such as CAB use
+// VT_UI4.  A strict `vt == VT_UI8` check silently drops those, showing size 0.
+// Coerce any integer PROPVARIANT to UInt64 instead.  (An absent value — e.g. the
+// per-file packed size of a solid CAB block — stays VT_EMPTY → 0, as expected.)
+UInt64 PropToUInt64(const PROPVARIANT& p) {
+    switch (p.vt) {
+    case VT_UI8: return p.uhVal.QuadPart;
+    case VT_UI4: return p.ulVal;
+    case VT_UI2: return p.uiVal;
+    case VT_UI1: return p.bVal;
+    case VT_I8:  return p.hVal.QuadPart >= 0 ? (UInt64)p.hVal.QuadPart : 0;
+    case VT_I4:  return p.lVal       >= 0 ? (UInt64)p.lVal       : 0;
+    case VT_I2:  return p.iVal       >= 0 ? (UInt64)p.iVal       : 0;
+    case VT_I1:  return p.cVal       >= 0 ? (UInt64)p.cVal       : 0;
+    default:     return 0;
+    }
+}
+} // namespace
+
 // ============================================================
 // CInFileStream — wraps a Win32 file handle as IInStream
 // ============================================================
@@ -829,13 +850,13 @@ HRESULT SevenZip::OpenArchive(const wchar_t* path, std::vector<ArchiveItem>& ite
         // Size
         PropVariantInit(&prop);
         archive->GetProperty(i, kpidSize, &prop);
-        it.size = (prop.vt == VT_UI8) ? prop.uhVal.QuadPart : 0;
+        it.size = PropToUInt64(prop);
         PropVariantClear(&prop);
 
         // Packed size
         PropVariantInit(&prop);
         archive->GetProperty(i, kpidPackSize, &prop);
-        it.packedSize = (prop.vt == VT_UI8) ? prop.uhVal.QuadPart : 0;
+        it.packedSize = PropToUInt64(prop);
         PropVariantClear(&prop);
 
         // Method
@@ -1492,13 +1513,13 @@ HRESULT SevenZip::GetArchiveProperties(const wchar_t* path,
             }
 
             PropVariantInit(&prop);
-            if (SUCCEEDED(archive->GetProperty(i, kpidSize, &prop)) && prop.vt == VT_UI8)
-                out.totalSize += prop.uhVal.QuadPart;
+            if (SUCCEEDED(archive->GetProperty(i, kpidSize, &prop)))
+                out.totalSize += PropToUInt64(prop);
             PropVariantClear(&prop);
 
             PropVariantInit(&prop);
-            if (SUCCEEDED(archive->GetProperty(i, kpidPackSize, &prop)) && prop.vt == VT_UI8)
-                out.packedTotal += prop.uhVal.QuadPart;
+            if (SUCCEEDED(archive->GetProperty(i, kpidPackSize, &prop)))
+                out.packedTotal += PropToUInt64(prop);
             PropVariantClear(&prop);
         }
 
