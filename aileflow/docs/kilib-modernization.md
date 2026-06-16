@@ -111,6 +111,24 @@ Rythp VM は元来 char バッファのテキストエンジン（`eval(char*)`/
 ## 回帰テストの担保（各ステップ共通）
 
 UI がモーダルで自動化しづらいため、`B2eBridge` の公開 API（`B2e_List`/`B2e_Extract`/
-`B2e_Compress`/`B2e_Test`/`B2e_Delete`/`B2e_GetWritableFormats`）を叩く小さなテストハーネスを
-用意し、代表フォーマット（7z / zip / tar.gz / rar など）で list→extract→compress→test の
-往復が wide 化前後で一致することを確認するのが安全。
+`B2e_Compress`/`B2e_Test`）を叩くヘッドレスハーネスを用意した。
+
+- 実体: `tests/harness.cpp`、CMake ターゲット `AileFlowHarness`（`EXCLUDE_FROM_ALL`・
+  WIN32/wWinMain で `kl_app.cpp` のダミー `main()` と衝突回避）。
+- 実行: `cmake --build build --target AileFlowHarness` → `build/aileflow/AileFlowHarness.exe`。
+  結果は `%TEMP%\aileflow_harness_result.txt` ＋ AllocConsole。終了コード 0=gate 合格。
+- 内容: 一時ディレクトリで 7z / zip について Compress→List→Test→Extract のラウンドトリップ。
+  各ケースに **ASCII 名（gate）** と **非 ASCII 名（日本語＋絵文字, baseline）** を含む。
+- 7z.exe は `CArcModule` の検索順（exe→bin\→PATH）でシステム 7-Zip が見つかるため dev ビルドで実行可。
+
+### フリップ前ベースライン（2026-06-16, commit 段階）
+
+| ケース | 結果 | 意味 |
+|---|---|---|
+| ASCII 全項目（7z/zip） | PASS | 既存機能の健全性 |
+| 非 ASCII **解凍内容** | PASS | 全解凍は `7z.exe` が Unicode 名で書くため成功 |
+| 非 ASCII **一覧表示** | **WARN** | kilib が stdout を CP_ACP 復号 → 名前が化ける（narrow 境界） |
+
+→ **UTF-16 フリップ成功の判定 = 「listed entry present: 日本語_😀.txt」が WARN→PASS**。
+   選択解凍（index→`WToA`）も同様に wide 化で改善されるはず（現ハーネスは全解凍のみ検証。
+   将来 wide 経路の確証を強めるなら選択解凍ケースの追加を検討）。

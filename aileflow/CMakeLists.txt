@@ -145,3 +145,36 @@ add_custom_command(TARGET AileFlow POST_BUILD
             "$<TARGET_FILE_DIR:AileFlow>/b2e"
     COMMENT "Copying b2e scripts → $<TARGET_FILE_DIR:AileFlow>/b2e"
 )
+
+# ── Headless regression harness (safety net for the kilib UTF-16 migration) ──
+# Links the same ANSI kilib engine + B2eBridge as AileFlow, minus the UI, and
+# drives Compress/List/Test/Extract round-trips from a UNICODE wWinMain entry.
+# EXCLUDE_FROM_ALL: never built by a plain `cmake --build`; opt in with
+#   cmake --build build --target AileFlowHarness
+# WIN32 (wWinMain) avoids colliding with the dummy int main() in kl_app.cpp.
+add_executable(AileFlowHarness WIN32 EXCLUDE_FROM_ALL
+    tests/harness.cpp
+    ${KILIB_B2E_SOURCES}
+)
+target_include_directories(AileFlowHarness PRIVATE
+    src
+    ${COMMON_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_compile_definitions(AileFlowHarness PRIVATE
+    WIN32_LEAN_AND_MEAN UNICODE _UNICODE NOMINMAX _CRT_SECURE_NO_WARNINGS
+)
+target_link_libraries(AileFlowHarness PRIVATE
+    comctl32 shlwapi shell32 ole32 oleaut32 advapi32 comdlg32 version
+)
+if(MSVC)
+    target_compile_options(AileFlowHarness PRIVATE /W3 /utf-8)
+    target_link_options(AileFlowHarness PRIVATE "/MANIFEST:NO")
+endif()
+add_custom_command(TARGET AileFlowHarness POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:AileFlowHarness>/b2e"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_CURRENT_SOURCE_DIR}/Release/b2e"
+            "$<TARGET_FILE_DIR:AileFlowHarness>/b2e"
+    COMMENT "Copying b2e scripts → $<TARGET_FILE_DIR:AileFlowHarness>/b2e"
+)
