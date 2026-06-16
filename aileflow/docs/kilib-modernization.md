@@ -133,6 +133,24 @@ listing / selective-extract）は WARN 据置＝非回帰。
 `Archiver` の stdout 復号（`lst_exe`/`tst_exe`）と `resp` 書き出しを UTF-8 化し、`.b2e` の
 list/test/resp コマンドに 7-Zip の `-scc`/`-scs`（UTF-8）スイッチを付与。
 
+### ▶ 次回の最初の一手（resume here）
+
+現状: `refactor/kilib-wide-modernization @ 409add7`、ビルド緑・実機スモーク合格。
+最終段の具体手順:
+1. `Archiver.cpp` の `lst_exe`/`tst_exe`: stdout 復号の `MultiByteToWideChar(CP_ACP, …)` を
+   `CP_UTF8` に変更（2 箇所）。
+2. `ArcB2e.cpp` の `resp`: `writeAnsi` ラムダの `WideCharToMultiByte(CP_ACP, …)` を `CP_UTF8` に。
+3. `.b2e` スクリプト（まず `7z.b2e` / `zip.zipx.b2e`）の list/test/encode コマンドに 7-Zip の
+   `-sccUTF-8`（コンソール出力）/`-scsUTF-8`（リスト/レスポンスファイル）を付与。
+   ※どのフォーマットまで対応するかは作業前にユーザーと方針確認。
+4. 検証: `cmake --build build --target AileFlowHarness` → 実行し、
+   `listed entry present: 日本語_😀.txt` と `selective-extract locate: 日本語_😀.txt` が
+   **WARN→PASS** になること。ASCII ゲート 16 は緑維持。
+5. GUI 実機で日本語名アーカイブの一覧・展開を確認。
+
+注意: 7-Zip 版により `-scc/-scs` の対応可否・既定挙動が異なるため、まず 7z 単体で挙動確認すると安全。
+[[既存]] のハーネスがそのまま回帰ゲートになる。
+
 以下は作業当時のコア層メモ（履歴）。
 
 **完了（kilib コア）**:
