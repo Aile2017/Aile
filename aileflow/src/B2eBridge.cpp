@@ -137,7 +137,11 @@ static const struct { const wchar_t* method; const wchar_t* ext; } kTarMethodExt
     { L"lz4",    L"tar.lz4" }, { L"lz5",    L"tar.lz5" }, { L"brotli", L"tar.br"  },
 };
 
-std::vector<B2eFormatInfo> B2e_GetWritableFormats()
+// Scans b2e/*.b2e and parses each (type ...) line into a B2eFormatInfo list.
+// Heavy (directory scan + file read + parse per script), so the public entry
+// point below caches the result for the process lifetime — same approach as
+// GetExtMap().  .b2e scripts do not change during a run.
+static std::vector<B2eFormatInfo> BuildWritableFormats()
 {
     std::vector<B2eFormatInfo> result;
 
@@ -242,6 +246,13 @@ std::vector<B2eFormatInfo> B2e_GetWritableFormats()
 
     ::FindClose(hFind);
     return result;
+}
+
+std::vector<B2eFormatInfo> B2e_GetWritableFormats()
+{
+    // Thread-safe one-time scan (C++11 static-local init); callers receive a copy.
+    static const std::vector<B2eFormatInfo> s_cache = BuildWritableFormats();
+    return s_cache;
 }
 
 std::vector<std::wstring> B2e_GetComponentVersions()

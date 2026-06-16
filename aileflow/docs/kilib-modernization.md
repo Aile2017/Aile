@@ -245,7 +245,20 @@ listing / selective-extract）は WARN 据置＝非回帰。
 4. **文字列/コンテナ wide 化**: `kiStr`/`kiPath`→ wchar 内部、`kiArray`/`StrArray`/`CharArray`→ std へ。
 5. **プロセス I/O の wide 化**: `Archiver.cpp` を `CreateProcessW` + stdout CP 復号へ。
 6. **Rythp VM wide 化**: `kl_rythp`（`kiVar`/`kiRythpVM`）。最後・最重点・回帰テスト必須。
-7. **ブリッジ撤去**: `B2eBridge` を passthrough 化 → 削除、`SevenZipB2e` から直接呼び出し。
+7. **ブリッジ撤去 → 評価の上で「維持」に変更（2026-06-16）**: 当初は passthrough 化→削除の予定
+   だったが、コード精読の結果 `B2eBridge` は今も**実役割**を持つと判明し、完全撤去は見送り。
+   - **役割①**: kilib 型 ↔ std/Win32 型の**実変換**（`CArcB2e`/`aflArray`/`arcfile`/`kiStr`/`kiPath`
+     → `ArchiveItem`/`std::wstring`）。CP_ACP 変換は消えたが型変換は残り、564 行の中身の大半。passthrough ではない。
+   - **役割②**: **コンパイルフラグ分離境界**。`B2eBridge.cpp` は kilib 群（`/EHs-c- /GR-`、
+     `WIN32_LEAN_AND_MEAN` 未定義）、`SevenZipB2e.cpp` は UI 群（例外/RTTI 有効）。
+     「UI 層は kilib を一切知らない」分離を成立させている。撤去すると `SevenZipB2e` を
+     kilib フラグ側へ移す必要があり、分離が消える。
+   - **役割③**: 回帰ハーネス（`tests/harness.cpp`）の**テスト入口**。`B2e_List/Extract/Compress/Test`
+     を直接叩く。撤去すると seam を失い書き換えが要る。
+   - → **撤去の害（分離喪失・ハーネス書換）が LOC 削減を上回る**ため意図的に維持。
+     代わりに**低リスクのスリム化**を実施: `B2e_GetWritableFormats()` を static-local で
+     キャッシュ化（Load/CompressDlg/Compress/AddToArchive の 4 経路で毎回 b2e ディレクトリを
+     全スキャンしていた冗長を解消、`GetExtMap()` と同パターン）。ハーネス 20/20 維持。
 
 ## 回帰テストの担保（各ステップ共通）
 
