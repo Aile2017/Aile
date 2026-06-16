@@ -37,7 +37,6 @@ set(KILIB_B2E_SOURCES
     kilib/kl_find.cpp
     kilib/kl_rythp.cpp
     kilib/kl_str.cpp
-    kilib/kl_wnd.cpp
     kilib/kl_wcmn.cpp
 )
 

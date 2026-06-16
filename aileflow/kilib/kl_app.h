@@ -10,7 +10,6 @@
 class kiApp
 {
 friend kiApp* app();
-friend void kilib_startUp();
 
 public: //-- Public interface --------------------------
 
@@ -20,18 +19,11 @@ public: //-- Public interface --------------------------
 			return m_hInst;
 		}
 
-	// Main window
+	// Main window.  AileFlow drives its own message loop on the common UI
+	// layer, so kilib never owns a main window; this stays NULL.
 	HWND mainhwnd() const
 		{
-			return m_pMainWnd ? m_pMainWnd->hwnd() : NULL;
-		}
-	kiWindow* mainwnd() const
-		{
-			return m_pMainWnd;
-		}
-	void setMainWnd( kiWindow* wnd )
-		{
-			m_pMainWnd = wnd;
+			return m_hMainWnd;
 		}
 
 	// OS version
@@ -93,7 +85,7 @@ protected: //-- Internal processing -----------------------------------
 		{
 			st_pApp = this;
 			m_hInst = ::GetModuleHandle( NULL );
-			m_pMainWnd = NULL;
+			m_hMainWnd = NULL;
 			m_bShellInit = false;
 			m_OsVer.dwOSVersionInfoSize = sizeof( m_OsVer );
 #pragma warning(push)
@@ -118,7 +110,7 @@ private:
 	IMalloc*       m_pShellAlloc;
 	bool           m_bShellInit;
 	OSVERSIONINFO  m_OsVer;
-	kiWindow*      m_pMainWnd;
+	HWND           m_hMainWnd;
 	static kiApp* st_pApp;
 #ifdef KILIB_LOG
 	kiFile         m_log;

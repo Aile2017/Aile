@@ -9,10 +9,10 @@
 
 class kiStr
 {
-friend void kilib_startUp();
-
 private: //-- Global initialization etc. ---------------------
 
+	// Populates st_lb[] (MBCS lead-byte table).  Invoked via standalone_init()
+	// from AileFlow's wWinMain startup.
 	static void init();
 
 public: //-- Public interface --------------------------

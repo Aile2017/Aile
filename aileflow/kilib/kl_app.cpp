@@ -13,37 +13,11 @@ kiApp* app()
 	return kiApp::st_pApp;
 }
 
-//-------------------- Startup code ------------------------//
-
-void kilib_startUp()
-{
-	// For English locale testing
-	//::SetThreadUILanguage(0x0409);
-
-	//-- K.I.LIB initialization
-	kiStr::init();
-	kiWindow::init();
-
-	//-- Clear keyboard state
-	::GetAsyncKeyState( VK_SHIFT );
-
-	//-- Create application instance
-	kilib_create_new_app();
-	if( app() )
-	{
-		// Command line splitting
-		kiCmdParser cmd( ::GetCommandLine(), true );
-
-		// Execute
-		app()->run( cmd );
-	}
-
-	//-- K.I.LIB termination
-	kiWindow::finish();
-
-	delete app();
-	::ExitProcess( 0 );
-}
+//-------------------- Allocator / runtime scaffolding ------------------------//
+// AileFlow enters through wWinMain, not kilib's kilib_startUp(), so the original
+// startup routine (which drove kiWindow and app()->run()) has been removed along
+// with the kilib windowing framework.  The global operator new/delete overrides
+// below remain process-wide and load-bearing, so they are intentionally kept.
 
 void* operator new( size_t siz )
 {

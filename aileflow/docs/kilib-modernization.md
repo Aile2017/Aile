@@ -68,11 +68,21 @@ wide 化の本作業に入る前に、ここを落とすだけで対象が ~2000
 → **`.b2e` にコードページヒントを持たせ、パイプ境界で参照して復号する**設計に収束させる。
    これで残存 narrow ポイントが「指定 CP で stdout を復号する1関数」だけになる。
 
+## ⚠ 注意: kl_app.cpp の load-bearing スキャフォールディング
+
+`kl_app.cpp` は **グローバル `operator new/delete`（`new[]`/`delete[]` 含む）を
+`GlobalAlloc`/`GlobalFree` で置き換えている**。これはプロセス全体に効くため、UI 層・
+ブリッジの STL アロケーションもこの経路を通る可能性がある。`__cxa_pure_virtual` と
+ダミー `int main()` も同様にリンク時スキャフォールディング。**死にコード削除では触れず温存**。
+このアロケータ差し替えの撤去は単独で切り出し、十分なテストを伴って行うこと（高リスク）。
+
 ## 進行順（ロードマップ）
 
 1. ✅ **依存スコープ調査**（本メモ）
-2. **死にコード削除**: `kl_dnd` / `kl_reg` / `kl_wnd` の未使用部分を撤去（`kiWindow::msg/init/finish`
-   を最小ポンプヘルパに退避）。ビルド・全フォーマットの list/extract/compress/test が通ることを確認。
+2. ✅ **死にコード削除**: `kl_dnd`(217) / `kl_reg`(64) を撤去（commit `be4157b`）。
+   `kl_wnd`(438) を撤去し `kiWindow::msg()` を `Archiver.cpp` のローカル `pump_thread_messages()`
+   に退避、`kiApp` の `kiWindow*` 依存を `HWND` 直持ちに置換、死んだ `kilib_startUp()` を削除。
+   Debug/Release 両方リンク成功。**合計 ~719 LOC 削減**。
 3. **OS ラッパ層の W API 化**: `kl_file` / `kl_find` / `kl_wcmn`。
 4. **文字列/コンテナ wide 化**: `kiStr`/`kiPath`→ wchar 内部、`kiArray`/`StrArray`/`CharArray`→ std へ。
 5. **プロセス I/O の wide 化**: `Archiver.cpp` を `CreateProcessW` + stdout CP 復号へ。

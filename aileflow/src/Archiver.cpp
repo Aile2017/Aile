@@ -6,6 +6,15 @@
 #include "AileFlowApp.h"
 
 
+// Drain this thread's message queue so the UI stays responsive while we block
+// waiting on a child process.  Replaces the former kiWindow::msg() now that the
+// kilib windowing framework has been removed (AileFlow uses the common UI layer).
+static void pump_thread_messages()
+{
+	for( MSG m; ::PeekMessage( &m, NULL, 0, 0, PM_REMOVE ); )
+		::TranslateMessage( &m ), ::DispatchMessage( &m );
+}
+
 
 CArcModule::CArcModule( const char* name )
 {
@@ -74,7 +83,7 @@ int CArcModule::cmd( const char* cmd, bool mini )
 	// Wait for exit
 	::CloseHandle( pi.hThread );
 	while( WAIT_OBJECT_0 != ::WaitForSingleObject( pi.hProcess, 500 ) )
-		kiWindow::msg();
+		pump_thread_messages();
 	int ex;
 	::GetExitCodeProcess( pi.hProcess, (DWORD*)&ex );
 	::CloseHandle( pi.hProcess );
@@ -158,7 +167,7 @@ bool CArcModule::lst_exe( const char* lstcmd, aflArray& files,
 		if( !endpr )
 		{
 			endpr = (WAIT_OBJECT_0==::WaitForSingleObject(pi.hProcess,50));
-			kiWindow::msg();
+			pump_thread_messages();
 		}
 
 		// Read from pipe; exit only when process has exited AND pipe is fully drained
@@ -334,7 +343,7 @@ int CArcModule::tst_exe( const char* tstcmd, kiStr& output )
 	for(;;) {
 		if( !endpr ) {
 			endpr = (WAIT_OBJECT_0 == ::WaitForSingleObject( pi.hProcess, 50 ));
-			kiWindow::msg();
+			pump_thread_messages();
 		}
 		DWORD avail = 0;
 		::PeekNamedPipe( rp, NULL, 0, NULL, &avail, NULL );
