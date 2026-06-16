@@ -39,8 +39,10 @@ private:
 
     void   LaunchExe(const wchar_t* action, const std::wstring& target) const;
     std::wstring ResolveExePath() const;
+    HBITMAP CreateMenuBitmap() const;
 
     long  m_ref;
+    HBITMAP m_hMenuBmp = nullptr;
     std::vector<std::wstring> m_paths;   // selected items
     bool  m_allArchives = false;         // decides which verbs to show
     // Menu-offset → verb map filled in QueryContextMenu, read in InvokeCommand.

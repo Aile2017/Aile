@@ -42,7 +42,10 @@ const Labels& L() {
 } // namespace
 
 CShellExt::CShellExt() : m_ref(1) { DllAddRef(); }
-CShellExt::~CShellExt() { DllRelease(); }
+CShellExt::~CShellExt() {
+    if (m_hMenuBmp) DeleteObject(m_hMenuBmp);
+    DllRelease();
+}
 
 // ---- IUnknown ---------------------------------------------------------------
 IFACEMETHODIMP CShellExt::QueryInterface(REFIID riid, void** ppv) {
@@ -104,11 +107,26 @@ IFACEMETHODIMP CShellExt::QueryContextMenu(HMENU hMenu, UINT indexMenu,
     HMENU sub = CreatePopupMenu();
     if (!sub) return MAKE_HRESULT(SEVERITY_SUCCESS, 0, 0);
 
+    if (!m_hMenuBmp) {
+        m_hMenuBmp = CreateMenuBitmap();
+    }
+
     const Labels& lab = L();
     UINT offset = 0;
     auto add = [&](const wchar_t* text, Verb v) {
         if (idCmdFirst + offset > idCmdLast) return;
-        AppendMenuW(sub, MF_STRING, idCmdFirst + offset, text);
+        
+        MENUITEMINFOW miiSub = { sizeof(miiSub) };
+        miiSub.fMask = MIIM_STRING | MIIM_ID;
+        if (m_hMenuBmp) {
+            miiSub.fMask |= MIIM_BITMAP;
+            miiSub.hbmpItem = m_hMenuBmp;
+        }
+        miiSub.wID = idCmdFirst + offset;
+        miiSub.dwTypeData = const_cast<wchar_t*>(text);
+        
+        InsertMenuItemW(sub, offset, TRUE, &miiSub);
+        
         m_verbs.push_back(v);
         ++offset;
     };
@@ -124,6 +142,10 @@ IFACEMETHODIMP CShellExt::QueryContextMenu(HMENU hMenu, UINT indexMenu,
     // Top-level submenu entry carrying the app name.
     MENUITEMINFOW mii = { sizeof(mii) };
     mii.fMask = MIIM_SUBMENU | MIIM_STRING | MIIM_ID;
+    if (m_hMenuBmp) {
+        mii.fMask |= MIIM_BITMAP;
+        mii.hbmpItem = m_hMenuBmp;
+    }
     mii.wID = idCmdFirst + offset;   // id for the popup itself (not invoked)
     mii.hSubMenu = sub;
     mii.dwTypeData = const_cast<wchar_t*>(g_shellConfig.menuLabel);
@@ -197,4 +219,40 @@ void CShellExt::LaunchExe(const wchar_t* action, const std::wstring& target) con
     if (action && action[0]) { params += action; params += L' '; }
     params += L'"'; params += target; params += L'"';
     ShellExecuteW(nullptr, L"open", exe.c_str(), params.c_str(), nullptr, SW_SHOWNORMAL);
+}
+
+HBITMAP CShellExt::CreateMenuBitmap() const {
+    std::wstring exe = ResolveExePath();
+    if (exe.empty()) return nullptr;
+
+    HICON hIcon = nullptr;
+    // Extract the small icon (16x16) from the executable
+    ExtractIconExW(exe.c_str(), 0, nullptr, &hIcon, 1);
+    if (!hIcon) return nullptr;
+
+    HDC hdcScreen = GetDC(nullptr);
+    HDC hdcMem = CreateCompatibleDC(hdcScreen);
+
+    BITMAPINFO bi = {};
+    bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bi.bmiHeader.biWidth = 16;
+    bi.bmiHeader.biHeight = 16;
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    bi.bmiHeader.biCompression = BI_RGB;
+
+    void* pBits = nullptr;
+    HBITMAP hBmp = CreateDIBSection(hdcScreen, &bi, DIB_RGB_COLORS, &pBits, nullptr, 0);
+    if (hBmp) {
+        HBITMAP hOld = (HBITMAP)SelectObject(hdcMem, hBmp);
+        memset(pBits, 0, 16 * 16 * 4);
+        DrawIconEx(hdcMem, 0, 0, hIcon, 16, 16, 0, nullptr, DI_NORMAL);
+        SelectObject(hdcMem, hOld);
+    }
+
+    DeleteDC(hdcMem);
+    ReleaseDC(nullptr, hdcScreen);
+    DestroyIcon(hIcon);
+
+    return hBmp;
 }
