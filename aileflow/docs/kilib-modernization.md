@@ -66,6 +66,60 @@ Rythp VM は元来 char バッファのテキストエンジン（`eval(char*)`/
 **先行/独立にできる作業**: 安全網（B2eBridge 公開 API を叩く小テスト）は flip と独立に先行可。
 `kl_file`/`kl_find`/`kl_wcmn` の W API 化は `kiStr` wide 化と同時か直後。
 
+## UTF-16 フリップ 実行計画（精密版・コア読込済み）
+
+`kl_str.cpp`/`kl_rythp.cpp`/`kl_misc.h`/`kilibext.h` を精読した上での実行手順。
+対象 ~3,490 行は密結合かつ VM が buffer を in-place 書換するため **原子的に一括** で倒し、
+ハーネス（gate 16 + カナリア2本）で検証してから 1 コミットする。
+
+### 鍵となるレバー: per-file `/UUNICODE` の除去
+
+`ki_strlen/strcpy/strcmp/strcmpi` は `::lstrlen` 等のマクロ（`kl_misc.h`）で、`UNICODE` 定義の
+有無で A/W が自動切替。同様に kilib 内の Win32 呼び出し（`GetModuleFileName`/`GetTempPath`/
+`CreateProcess`/`FindFirstFile`/`CreateDirectory`/`LoadString`/`GetShortPathName`/
+`SHGetPathFromIDList`/`GetDriveType` …）も A/W マクロ。
+→ **`CMakeLists.txt` の `KILIB_B2E_SOURCES` の `COMPILE_OPTIONS` から `/UUNICODE;/U_UNICODE` を外す**
+   だけで、これらが**一括で W 版に切替わる**。手作業は型と文字リテラルとバイト数に集中できる。
+
+### ⚠ 最大のバグ源: mem 系のバイト数
+
+`ki_memcpy/memmov/memzero` は `CopyMemory/MoveMemory/ZeroMemory`（**バイト単位**）。
+現状 `slen = ki_strlen(s)+1`（文字数）をそのまま渡している箇所が多数（`kl_str.cpp` の
+ctor/operator=/operator+=、`kl_rythp.cpp` の quote/unquote 等）。wchar 化後は
+**`* sizeof(wchar_t)` を掛ける**必要がある。`new char[n]`→`new wchar_t[n]` も同様。
+ここを機械的に潰すのが品質の要。
+
+### 手順（順序）
+
+1. **コンテナ/型**: `kl_misc.h` の `CharArray=kiArray<char*>`→`kiArray<wchar_t*>`、
+   `cCharArray` 同様。`kl_carc.h` の `INDIVIDUALINFO::szFileName[]` を `wchar_t` 化。
+2. **kiStr/kiPath**（`kl_str.h/.cpp`）: `m_pBuf` を `wchar_t*`、全 `char`→`wchar_t`、
+   リテラル→`L""`、`next(p)`/`isLeadByte`/`st_lb[]` 撤去（wchar は固定幅 ⇒ `++p`）、
+   mem 系にバイト換算。`standalone_init`/`init` は不要化（DBCS テーブル消滅）。
+3. **kiVar/kiRythpVM**（`kl_rythp.cpp`）: 同様に wchar 化。`ele[256]` は `(*p)&0xff`
+   のままで可（`.b2e` 変数名は ASCII）。`split`/`getarg`/`eval` は ASCII デリミタ走査なので
+   型・リテラル・mem 換算のみ。
+4. **.b2e 読込**（`B2eScript.cpp`）: ファイルバイト（ANSI/UTF-8）を読み、
+   `MultiByteToWideChar` で `wchar_t` バッファへ変換してからセクション分割（キーワードは ASCII）。
+5. **Archiver.cpp**: `CreateProcess` は cmdline が `wchar_t*` になり自動 W 化。
+   **stdout は `ReadFile` で生バイト**なので、ここだけ非機械的: ツール出力 CP を決めて
+   `MultiByteToWideChar` で `wchar_t` 化してから VM に渡す（7-Zip は `-scc` で UTF-8 強制可、
+   既定は OEM/コンソール CP）。`.b2e` に CP ヒントを持たせる設計に接続。
+6. **ArcB2e.cpp**: kiStr/kiPath/kiVar/CharArray を使う全箇所が wchar 化に追従。
+   コマンド組立の文字リテラル→`L""`。
+7. **B2eBridge.cpp**: CP_ACP 変換群（`WToA`/`AToWString`/`WideFsPathToAnsiPath` の
+   短名回避）を**撤去**し wstring パススルー化。`szFileName`(wchar) を直接 `std::wstring` へ。
+   → ここで**ブリッジが大幅に縮む**（境界が消える方向）。
+8. **kl_app.h**: `msgBox(const char*)`→`wchar`、`log`→`wchar`（軽微）。
+
+### 緑ゲート（検証）
+
+`cmake --build build --target AileFlowHarness` → 実行。
+- gate 16 が PASS のまま（既存機能の非回帰）
+- **カナリア**: `listed entry present: 日本語_😀.txt` と
+  `selective-extract locate/round-trip: 日本語_😀.txt` が **WARN→PASS** に転じれば成功。
+- AileFlow.exe 本体でも起動・圧縮・解凍のスモーク（ユーザー検証）。
+
 ## 外部ツール I/O 境界（wide 化の本丸）
 
 `src/Archiver.cpp` に集約。ここが narrow の最終境界。
