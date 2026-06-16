@@ -47,16 +47,21 @@ response (list) file as UTF-8, and the **7z-family `.b2e` scripts** pass `-sccUT
 listing, selective extraction, and compression of non-ASCII names (incl. emoji) lossless
 for the 7z-family backends (7z, zip, cab, lzh, rpm/cpio, tar-family, generic).
 
-Remaining gaps (out of scope for the UTF-8 boundary work):
+**RAR** is also UTF-8 across the boundary: `rar.b2e` passes `-scfr` (UTF-8 for
+redirected/console output) on `Rar.exe v`/`t` and `-scfl` (UTF-8 for `@list` files) on
+the `cmd a … (resp@ …)` compress lines. Verified end-to-end with `Rar.exe` and
+`WinRAR.exe`: the `日本語_😀.txt` name (incl. emoji) is stored and listed losslessly.
+
+Remaining hard limits (tool-side, not fixable by a switch):
 
 | Path | Behavior |
 |---|---|
-| **CAB creation (cabarc.exe)** | `cab.b2e` `encode:` feeds the response file to `cabarc.exe`, which does not understand `-scsUTF-8`. Since the response file is now UTF-8, **non-ASCII names in newly created CABs can be mangled** (ASCII names are unaffected — UTF-8 is an ASCII superset). Listing/testing CABs via `7z.exe` is fine. |
-| **RAR (Rar.exe)** | `rar.b2e` lists/tests with `Rar.exe v`/`t`, not 7z. The global stdout decode is now UTF-8, so non-ASCII RAR listing is not guaranteed; RAR's own UTF-8 charset switches were not applied. |
-| **zpaq (zpaq64.exe)** | Lists with `zpaq64.exe l`. Relies on the tool's native output encoding under the global UTF-8 decode; not separately verified. |
+| **CAB creation (cabarc.exe)** | `cab.b2e` `encode:` feeds the response file to `cabarc.exe`, which is **ANSI-only** and has no UTF-8 list-file switch. With a UTF-8 response file it misreads the bytes as the local ANSI codepage and `FCIAddFile()` fails to open names containing characters outside that codepage (verified: emoji → `code 1 [Failure opening file]`). So **creating CABs with non-ASCII names is unsupported**. ASCII creation, and listing/testing/extracting any CAB via `7z.exe`, are unaffected. |
+| **zpaq (zpaq64.exe)** | `zpaq64.exe l` emits BMP characters as proper UTF-8 (e.g. `日本語` lists correctly under the global UTF-8 decode), but encodes astral/non-BMP characters (e.g. emoji `😀`) as **CESU-8** (UTF-8-encoded surrogate halves, `ED A0 BD ED B8 80` instead of `F0 9F 98 80`). zpaq exposes no charset switch, so **emoji/astral names show replacement characters in the listing**. BMP non-ASCII names work. |
 
 ASCII names work for all backends in every path. The regression harness
-(`AileFlowHarness`) gates the 7z and zip round-trips, including the `日本語_😀.txt` canary.
+(`AileFlowHarness`) gates the 7z and zip round-trips, including the `日本語_😀.txt` canary;
+RAR is GUI/CLI-verified manually (WinRAR.exe is modal, so it is not in the headless harness).
 
 ---
 

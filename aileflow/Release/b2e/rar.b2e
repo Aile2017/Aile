@@ -20,20 +20,23 @@ load:
  (type rar Store Default *Best RR Recover password)
 
 encode:
+ ; -scfl = read the response file (list charset) as UTF-8 so non-ASCII names
+ ; survive (matches the UTF-8 response written by ArcB2e.cpp).
+
  ; Method 1: Store only.
- (if (method 1) (cmd a -m0 (arc.rar) (resp@ (listr))))
+ (if (method 1) (cmd a -m0 -scfl (arc.rar) (resp@ (listr))))
 
  ; Method 2: Backend default settings.
- (if (method 2) (cmd a (arc.rar) (resp@ (listr))))
+ (if (method 2) (cmd a -scfl (arc.rar) (resp@ (listr))))
 
  ; Method 3: Best compression with solid mode enabled.
- (if (method 3) (cmd a -m5 -s (arc.rar) (resp@ (listr))))
+ (if (method 3) (cmd a -m5 -s -scfl (arc.rar) (resp@ (listr))))
 
  ; Method 4: Ask for recovery record size, then append it after creation.
  ; -mm keeps multimedia mode enabled as in the original script behavior.
  (if (method 4) (exec
     (let r (input "Recovery record size (1, 2 .. 524288)"))
-    (cmd a -m5 -s -mm (arc.rar) (resp@ (listr)))
+    (cmd a -m5 -s -mm -scfl (arc.rar) (resp@ (listr)))
     (cmd rr%r (arc.rar))))
 
  ; Method 5: Recover / repair an existing archive.
@@ -42,7 +45,7 @@ encode:
  ; Method 6: Password-protected archive.
  (if (method 6) (exec
     (let p (inputpw "Password"))
-    (cmd a -p%p -m5 -s -mm (arc.rar) (resp@ (listr)))))
+    (cmd a -p%p -m5 -s -mm -scfl (arc.rar) (resp@ (listr)))))
 
 sfx:
  ; Convert the archive to an SFX archive using WinRAR's built-in SFX support.
@@ -62,8 +65,10 @@ delete:
 
 test:
  ; Verify archive integrity.
- (xcmd Rar.exe t (arc))
+ ; -scfr = emit redirected (console) output as UTF-8 for the wide stdout decoder.
+ (xcmd Rar.exe t -scfr (arc))
 
 list:
  ; Parse verbose RAR listing output.
- (xscan "-----------" 1 "-----------" 1 68 Rar.exe v (arc))
+ ; -scfr = emit redirected (console) output as UTF-8 so non-ASCII names survive.
+ (xscan "-----------" 1 "-----------" 1 68 Rar.exe v -scfr (arc))

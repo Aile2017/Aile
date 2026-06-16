@@ -147,14 +147,29 @@ listing / selective-extract）は WARN 据置＝非回帰。
 今回対象外。特に **CAB 作成（cabarc）は resp が UTF-8 になるため非 ASCII 名が壊れ得る**
 （ASCII は無事）。詳細は `limitations.md`「Non-ASCII Filenames (UTF-8 boundary)」参照。
 
+### ✅ 非 7z ツールの UTF-8 化（2026-06-16, commit 後述）
+
+実機で各ツールの非 ASCII 出力エンコーディングを実測（絵文字 😀 は CP932 表現不可なので判別子）:
+- **RAR = 対応完了**: `Rar.exe`/`WinRAR.exe` は `-sc<charset><object>` を持つ。実測で
+  `-scfr`（charset=f(UTF-8), object=r(redirected/console出力)）→ stdout が UTF-8、
+  `-scfl`（object=l(@list ファイル)）→ UTF-8 レスポンス読込。`rar.b2e` の list/test に `-scfr`、
+  encode の `cmd a …(resp@ …)` 5 箇所に `-scfl` を付与。`日本語_😀.txt` の格納・一覧を
+  Rar.exe/WinRAR.exe 両方で round-trip 確認済み。
+- **zpaq = ツール制約**: `zpaq64.exe l` は BMP を正規 UTF-8 で吐く（日本語等は既にグローバル
+  復号で通る）が、星界面（絵文字）は **CESU-8**（サロゲート各々を UTF-8 化、`ED A0 BD ED B8 80`）。
+  charset スイッチが無く、絵文字は化ける。BMP 非 ASCII は動作。
+- **cab = ツール制約**: `cabarc.exe` は ANSI 専用で UTF-8 list ファイル非対応。UTF-8 レスポンスを
+  ローカル ANSI と誤解釈し、コードページ外の名前で `FCIAddFile() code 1` 失敗（実測）。
+  **CAB の非 ASCII 名作成は不可**。一覧/テスト/展開は 7z.exe 経由なので影響なし。
+
+→ 修正可能だったのは RAR のみ。zpaq/cab はツール側の根本制約として `limitations.md`
+  「Non-ASCII Filenames (UTF-8 boundary)」に記録。
+
 ### ▶ 残課題（後続・任意）
 
-- **非 7z ツールの UTF-8 化**: `rar.b2e`（Rar.exe の charset スイッチ）・`zpaq.b2e`・cab 作成。
-  本格対応は「`.b2e` にコードページヒントを持たせ、パイプ境界で参照して復号」設計
-  （本ファイル「stdout 復号の方針」節）に接続するのが筋。
 - **ロードマップ 7「ブリッジ撤去」**: `B2eBridge` を passthrough 化 → 削除し
-  `SevenZipB2e` から直接呼び出し。境界変換が消えた今、縮小余地が大きい。
-- GUI 実機で日本語名アーカイブの一覧・展開・圧縮のスモーク（ユーザー検証）。
+  `SevenZipB2e` から直接呼び出し。境界変換が消えた今、縮小余地が大きい（残 664 行）。
+- GUI 実機で RAR 日本語名アーカイブの一覧・展開・圧縮のスモーク（ユーザー検証）。
 
 以下は作業当時のコア層メモ（履歴）。
 
