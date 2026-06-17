@@ -122,6 +122,14 @@ format is listed, extracted, and created by delegating to external tools. AileFl
 scripts as-is (with minor modifications where needed) and drives them through the same B2E engine
 (`ArcB2e` + Rythp VM).
 
+### Bundled 7-Zip Modules
+
+The `bin\` folder ships `7z.exe`, `7zG.exe`, `7z.dll`, and the SFX stub
+(`7z.sfx`), which are built from [**7-Zip Zstandard**](https://github.com/mcmilk/7-Zip-zstd/)
+— Tino Reichardt's fork of Igor Pavlov's [7-Zip](https://www.7-zip.org/) that
+adds the Zstandard / Brotli / LZ4 / LZ5 / Lizard / FastLZMA2 codecs. Distributed
+under the GNU LGPL-2.1 with the unRAR-restricted license; see `bin\License.txt`.
+
 ### Application Icon
 
 [Archiver - free Icon in PNG and SVG](https://icon-icons.com/icon/archiver/37045) by [icon-icons.com](https://icon-icons.com/), used under free for commercial use license.
