@@ -104,6 +104,20 @@ static std::wstring DeriveOutputPath(const Settings& s, const std::wstring& srcF
     return outDir.empty() ? stem : outDir + L"\\" + stem;
 }
 
+// Append ".<format>" unless the path already ends with it (case-insensitive).
+// A "does the path contain any dot" test is wrong: a dotted stem such as
+// "v-internalGW.log" (StemFromPath strips only the last extension) would then
+// keep its ".log" tail, leaving the archive without its real extension. The B2E
+// backend resolves the format/method from the output extension, so a missing
+// ".7z" makes the method lookup (e.g. "password") fail silently — no archive,
+// no password prompt. Match strictly on the trailing extension instead.
+static void EnsureArchiveExt(std::wstring& path, const std::wstring& format) {
+    const std::wstring suffix = L"." + format;
+    if (path.size() < suffix.size() ||
+        _wcsicmp(path.c_str() + path.size() - suffix.size(), suffix.c_str()) != 0)
+        path += suffix;
+}
+
 int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdShow,
                          const std::wstring& destDir,
                          const std::wstring& typeOverride,
@@ -132,8 +146,8 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
             auto dot = params.outputPath.find_last_of(L'.');
             if (dot != std::wstring::npos) params.outputPath.erase(dot);
             params.outputPath += L".exe";
-        } else if (params.outputPath.find(L'.') == std::wstring::npos) {
-            params.outputPath += L"." + params.format;
+        } else {
+            EnsureArchiveExt(params.outputPath, params.format);
         }
     } else {
         CompressDlg dlg;
@@ -191,8 +205,8 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
             auto dot = baseParams.outputPath.find_last_of(L'.');
             if (dot != std::wstring::npos) baseParams.outputPath.erase(dot);
             baseParams.outputPath += L".exe";
-        } else if (baseParams.outputPath.find(L'.') == std::wstring::npos) {
-            baseParams.outputPath += L"." + baseParams.format;
+        } else {
+            EnsureArchiveExt(baseParams.outputPath, baseParams.format);
         }
     } else {
         CompressDlg dlg;
@@ -210,8 +224,8 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
             auto dot = params.outputPath.find_last_of(L'.');
             if (dot != std::wstring::npos) params.outputPath.erase(dot);
             params.outputPath += L".exe";
-        } else if (params.outputPath.find(L'.') == std::wstring::npos) {
-            params.outputPath += L"." + params.format;
+        } else {
+            EnsureArchiveExt(params.outputPath, params.format);
         }
 
         {

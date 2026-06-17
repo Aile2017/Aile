@@ -163,6 +163,18 @@ static void ApplyOverrides(CompressDlg::Params& params,
     }
 }
 
+// Append ".<format>" unless the path already ends with it (case-insensitive).
+// A "does the path contain any dot" test is wrong: a dotted input name such as
+// "v-internalGW.log.ERROR" yields a stem "v-internalGW.log", which already
+// contains a dot, so the archive would be written without its ".7z" extension.
+// Match strictly on the trailing extension instead.
+static void EnsureArchiveExt(std::wstring& path, const std::wstring& format) {
+    const std::wstring suffix = L"." + format;
+    if (path.size() < suffix.size() ||
+        _wcsicmp(path.c_str() + path.size() - suffix.size(), suffix.c_str()) != 0)
+        path += suffix;
+}
+
 int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdShow,
                          const std::wstring& destDir,
                          const std::wstring& typeOverride,
@@ -195,8 +207,7 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
     const bool skipDialog = (!typeOverride.empty() || !sfxOverride.empty()) && (nCmdShow == SW_HIDE);
     if (skipDialog) {
         if (params.sfxMode.empty()) {
-            if (params.outputPath.find(L'.') == std::wstring::npos)
-                params.outputPath += L"." + params.format;
+            EnsureArchiveExt(params.outputPath, params.format);
         } else {
             auto dot = params.outputPath.find_last_of(L'.');
             if (dot != std::wstring::npos) params.outputPath.erase(dot);
