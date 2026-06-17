@@ -132,4 +132,4 @@ under the GNU LGPL-2.1 with the unRAR-restricted license; see `bin\License.txt`.
 
 ### Application Icon
 
-[Archiver - free Icon in PNG and SVG](https://icon-icons.com/icon/archiver/37045) by [icon-icons.com](https://icon-icons.com/), used under free for commercial use license.
+[Paperplane - free Icon in PNG and SVG](https://icon-icons.com/icon/paperplane-dm-chat-fly-interaction-communication-message-send/195724) by [icon-icons.com](https://icon-icons.com/), used under free for commercial use license.
