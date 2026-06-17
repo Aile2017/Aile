@@ -27,7 +27,6 @@ script-based backend, so no archive DLLs are bundled with the application itself
 | 7-Zip | `.7z` |
 | ZIP / ZIPX | `.zip`, `.zipx` |
 | RAR | `.rar` |
-| ZPAQ | `.zpaq` |
 | TAR and compressed TAR | `.tar`, `.tar.gz` / `.tgz`, `.tar.bz2` / `.tbz2`, `.tar.xz` / `.txz`, `.tar.zst`, `.tar.liz`, `.tar.lz4`, `.tar.lz5`, `.tar.br` |
 | Compressed single files | `.gz`, `.bz2`, `.xz`, `.zst`, `.liz`, `.lz4`, `.lz5`, `.br` |
 | CAB / LZH / RPM / CPIO (read-only) | `.cab`, `.lzh`, `.rpm`, `.cpio` |
@@ -39,10 +38,9 @@ script-based backend, so no archive DLLs are bundled with the application itself
 | 7-Zip | `.7z` |
 | ZIP | `.zip` |
 | RAR | `.rar` |
-| ZPAQ | `.zpaq` |
 | TAR variants | `.tar`, `.tar.gz`, `.tar.bz2`, `.tar.xz`, `.tar.zst`, and others |
 
-> **Note:** RAR compression requires WinRAR; ZPAQ requires `zpaq64.exe`. CAB / LZH / RPM / CPIO are
+> **Note:** RAR compression requires WinRAR to be installed. CAB / LZH / RPM / CPIO are
 > **read-only** (listing, extraction, and integrity test only) — their legacy ANSI writers
 > (`cabarc.exe` / `lha32.exe`) corrupted non-ASCII paths once the I/O boundary moved to UTF-8, so
 > creation was dropped. The available compression methods for each format are read dynamically from
@@ -59,7 +57,6 @@ script-based backend, so no archive DLLs are bundled with the application itself
 - External tools reachable from the same directory as `AileFlow.exe` or via `PATH`:
   - **7-Zip** — `7z.exe`, `7zG.exe` (for 7z, ZIP, TAR, CAB, LZH, RPM/CPIO, and other formats)
   - **WinRAR** — `WinRAR.exe`, `Rar.exe` (for RAR)
-  - **ZPAQ** — `zpaq64.exe` (for ZPAQ create / extract)
 
 ### Build
 
@@ -90,13 +87,13 @@ cmake --build build_release
 
 | Feature | Status |
 |---|---|
-| Archive integrity test | Available for every bundled format — each `.b2e` defines a `test:` section |
-| Delete entries from archive | Available for 7z, ZIP, RAR (their `.b2e` has a `delete:` section); unavailable for the TAR family, ZPAQ, and the read-only CAB / LZH / RPM / CPIO formats |
+| Archive integrity test | Available for all supported formats — each `.b2e` defines a `test:` section |
+| Delete entries from archive | Available for 7z, ZIP, RAR (their `.b2e` has a `delete:` section); unavailable for the TAR family and the read-only CAB / LZH / RPM / CPIO formats |
 | Add files to an existing archive | Implemented; files are always added to archive root (destination folder within archive is not selectable) |
 | Archive comment read/write | Not available |
 | Split volume creation | Not available (volume-size parameter is accepted but B2E scripts lack volume-handling directives) |
 | SFX (self-extracting) creation | Format-dependent: available for formats whose `.b2e` has an `sfx:`/`sfxd:` section (7z, RAR) |
-| Selective extraction | Supported for every bundled format — each `.b2e` defines a `decode1:` section |
+| Selective extraction | Supported for all formats — each `.b2e` defines a `decode1:` section |
 | Format auto-detection | Extension-based only; files with wrong or missing extensions will not open |
 | Progress reporting | Displayed by the external tool's own window, not AileFlow's progress dialog |
 | Compression advanced options | Discrete method selection only; dictionary size, thread count, etc. are not configurable |
