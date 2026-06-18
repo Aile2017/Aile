@@ -49,6 +49,22 @@ cmake --build build --target AileFlow
 | AileEx.exe (Release) | `build_release\aileex\AileEx.exe` |
 | AileFlow.exe (Release) | `build_release\aileflow\AileFlow.exe` |
 
+### Build 32-bit Shell Extensions
+
+To support 32-bit file managers on 64-bit OS, you must build and register the 32-bit version of the shell extensions (`AileExShell32.dll` and `AileFlowShell32.dll`).
+
+**Important**: You must use the 32-bit MSVC environment (`vcvars32.bat`). If you use `vcvarsall.bat x64` with Ninja, it will incorrectly build 64-bit binaries.
+
+```powershell
+# Adjust the Visual Studio path for your environment
+$vcvars = "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars32.bat"
+
+# Configure and build the x86 Release
+cmd /c "`"$vcvars`" && cmake -B build_x86_release -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build_x86_release"
+```
+
+To register the generated 32-bit DLL, run the `AileEx_register32.bat` (or `AileFlow_register32.bat`) which calls `%SystemRoot%\SysWOW64\regsvr32.exe`.
+
 ---
 
 ## Credits

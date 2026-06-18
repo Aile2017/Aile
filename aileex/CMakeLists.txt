@@ -111,7 +111,11 @@ target_compile_definitions(AileExShell PRIVATE
 target_link_libraries(AileExShell PRIVATE
     ole32 oleaut32 shlwapi shell32 advapi32 user32 uuid
 )
-set_target_properties(AileExShell PROPERTIES OUTPUT_NAME "AileExShell")
+if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+    set_target_properties(AileExShell PROPERTIES OUTPUT_NAME "AileExShell32")
+else()
+    set_target_properties(AileExShell PROPERTIES OUTPUT_NAME "AileExShell")
+endif()
 if(MSVC)
     target_compile_options(AileExShell PRIVATE /W3 /utf-8)
     target_link_options(AileExShell PRIVATE

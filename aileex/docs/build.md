@@ -36,6 +36,19 @@ cmake --build build_release
 
 Output: `build_release\AileEx.exe`
 
+### 32-bit Shell Extension Build
+
+To support 32-bit file managers on a 64-bit OS, you need to compile the 32-bit shell extension DLLs. You must do this using the x86 build environment (`vcvars32.bat`).
+
+```powershell
+$vcvars32 = "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars32.bat"
+cmd /c "`"$vcvars32`" && cmake -B build_x86 -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build_x86"
+```
+
+Output: `build_x86\aileex\AileExShell32.dll`
+
+Register it using `%SystemRoot%\SysWOW64\regsvr32.exe` (provided in the `aileex\shell\AileEx_register32.bat` file).
+
 ## CMake Key Settings
 
 ```cmake

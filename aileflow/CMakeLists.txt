@@ -131,7 +131,11 @@ target_compile_definitions(AileFlowShell PRIVATE
 target_link_libraries(AileFlowShell PRIVATE
     ole32 oleaut32 shlwapi shell32 advapi32 user32 uuid
 )
-set_target_properties(AileFlowShell PROPERTIES OUTPUT_NAME "AileFlowShell")
+if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+    set_target_properties(AileFlowShell PROPERTIES OUTPUT_NAME "AileFlowShell32")
+else()
+    set_target_properties(AileFlowShell PROPERTIES OUTPUT_NAME "AileFlowShell")
+endif()
 if(MSVC)
     target_compile_options(AileFlowShell PRIVATE /W3 /utf-8)
     target_link_options(AileFlowShell PRIVATE
