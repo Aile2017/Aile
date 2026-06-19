@@ -1,16 +1,20 @@
 #pragma once
 #include "IArchiveBackend.h"
 #include "UnrarDll.h"
+#include "RarProcess.h"
+#include <functional>
 
-// Thin IArchiveBackend adapter for RAR. Composes UnrarDll (read) and, in a later
-// step, RarProcess (write) behind a single backend facade — this is why RAR's two
-// classes do not need to be merged.
+// IArchiveBackend adapter for RAR. Composes UnrarDll (read) and RarProcess
+// (write) behind a single backend facade — this is why RAR's two classes do not
+// need to be merged.
 //
-// Step 1 implements the read side (Open/Extract/Test/GetComment) and capabilities
-// by delegating to UnrarDll. The write operations (Add/Delete/SetComment) are
-// bridged from rar.exe's asynchronous, window-message model in Step 2
-// (see backend-interface-refactor.md §5) and return E_NOTIMPL until then.
-// Not wired into call sites yet.
+// Read operations (Open/Extract/Test/GetComment) delegate to UnrarDll. Write
+// operations (Add/Delete/SetComment) drive rar.exe through RarProcess, whose
+// native model is asynchronous (a child process posting WM_APP_* to a window).
+// DriveRarSync() bridges that to a blocking, sink-based call so the whole backend
+// satisfies the synchronous IArchiveBackend contract and can run on a worker
+// thread like the 7z backend (Step 2 of backend-interface-refactor.md). Not wired
+// into call sites yet.
 class RarBackend : public IArchiveBackend {
 public:
     // rarExePath: resolved rar.exe / WinRAR.exe path; empty = no writer available.
@@ -38,6 +42,14 @@ public:
     const std::wstring& BackendName() const override { return m_unrar.GetLoadedName(); }
 
 private:
+    // Launch a rar.exe operation (via `launch`) and pump its WM_APP_* notifications
+    // to completion on the calling thread, forwarding progress to `sink` (nullptr
+    // for operations that emit none) and translating cancellation to rar.Cancel().
+    // `launch(hwnd, progressMsg, doneMsg)` invokes the matching RarProcess method.
+    HRESULT DriveRarSync(RarProcess& rar,
+                         const std::function<bool(HWND, UINT, UINT)>& launch,
+                         IExtractProgressSink* sink);
+
     UnrarDll&    m_unrar;
     std::wstring m_rarExePath;
     std::wstring m_path;

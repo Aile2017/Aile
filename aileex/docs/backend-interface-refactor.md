@@ -5,8 +5,9 @@ Design note and incremental plan for replacing the flag-based backend selection 
 `architecture.md` → *Main concerns* #4 (flags instead of polymorphism) and #5
 (RAR and 7z duplicate responsibilities without a shared interface).
 
-**Status:** design accepted; implementation to proceed in stages (see *Incremental
-plan*). No behavior change is intended by the refactor itself.
+**Status:** Steps 1–2 done (adapters exist but are not yet consumed, so behavior
+is unchanged); Steps 3–5 pending. No behavior change is intended by the refactor
+until the MainWindow migration in Step 3.
 
 ---
 
