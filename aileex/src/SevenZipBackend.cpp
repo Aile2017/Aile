@@ -36,6 +36,20 @@ HRESULT SevenZipBackend::Open(const wchar_t* path, std::vector<ArchiveItem>& ite
     return hr;
 }
 
+void SevenZipBackend::Bind(const std::wstring& displayPath,
+                           const std::wstring& effectivePath,
+                           const std::wstring& password) {
+    m_displayPath   = displayPath;
+    m_effectivePath = effectivePath;
+    m_password      = password;
+    m_ext           = LowerExt(displayPath.c_str());
+
+    m_canModify = false;
+    for (const auto& wf : m_sz.GetWritableFormats())
+        if (_wcsicmp(wf.ext.c_str(), m_ext.c_str()) == 0) { m_canModify = true; break; }
+    m_canComment = (m_ext == L"zip");
+}
+
 HRESULT SevenZipBackend::Extract(const std::vector<UINT32>& indices, const wchar_t* destDir,
                                  const wchar_t* password, IExtractProgressSink* sink) {
     return m_sz.Extract(m_effectivePath.c_str(), indices, destDir, password, sink);

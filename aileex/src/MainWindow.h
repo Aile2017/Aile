@@ -5,10 +5,12 @@
 #include <vector>
 #include <string>
 #include <set>
+#include <memory>
 #include "ArchiveItem.h"
 #include "WorkerThread.h"
 #include "CompressDlg.h"
 #include "RarProcess.h"
+#include "IArchiveBackend.h"
 
 class MainWindow {
 public:
@@ -117,6 +119,10 @@ private:
     std::wstring             m_password;             // Password used to open the current archive (empty if none)
     bool                     m_openedWithUnrar = false;
     bool                     m_isReadOnly      = false;  // Write operations disabled (e.g. split auto-unwrap)
+    // Polymorphic backend bound to the currently open archive. Operations are being
+    // migrated onto this incrementally (backend-interface-refactor.md Step 3); until
+    // the migration completes, m_openedWithUnrar is kept in sync for unmigrated paths.
+    std::unique_ptr<IArchiveBackend> m_backend;
     std::vector<ArchiveItem> m_items;
     std::vector<std::wstring> m_folderPaths;  // sorted; index matches TreeView lParam
     std::wstring             m_currentFolderPath; // currently displayed folder in ListView

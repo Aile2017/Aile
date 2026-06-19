@@ -9,6 +9,8 @@
 #include "PropertiesDlg.h"
 #include "ProgressDlg.h"
 #include "RarProcess.h"
+#include "RarBackend.h"
+#include "SevenZipBackend.h"
 #include "SettingsDlg.h"
 #include "resource.h"
 #include <shellapi.h>
@@ -388,6 +390,24 @@ bool MainWindow::OpenArchive(const wchar_t* path) {
         }
         ShowError(msg.c_str(), hr);
         return false;
+    }
+
+    // Bind the polymorphic backend to the freshly opened archive. Transition
+    // scaffolding for the IArchiveBackend migration (Step 3): the open/fallback
+    // logic above is left intact and will be folded into backend->Open() later.
+    {
+        auto& s = app.GetSettings();
+        std::wstring rarExe = s.GetRarExePath();
+        if (rarExe.empty()) rarExe = RarProcess::FindRarExe();
+        if (m_openedWithUnrar) {
+            auto b = std::make_unique<RarBackend>(app.GetUnrar(), rarExe);
+            b->Bind(m_archivePath, m_items);
+            m_backend = std::move(b);
+        } else {
+            auto b = std::make_unique<SevenZipBackend>(app.Get7z());
+            b->Bind(m_archivePath, m_effectiveArchivePath, m_password);
+            m_backend = std::move(b);
+        }
     }
 
     // Delete previously unwrapped split temp file only after successful open
@@ -1540,7 +1560,6 @@ HRESULT MainWindow::OnTest() {
         return E_FAIL;
     }
 
-    App& app = App::Instance();
     bool useUnrar = m_openedWithUnrar;
     if (!Ensure7zLoaded(useUnrar)) return E_FAIL;
 
@@ -1551,22 +1570,14 @@ HRESULT MainWindow::OnTest() {
     ProgressPostSink* sink = sg.sink;
     progDlg.SetSink(sink);
 
-    auto archivePath = m_effectiveArchivePath;
-
+    // Migrated to IArchiveBackend: the backend (SevenZipBackend / RarBackend) was
+    // bound at open time and dispatches to the right engine internally.
+    IArchiveBackend* backend = m_backend.get();
     std::wstring password = m_password;
-    if (useUnrar) {
-        auto& unrar = app.GetUnrar();
-        m_worker.Start([&unrar, archivePath, password, sink]() -> HRESULT {
-            const wchar_t* pw = password.empty() ? nullptr : password.c_str();
-            return unrar.TestArchive(archivePath.c_str(), pw, sink) ? S_OK : E_FAIL;
-        }, m_hwnd, WM_APP_DONE);
-    } else {
-        auto& sz = app.Get7z();
-        m_worker.Start([&sz, archivePath, password, sink]() -> HRESULT {
-            const wchar_t* pw = password.empty() ? nullptr : password.c_str();
-            return sz.Test(archivePath.c_str(), pw, sink);
-        }, m_hwnd, WM_APP_DONE);
-    }
+    m_worker.Start([backend, password, sink]() -> HRESULT {
+        const wchar_t* pw = password.empty() ? nullptr : password.c_str();
+        return backend->Test(pw, sink);
+    }, m_hwnd, WM_APP_DONE);
 
     HRESULT hrDone = progDlg.RunMessageLoop();
     m_worker.Wait();
@@ -1894,6 +1905,7 @@ void MainWindow::CloseArchive() {
     m_folderPaths.clear();
     m_openedWithUnrar = false;
     m_isReadOnly = false;
+    m_backend.reset();
 
     if (m_hTreeView) TreeView_DeleteAllItems(m_hTreeView);
     if (m_hListView) ListView_DeleteAllItems(m_hListView);
