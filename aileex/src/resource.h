@@ -61,7 +61,6 @@
 #define IDC_CANCEL          2003
 
 // Settings dialog controls
-#define IDC_RAR_EXTRACTOR   3001
 #define IDC_DEFAULT_DIR     3002
 #define IDC_BROWSE_DIR      3003
 #define IDC_7Z_DLL_PATH     3004

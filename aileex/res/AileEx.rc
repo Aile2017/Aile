@@ -162,7 +162,7 @@ BEGIN
     PUSHBUTTON      "Cancel",          IDC_CANCEL,     116,  42,   68, 14
 END
 
-IDD_SETTINGS DIALOGEX 0, 0, 280, 372
+IDD_SETTINGS DIALOGEX 0, 0, 280, 334
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Settings"
 FONT 9, "Segoe UI", 400, 0, 0x1
@@ -190,26 +190,22 @@ BEGIN
     EDITTEXT        IDC_FONT_NAME,      64, 184, 155,  14, ES_AUTOHSCROLL | ES_READONLY
     PUSHBUTTON      "...",              IDC_BROWSE_FONT,223, 184,  38,  14
 
-    GROUPBOX        "RAR extraction engine", IDC_STATIC,   7, 210, 266,  30
-    LTEXT           "Use:",              IDC_STATIC,    14, 224,  54,   8
-    COMBOBOX        IDC_RAR_EXTRACTOR,  70, 222, 110, 100, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    GROUPBOX        "Executable / DLL paths", IDC_STATIC, 7, 210, 266, 74
+    LTEXT           "7z.dll:",           IDC_STATIC,    14, 224,  30,   8
+    EDITTEXT        IDC_7Z_DLL_PATH,    46, 222, 180,  14, ES_AUTOHSCROLL
+    PUSHBUTTON      "Browse...",        IDC_BROWSE_7Z, 230, 221,  36,  15
+    LTEXT           "unrar.dll:",       IDC_STATIC,    14, 242,  30,   8
+    EDITTEXT        IDC_UNRAR_DLL_PATH, 46, 240, 180,  14, ES_AUTOHSCROLL
+    PUSHBUTTON      "Browse...",        IDC_BROWSE_UNRAR, 230, 239, 36, 15
+    LTEXT           "rar.exe:",         IDC_STATIC,    14, 260,  30,   8
+    EDITTEXT        IDC_RAR_EXE_PATH,   46, 258, 180,  14, ES_AUTOHSCROLL
+    PUSHBUTTON      "Browse...",        IDC_BROWSE_RAR, 230, 257,  36,  15
 
-    GROUPBOX        "Executable / DLL paths", IDC_STATIC, 7, 248, 266, 74
-    LTEXT           "7z.dll:",           IDC_STATIC,    14, 262,  30,   8
-    EDITTEXT        IDC_7Z_DLL_PATH,    46, 260, 180,  14, ES_AUTOHSCROLL
-    PUSHBUTTON      "Browse...",        IDC_BROWSE_7Z, 230, 259,  36,  15
-    LTEXT           "unrar.dll:",       IDC_STATIC,    14, 280,  30,   8
-    EDITTEXT        IDC_UNRAR_DLL_PATH, 46, 278, 180,  14, ES_AUTOHSCROLL
-    PUSHBUTTON      "Browse...",        IDC_BROWSE_UNRAR, 230, 277, 36, 15
-    LTEXT           "rar.exe:",         IDC_STATIC,    14, 298,  30,   8
-    EDITTEXT        IDC_RAR_EXE_PATH,   46, 296, 180,  14, ES_AUTOHSCROLL
-    PUSHBUTTON      "Browse...",        IDC_BROWSE_RAR, 230, 295,  36,  15
+    GROUPBOX        "Behavior",         IDC_STATIC,     7, 288, 266,  24
+    AUTOCHECKBOX    "Open folder after extraction", IDC_OPEN_FOLDER_AFTER, 14, 299, 200, 9
 
-    GROUPBOX        "Behavior",         IDC_STATIC,     7, 326, 266,  24
-    AUTOCHECKBOX    "Open folder after extraction", IDC_OPEN_FOLDER_AFTER, 14, 337, 200, 9
-
-    DEFPUSHBUTTON   "OK",               IDOK,          168, 354,  50,  14
-    PUSHBUTTON      "Cancel",           IDCANCEL,      222, 354,  50,  14
+    DEFPUSHBUTTON   "OK",               IDOK,          168, 316,  50,  14
+    PUSHBUTTON      "Cancel",           IDCANCEL,      222, 316,  50,  14
 END
 
 IDD_INFO DIALOGEX 0, 0, 340, 280
@@ -630,7 +626,7 @@ BEGIN
     PUSHBUTTON      "キャンセル",       IDC_CANCEL,     116,  42,   68, 14
 END
 
-IDD_SETTINGS DIALOGEX 0, 0, 280, 372
+IDD_SETTINGS DIALOGEX 0, 0, 280, 334
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "設定"
 FONT 9, "Segoe UI", 400, 0, 0x1
@@ -658,26 +654,22 @@ BEGIN
     EDITTEXT        IDC_FONT_NAME,      64, 184, 155,  14, ES_AUTOHSCROLL | ES_READONLY
     PUSHBUTTON      "...",              IDC_BROWSE_FONT,223, 184,  38,  14
 
-    GROUPBOX        "RARファイルの展開エンジン", IDC_STATIC,   7, 210, 266,  30
-    LTEXT           "展開に使用:",       IDC_STATIC,    14, 224,  54,   8
-    COMBOBOX        IDC_RAR_EXTRACTOR,  70, 222, 110, 100, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    GROUPBOX        "実行ファイル・DLL パス", IDC_STATIC, 7, 210, 266, 74
+    LTEXT           "7z.dll:",           IDC_STATIC,    14, 224,  30,   8
+    EDITTEXT        IDC_7Z_DLL_PATH,    46, 222, 180,  14, ES_AUTOHSCROLL
+    PUSHBUTTON      "参照...",               IDC_BROWSE_7Z, 230, 221,  36,  15
+    LTEXT           "unrar.dll:",        IDC_STATIC,    14, 242,  30,   8
+    EDITTEXT        IDC_UNRAR_DLL_PATH, 46, 240, 180,  14, ES_AUTOHSCROLL
+    PUSHBUTTON      "参照...",               IDC_BROWSE_UNRAR, 230, 239, 36, 15
+    LTEXT           "rar.exe:",          IDC_STATIC,    14, 260,  30,   8
+    EDITTEXT        IDC_RAR_EXE_PATH,   46, 258, 180,  14, ES_AUTOHSCROLL
+    PUSHBUTTON      "参照...",               IDC_BROWSE_RAR, 230, 257,  36,  15
 
-    GROUPBOX        "実行ファイル・DLL パス", IDC_STATIC, 7, 248, 266, 74
-    LTEXT           "7z.dll:",           IDC_STATIC,    14, 262,  30,   8
-    EDITTEXT        IDC_7Z_DLL_PATH,    46, 260, 180,  14, ES_AUTOHSCROLL
-    PUSHBUTTON      "参照...",               IDC_BROWSE_7Z, 230, 259,  36,  15
-    LTEXT           "unrar.dll:",        IDC_STATIC,    14, 280,  30,   8
-    EDITTEXT        IDC_UNRAR_DLL_PATH, 46, 278, 180,  14, ES_AUTOHSCROLL
-    PUSHBUTTON      "参照...",               IDC_BROWSE_UNRAR, 230, 277, 36, 15
-    LTEXT           "rar.exe:",          IDC_STATIC,    14, 298,  30,   8
-    EDITTEXT        IDC_RAR_EXE_PATH,   46, 296, 180,  14, ES_AUTOHSCROLL
-    PUSHBUTTON      "参照...",               IDC_BROWSE_RAR, 230, 295,  36,  15
+    GROUPBOX        "動作",             IDC_STATIC,     7, 288, 266,  24
+    AUTOCHECKBOX    "展開後にフォルダを開く", IDC_OPEN_FOLDER_AFTER, 14, 299, 200, 9
 
-    GROUPBOX        "動作",             IDC_STATIC,     7, 326, 266,  24
-    AUTOCHECKBOX    "展開後にフォルダを開く", IDC_OPEN_FOLDER_AFTER, 14, 337, 200, 9
-
-    DEFPUSHBUTTON   "OK",               IDOK,          168, 354,  50,  14
-    PUSHBUTTON      "キャンセル",        IDCANCEL,      222, 354,  50,  14
+    DEFPUSHBUTTON   "OK",               IDOK,          168, 316,  50,  14
+    PUSHBUTTON      "キャンセル",        IDCANCEL,      222, 316,  50,  14
 END
 
 IDD_INFO DIALOGEX 0, 0, 340, 280

@@ -9,7 +9,6 @@ void Settings::BuildIniPath() const {
 
 void Settings::Load() {
     BuildIniPath();
-    m_rarExtractor     = ReadStr(L"General", L"RarExtractor",     L"7z");
     m_rarExePath       = ReadStr(L"General", L"RarExePath",       L"");
     m_defaultOutputDir = ReadStr(L"General", L"DefaultOutputDir", L"");
     {
@@ -94,7 +93,6 @@ void Settings::Load() {
 void Settings::Save() const {
     // Guard against writing to an empty path if Save() is called before Load()
     if (!m_iniPath[0]) BuildIniPath();
-    WriteStr(L"General", L"RarExtractor",     m_rarExtractor.c_str());
     WriteStr(L"General", L"RarExePath",       m_rarExePath.c_str());
     WriteStr(L"General", L"DefaultOutputDir", m_defaultOutputDir.c_str());
     WriteStr(L"General", L"OutputDirMode",    m_outputDirModeFixed ? L"fixed" : L"source");

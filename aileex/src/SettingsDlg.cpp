@@ -80,17 +80,6 @@ INT_PTR SettingsDlg::HandleMsg(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 void SettingsDlg::OnInit(HWND hwnd) {
     Settings& s = App::Instance().GetSettings();
 
-    // RAR extractor combo
-    // Add unrar.dll as an option only when it is loaded
-    HWND hExt = GetDlgItem(hwnd, IDC_RAR_EXTRACTOR);
-    bool unrarLoaded = App::Instance().GetUnrar().IsLoaded();
-    SendMessageW(hExt, CB_ADDSTRING, 0, (LPARAM)L"7z.dll (7-Zip)");
-    if (unrarLoaded)
-        SendMessageW(hExt, CB_ADDSTRING, 0, (LPARAM)L"unrar.dll (UnRAR)");
-    // If unrar.dll is not loaded, fall back to 7z even if the saved setting is "unrar"
-    int extSel = (unrarLoaded && s.GetRarExtractor() == L"unrar") ? 1 : 0;
-    SendMessageW(hExt, CB_SETCURSEL, extSel, 0);
-
     // Font — show current name; user opens ChooseFont via "..." button.
     SetDlgItemTextW(hwnd, IDC_FONT_NAME, s.GetFontName().c_str());
 
@@ -168,10 +157,6 @@ bool SettingsDlg::OnOK(HWND hwnd) {
     Settings& s = App::Instance().GetSettings();
 
     s.SetOutputDirModeFixed(IsDlgButtonChecked(hwnd, IDC_OUTDIR_FIXED) == BST_CHECKED);
-
-    HWND hExt = GetDlgItem(hwnd, IDC_RAR_EXTRACTOR);
-    int  sel  = (int)SendMessageW(hExt, CB_GETCURSEL, 0, 0);
-    s.SetRarExtractor(sel == 1 ? L"unrar" : L"7z");
 
     // Font selection
     wchar_t fontBuf[LF_FACESIZE] = {};

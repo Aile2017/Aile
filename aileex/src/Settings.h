@@ -16,9 +16,6 @@ public:
                                                  const std::vector<std::wstring>& srcFiles,
                                                  const std::wstring& overrideDir = L"");
 
-    const std::wstring& GetRarExtractor() const    { return m_rarExtractor; }
-    void SetRarExtractor(const wchar_t* v)          { m_rarExtractor = v; }
-
     const std::wstring& GetRarExePath() const       { return m_rarExePath; }
     void SetRarExePath(const wchar_t* v)            { m_rarExePath = v; }
 
@@ -135,7 +132,6 @@ private:
     mutable wchar_t m_iniPath[MAX_PATH] = {};
 
     // All members are initialized by Load() before use
-    std::wstring m_rarExtractor;
     std::wstring m_rarExePath;
     std::wstring m_defaultOutputDir;
     bool         m_outputDirModeFixed;

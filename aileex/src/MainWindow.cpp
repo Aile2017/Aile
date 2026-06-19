@@ -293,8 +293,7 @@ bool MainWindow::OpenArchive(const wchar_t* path) {
 
     // For .rar, prefer unrar whenever it is loaded so the archive binds to the
     // writable RarBackend (read=unrar, write=rar.exe). 7z opens .rar only as a
-    // read-only fallback when unrar is unavailable. (The RarExtractor setting no
-    // longer forces 7z for .rar while unrar is present.)
+    // read-only fallback when unrar is unavailable.
     bool preferUnrar = isRar && app.GetUnrar().IsLoaded();
 
     HRESULT hr = E_FAIL;

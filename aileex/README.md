@@ -125,7 +125,6 @@ Saved to `AileEx.ini` in the same folder as the EXE. Editable via the settings d
 
 ```ini
 [General]
-RarExtractor=7z          ; "7z" or "unrar"
 RarExePath=              ; Absolute path to WinRAR.exe / Rar.exe (empty = auto-detect from registry)
 DefaultOutputDir=        ; Default extraction destination (used when OutputDirMode=fixed)
 OutputDirMode=source     ; "source" = use source file directory; "fixed" = use DefaultOutputDir
