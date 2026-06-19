@@ -11,6 +11,7 @@
 #include "RarProcess.h"
 #include "RarBackend.h"
 #include "SevenZipBackend.h"
+#include "ArchiveOpener.h"
 #include "SettingsDlg.h"
 #include "resource.h"
 #include <shellapi.h>
@@ -270,114 +271,26 @@ bool MainWindow::Create(HINSTANCE hInst, int nCmdShow) {
 }
 
 bool MainWindow::OpenArchive(const wchar_t* path) {
-    // Save state before attempting open; revert on failure to keep UI/state consistent
+    // Snapshot only what the post-open cleanup needs; member state is left untouched
+    // until the open succeeds, so a failed open needs no rollback.
     const std::wstring prevPath = m_archivePath;
-    const std::wstring prevEffPath = m_effectiveArchivePath;
-    const bool prevReadOnly = m_isReadOnly;
-    const std::vector<ArchiveItem> prevItems = m_items;
     const std::wstring prevPassword = m_password;
-    const bool prevOpenedWithUnrar = m_openedWithUnrar;
     const std::wstring oldTempPath = m_effectiveArchivePath;
-    
-    m_archivePath = path;
-    m_effectiveArchivePath = path;
-    m_isReadOnly = false;
-    m_password.clear();
-    m_items.clear();
 
     App& app = App::Instance();
 
-    // Determine if this is a RAR file
-    const wchar_t* dotPos = wcsrchr(path, L'.');
-    bool isRar = (dotPos && _wcsicmp(dotPos + 1, L"rar") == 0);
+    // Resolve the rar.exe writer path once (used by RarBackend for write ops).
+    std::wstring rarExe = app.GetSettings().GetRarExePath();
+    if (rarExe.empty()) rarExe = RarProcess::FindRarExe();
 
-    // For .rar, prefer unrar whenever it is loaded so the archive binds to the
-    // writable RarBackend (read=unrar, write=rar.exe). 7z opens .rar only as a
-    // read-only fallback when unrar is unavailable.
-    bool preferUnrar = isRar && app.GetUnrar().IsLoaded();
+    // Delegate backend selection, fallback and password retry to ArchiveOpener.
+    // A successful result hands back a fully-bound backend plus its listing.
+    ArchiveOpener opener(app.Get7z(), app.GetUnrar(), rarExe);
+    ArchiveOpener::Result opened =
+        opener.Open(path, prevPassword, [this]{ return PromptPassword(); });
 
-    HRESULT hr = E_FAIL;
-    m_openedWithUnrar = false;
-
-    if (preferUnrar) {
-        // Try unrar first, then fall back to 7z
-        if (app.GetUnrar().ListArchive(path, m_items)) {
-            hr = S_OK;
-            m_openedWithUnrar = true;
-        } else if (app.Get7z().IsLoaded()) {
-            hr = app.Get7z().OpenArchive(path, m_items, nullptr, &m_effectiveArchivePath);
-        }
-    } else {
-        // Try 7z first
-        if (app.Get7z().IsLoaded()) {
-            hr = app.Get7z().OpenArchive(path, m_items, nullptr, &m_effectiveArchivePath);
-        }
-        // If 7z failed for a RAR file, try unrar as fallback
-        if (FAILED(hr) && isRar && app.GetUnrar().IsLoaded()) {
-            m_items.clear();
-            if (app.GetUnrar().ListArchive(path, m_items)) {
-                hr = S_OK;
-                m_openedWithUnrar = true;
-            }
-        }
-    }
-
-    // On open failure: may be encrypted header, prompt for password and retry.
-    // Respect the user's preferred backend (preferUnrar) and fall back to the other.
-    // Skip password prompt if no backend even attempted to open (e.g. DLL not loaded).
-    bool anyBackendTried = app.Get7z().IsLoaded() || (isRar && app.GetUnrar().IsLoaded());
-    if (FAILED(hr) && anyBackendTried) {
-        // Try the previously known password silently (covers re-open after delete/add
-        // on a header-encrypted archive without forcing the user to re-enter it).
-        auto tryWithPw = [&](const std::wstring& pw) {
-            m_items.clear();
-            if (preferUnrar) {
-                if (app.GetUnrar().ListArchive(path, m_items, pw.c_str())) {
-                    hr = S_OK;
-                    m_openedWithUnrar = true;
-                }
-                if (FAILED(hr) && app.Get7z().IsLoaded()) {
-                    m_items.clear();
-                    hr = app.Get7z().OpenArchive(path, m_items, pw.c_str(), &m_effectiveArchivePath);
-                }
-            } else {
-                if (app.Get7z().IsLoaded())
-                    hr = app.Get7z().OpenArchive(path, m_items, pw.c_str(), &m_effectiveArchivePath);
-                if (FAILED(hr) && isRar && app.GetUnrar().IsLoaded()) {
-                    m_items.clear();
-                    if (app.GetUnrar().ListArchive(path, m_items, pw.c_str())) {
-                        hr = S_OK;
-                        m_openedWithUnrar = true;
-                    }
-                }
-            }
-            if (SUCCEEDED(hr))
-                m_password = pw;
-        };
-        if (!prevPassword.empty())
-            tryWithPw(prevPassword);
-        if (FAILED(hr)) {
-            std::wstring pw = PromptPassword();
-            if (!pw.empty())
-                tryWithPw(pw);
-        }
-    }
-
-    // Detect split auto-unwrap → treat as read-only
-    if (SUCCEEDED(hr) &&
-        _wcsicmp(m_effectiveArchivePath.c_str(), m_archivePath.c_str()) != 0) {
-        m_isReadOnly = true;
-    }
-
-    if (FAILED(hr)) {
-        // Restore state on failure to keep UI consistent
-        m_archivePath = prevPath;
-        m_effectiveArchivePath = prevEffPath;
-        m_isReadOnly = prevReadOnly;
-        m_items = prevItems;
-        m_password = prevPassword;
-        m_openedWithUnrar = prevOpenedWithUnrar;
-        
+    if (!opened.backend) {
+        // Open failed; members are still pointing at the previous archive (if any).
         std::wstring msg = I18n::Tr(IDS_ERR_OPEN_ARCHIVE);
         if (!app.Get7z().IsLoaded() && !app.GetUnrar().IsLoaded()) {
             msg += I18n::Tr(IDS_ERR_OPEN_ARCHIVE_7Z_UNRAR);
@@ -388,27 +301,18 @@ bool MainWindow::OpenArchive(const wchar_t* path) {
             if (app.Get7z().IsWrongBitness())
                 msg += I18n::Tr(IDS_ERR_7Z_WRONG_BITNESS);
         }
-        ShowError(msg.c_str(), hr);
+        ShowError(msg.c_str(), E_FAIL);
         return false;
     }
 
-    // Bind the polymorphic backend to the freshly opened archive. Transition
-    // scaffolding for the IArchiveBackend migration (Step 3): the open/fallback
-    // logic above is left intact and will be folded into backend->Open() later.
-    {
-        auto& s = app.GetSettings();
-        std::wstring rarExe = s.GetRarExePath();
-        if (rarExe.empty()) rarExe = RarProcess::FindRarExe();
-        if (m_openedWithUnrar) {
-            auto b = std::make_unique<RarBackend>(app.GetUnrar(), rarExe);
-            b->Bind(m_archivePath, m_items);
-            m_backend = std::move(b);
-        } else {
-            auto b = std::make_unique<SevenZipBackend>(app.Get7z());
-            b->Bind(m_archivePath, m_effectiveArchivePath, m_password);
-            m_backend = std::move(b);
-        }
-    }
+    // Commit the new archive state from the opener's result.
+    m_archivePath          = path;
+    m_effectiveArchivePath = opened.effectivePath;
+    m_password             = std::move(opened.password);
+    m_items                = std::move(opened.items);
+    m_backend              = std::move(opened.backend);
+    // Split auto-unwrap (effective path differs from display path) is read-only.
+    m_isReadOnly = _wcsicmp(m_effectiveArchivePath.c_str(), m_archivePath.c_str()) != 0;
 
     // Delete previously unwrapped split temp file only after successful open
     // (If we're reloading a different archive, clean up the old temp)
@@ -436,9 +340,7 @@ bool MainWindow::OpenArchive(const wchar_t* path) {
 
     // Update status
     {
-        const std::wstring& dllName = m_openedWithUnrar
-            ? app.GetUnrar().GetLoadedName()
-            : app.Get7z().GetLoadedName();
+        const std::wstring& dllName = m_backend->BackendName();
         size_t fileCount = std::count_if(m_items.begin(), m_items.end(),
                                          [](const ArchiveItem& it){ return !it.isDir; });
         std::wstring status = I18n::TrFmt(IDS_FMT_STATUS_ENTRIES,
@@ -1207,15 +1109,8 @@ void MainWindow::OnListDblClick() {
 }
 
 void MainWindow::OnOpenAssoc() {
-    if (m_archivePath.empty()) return;
-    if (m_openedWithUnrar) {
-        MessageBoxW(m_hwnd, I18n::Tr(IDS_VIEW_REQUIRES_7Z).c_str(),
-                    I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONINFORMATION);
-        return;
-    }
+    if (m_archivePath.empty() || !m_backend) return;
 
-    App& app = App::Instance();
-    if (!Ensure7zLoaded()) return;
     int sel = ListView_GetNextItem(m_hListView, -1, LVNI_SELECTED);
     if (sel < 0) {
         MessageBoxW(m_hwnd, I18n::Tr(IDS_INFO_SELECT_FILE).c_str(),
@@ -1249,15 +1144,17 @@ void MainWindow::OnOpenAssoc() {
     // if the user opens another archive during message dispatch.
     std::vector<UINT32> indices    = { idx };
     std::wstring        itemPath   = it.path;
-    std::wstring        archivePath = m_effectiveArchivePath;
     std::wstring        password   = m_password;
     std::wstring        tmpDir     = m_tempViewDir;
-    auto& sz = app.Get7z();
+    // Single-entry view now goes through the bound backend, so RAR archives opened
+    // via unrar are viewable too. The window is disabled for the duration, so the
+    // backend cannot be replaced mid-run; capturing the raw pointer is safe.
+    IArchiveBackend* backend = m_backend.get();
 
     EnableWindow(m_hwnd, FALSE);
-    m_worker.Start([&sz, archivePath, indices, tmpDir, password]() -> HRESULT {
-        return sz.Extract(archivePath.c_str(), indices, tmpDir.c_str(),
-                          password.empty() ? nullptr : password.c_str(), nullptr);
+    m_worker.Start([backend, indices, tmpDir, password]() -> HRESULT {
+        return backend->Extract(indices, tmpDir.c_str(),
+                                password.empty() ? nullptr : password.c_str(), nullptr);
     }, m_hwnd, WM_APP_DONE);
 
     HRESULT hr = S_OK;
@@ -1387,7 +1284,8 @@ static void OpenExtractedFolder(const std::wstring& dir) {
 
 bool MainWindow::RunExtraction(std::vector<UINT32> indices, std::wstring presetDest) {
     App& app = App::Instance();
-    if (!Ensure7zLoaded(m_openedWithUnrar)) return false;
+    // The bound backend's engine is already loaded (it opened the archive); a
+    // failure is surfaced by the extract call itself.
 
     // If password not yet known, check whether target items are encrypted and prompt.
     if (m_password.empty()) {
@@ -1535,8 +1433,8 @@ HRESULT MainWindow::OnTest() {
         return E_FAIL;
     }
 
-    bool useUnrar = m_openedWithUnrar;
-    if (!Ensure7zLoaded(useUnrar)) return E_FAIL;
+    if (!m_backend) return E_FAIL;
+    // The bound backend's engine is already loaded; a failure is surfaced by Test().
 
     ProgressDlg progDlg;
     progDlg.Show(m_hwnd, I18n::Tr(IDS_PROGRESS_TESTING).c_str());
@@ -1840,8 +1738,7 @@ void MainWindow::OnToggleMenubar() {
 void MainWindow::OnInitMenuPopup(HMENU hMenu) {
     bool hasArchive = !m_archivePath.empty();
     int  selCount   = m_hListView ? ListView_GetSelectedCount(m_hListView) : 0;
-    // Enablement now follows the bound backend's capabilities rather than the
-    // m_openedWithUnrar flag (backend-interface-refactor.md Step 3).
+    // Enablement follows the bound backend's capabilities.
     bool canAdd     = hasArchive && m_backend && m_backend->CanAdd() && !m_isReadOnly;
     bool canDelete  = hasArchive && m_backend && m_backend->CanDelete() && !m_isReadOnly;
 
@@ -1883,7 +1780,6 @@ void MainWindow::CloseArchive() {
     m_effectiveArchivePath.clear();
     m_items.clear();
     m_folderPaths.clear();
-    m_openedWithUnrar = false;
     m_isReadOnly = false;
     m_backend.reset();
 
@@ -1951,9 +1847,13 @@ void MainWindow::AddFilesToCurrentArchive(std::vector<std::wstring> srcPaths) {
 
     // Level is the only format-specific input: RAR takes a 0..5 method index, 7z/zip
     // a 0..9 level (method/advanced options are unified later — design note §3.6).
+    // Add is only reachable when the backend is writable, and only RarBackend writes
+    // .rar, so the archive extension determines which level scale applies.
     // Password is not forwarded here, matching the previous add path.
     const auto& s = app.GetSettings();
-    int level = m_openedWithUnrar ? s.GetRarLevel() : s.GetCompressionLevel();
+    const wchar_t* dot = wcsrchr(m_archivePath.c_str(), L'.');
+    bool isRar = dot && _wcsicmp(dot + 1, L"rar") == 0;
+    int level = isRar ? s.GetRarLevel() : s.GetCompressionLevel();
     IArchiveBackend* backend = m_backend.get();
     std::wstring folder = archiveFolder;
     HRESULT hrDone = S_OK;
@@ -2010,7 +1910,10 @@ void MainWindow::OnArchiveProperties() {
         if (SUCCEEDED(hr)) haveProps = true;
     }
 
-    const wchar_t* fallback = m_openedWithUnrar ? L"RAR" : L"";
+    // Fallback format label when 7z couldn't read properties (typical for a RAR
+    // opened via unrar.dll); derived from the extension since the backend is opaque.
+    const wchar_t* dot = wcsrchr(m_archivePath.c_str(), L'.');
+    const wchar_t* fallback = (dot && _wcsicmp(dot + 1, L"rar") == 0) ? L"RAR" : L"";
     PropertiesDlg dlg;
     dlg.Show(m_hwnd, m_archivePath, m_items,
              haveProps ? &props : nullptr, fallback);
@@ -2605,8 +2508,8 @@ void MainWindow::ShowError(const wchar_t* msg, HRESULT hr) {
     MessageBoxW(parent, text.c_str(), L"AileEx", MB_ICONERROR);
 }
 
-bool MainWindow::Ensure7zLoaded(bool useUnrar) {
-    if (!useUnrar && !App::Instance().Get7z().IsLoaded()) {
+bool MainWindow::Ensure7zLoaded() {
+    if (!App::Instance().Get7z().IsLoaded()) {
         ShowError(I18n::Tr(IDS_ERR_7Z_NOT_LOADED).c_str());
         return false;
     }

@@ -25,12 +25,6 @@ public:
     HRESULT GetComment(std::wstring& out) override;
     HRESULT SetComment(const std::wstring& text) override;
 
-    // Transition scaffolding: bind to an archive MainWindow already opened, without
-    // re-opening it, so the existing OpenArchive logic can stay while operations are
-    // routed through this backend. Removed once OpenArchive itself uses Open().
-    void Bind(const std::wstring& displayPath, const std::wstring& effectivePath,
-              const std::wstring& password);
-
     bool CanTest()    const override { return true; }  // 7z.dll can test any opened format
     bool CanAdd()     const override { return m_canModify; }
     bool CanDelete()  const override { return m_canModify; }
