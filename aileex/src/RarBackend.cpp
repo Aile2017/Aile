@@ -40,11 +40,6 @@ HRESULT RarBackend::Open(const wchar_t* path, std::vector<ArchiveItem>& items,
     return ok ? S_OK : S_FALSE;
 }
 
-void RarBackend::Bind(const std::wstring& path, const std::vector<ArchiveItem>& items) {
-    m_path  = path;
-    m_items = items;
-}
-
 HRESULT RarBackend::Extract(const std::vector<UINT32>& indices, const wchar_t* destDir,
                             const wchar_t* password, IExtractProgressSink* sink) {
     const wchar_t* pw = (password && password[0]) ? password : nullptr;

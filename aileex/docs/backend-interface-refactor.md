@@ -5,9 +5,11 @@ Design note and incremental plan for replacing the flag-based backend selection 
 `architecture.md` → *Main concerns* #4 (flags instead of polymorphism) and #5
 (RAR and 7z duplicate responsibilities without a shared interface).
 
-**Status:** Steps 1–2 done (adapters exist but are not yet consumed, so behavior
-is unchanged); Steps 3–5 pending. No behavior change is intended by the refactor
-until the MainWindow migration in Step 3.
+**Status:** Steps 1–4 done. Both apps' `MainWindow` now dispatch every archive
+operation and all menu/capability state through the bound `IArchiveBackend`, and
+backend selection + open-time fallback live in `ArchiveOpener` (AileEx).
+`m_openedWithUnrar` and the transition `Bind()` scaffolds have been removed. Step 5
+(separating the format registry from the per-session abstraction) is pending.
 
 ---
 
@@ -113,15 +115,17 @@ This is favorable, not just a constraint: AileFlow already handles every format
 Do **not** do this in one pass: it touches the god object and the cross-app sync
 contract simultaneously. Each step keeps the build green and behavior unchanged.
 
-1. **Define `IArchiveBackend`; add thin adapters.** `SevenZipBackend` /
+1. ✅ **Define `IArchiveBackend`; add thin adapters.** `SevenZipBackend` /
    `RarBackend` delegate to the existing classes only (no behavior change).
-2. **Move async→sync + sink bridging into `RarBackend`** (relocate the
+2. ✅ **Move async→sync + sink bridging into `RarBackend`** (relocate the
    `RunRarCompressSync` responsibility).
-3. **Migrate `MainWindow` call sites one workflow at a time** (Extract first, then
-   Test, Add, Delete, comments), replacing `m_openedWithUnrar` branching with
-   capability queries.
-4. **Introduce `ArchiveService`** to centralize backend selection and open-time
-   fallback.
+3. ✅ **Migrate `MainWindow` call sites one workflow at a time** (Extract, Test,
+   Add, Delete, comments), replacing `m_openedWithUnrar` branching with capability
+   queries. Done for both AileEx and AileFlow.
+4. ✅ **Introduce `ArchiveOpener`** to centralize backend selection, S_FALSE/failure
+   fallback and password retry at open time. `m_openedWithUnrar` and the transition
+   `Bind()` scaffolds are removed; the winning backend comes pre-bound from `Open()`.
+   (Implemented as `ArchiveOpener` rather than the originally-named `ArchiveService`.)
 5. **Separate the format registry** (enumeration / filters / codecs) from the
    per-session abstraction.
 

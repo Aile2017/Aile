@@ -91,7 +91,7 @@ private:
     void SelectTreeFolder(const std::wstring& folderPath);
     void ShowError(const wchar_t* msg, HRESULT hr = 0);
     // Returns false and shows error if 7z is required but not loaded.
-    bool Ensure7zLoaded(bool useUnrar = false);
+    bool Ensure7zLoaded();
     // Returns entered password, or empty string if user cancelled.
     std::wstring PromptPassword();
     // Creates m_tempViewDir on first call; shows error and returns false on failure.
@@ -116,11 +116,10 @@ private:
     std::wstring             m_archivePath;          // Display path (e.g. xx.001)
     std::wstring             m_effectiveArchivePath; // Operative path (differs from m_archivePath only when a split archive is auto-unwrapped)
     std::wstring             m_password;             // Password used to open the current archive (empty if none)
-    bool                     m_openedWithUnrar = false;
     bool                     m_isReadOnly      = false;  // Write operations disabled (e.g. split auto-unwrap)
-    // Polymorphic backend bound to the currently open archive. Operations are being
-    // migrated onto this incrementally (backend-interface-refactor.md Step 3); until
-    // the migration completes, m_openedWithUnrar is kept in sync for unmigrated paths.
+    // Polymorphic backend bound to the currently open archive (RarBackend for RAR
+    // opened via unrar, otherwise SevenZipBackend). Built by ArchiveOpener at open
+    // time; all archive operations dispatch through it.
     std::unique_ptr<IArchiveBackend> m_backend;
     std::vector<ArchiveItem> m_items;
     std::vector<std::wstring> m_folderPaths;  // sorted; index matches TreeView lParam

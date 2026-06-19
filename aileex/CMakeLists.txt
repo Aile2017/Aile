@@ -36,6 +36,7 @@ add_executable(AileEx WIN32
     src/UnrarDll.cpp
     src/RarBackend.cpp
     src/RarProcess.cpp
+    src/ArchiveOpener.cpp
     ${COMMON_DIR}/I18n.cpp
     ${COMMON_DIR}/WorkerThread.cpp
     ${COMMON_DIR}/ProgressDlg.cpp
