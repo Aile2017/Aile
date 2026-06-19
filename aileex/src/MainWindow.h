@@ -52,12 +52,11 @@ private:
     void OnExtractSelected(const std::wstring& presetDest = L"");
     // Toolbar extract: extract selected items if any are selected, otherwise extract all.
     void OnExtractSmart();
-    // Common extraction driver. indices empty = extract all (7z path).
-    // rarTargetPaths empty = extract all (unrar path).
+    // Common extraction driver. indices empty = extract all; otherwise the active
+    // backend resolves the selected entries (RarBackend maps indices to paths).
     // presetDest: if non-empty, skip the folder picker and extract directly to this path.
     // Returns false only if the user cancelled the destination folder picker; true otherwise.
-    bool RunExtraction(std::vector<UINT32> indices, std::set<std::wstring> rarTargetPaths,
-                       std::wstring presetDest = L"");
+    bool RunExtraction(std::vector<UINT32> indices, std::wstring presetDest = L"");
     void OnContextMenu(HWND hwndFrom, int x, int y);
     HRESULT OnTest();
     void OnOpenAssoc();

@@ -1302,12 +1302,12 @@ void MainWindow::OnOpenAssoc() {
 
 void MainWindow::OnExtract(const std::wstring& presetDest) {
     if (m_archivePath.empty()) return;
-    RunExtraction({}, {}, presetDest);
+    RunExtraction({}, presetDest);
 }
 
 bool MainWindow::TriggerExtract(const std::wstring& presetDest) {
     if (m_items.empty()) return true;  // nothing to extract; let a batch continue
-    return RunExtraction({}, {}, presetDest);
+    return RunExtraction({}, presetDest);
 }
 
 void MainWindow::OnExtractSmart() {
@@ -1361,10 +1361,7 @@ void MainWindow::OnExtractSelected(const std::wstring& presetDest) {
     }
 
     std::vector<UINT32> indices(indexSet.begin(), indexSet.end());
-    std::set<std::wstring> rarTargetPaths;
-    for (UINT32 idx : indices) rarTargetPaths.insert(m_items[idx].path);
-
-    RunExtraction(std::move(indices), std::move(rarTargetPaths), presetDest);
+    RunExtraction(std::move(indices), presetDest);
 }
 
 static void OpenExtractedFolder(const std::wstring& dir) {
@@ -1388,12 +1385,9 @@ static void OpenExtractedFolder(const std::wstring& dir) {
     }
 }
 
-bool MainWindow::RunExtraction(std::vector<UINT32> indices, std::set<std::wstring> rarTargetPaths,
-                               std::wstring presetDest) {
+bool MainWindow::RunExtraction(std::vector<UINT32> indices, std::wstring presetDest) {
     App& app = App::Instance();
-    bool useUnrar = m_openedWithUnrar;
-
-    if (!Ensure7zLoaded(useUnrar)) return false;
+    if (!Ensure7zLoaded(m_openedWithUnrar)) return false;
 
     // If password not yet known, check whether target items are encrypted and prompt.
     if (m_password.empty()) {
@@ -1468,34 +1462,15 @@ bool MainWindow::RunExtraction(std::vector<UINT32> indices, std::set<std::wstrin
     ProgressPostSink* sink = sg.sink;
     progDlg.SetSink(sink);
 
-    auto archivePath = m_effectiveArchivePath;
-
+    // Migrated to IArchiveBackend: the backend maps selected indices to entries
+    // internally (RarBackend translates them to paths; SevenZipBackend uses them
+    // directly) and creates the destination tree as its engine requires.
+    IArchiveBackend* backend = m_backend.get();
     std::wstring password = m_password;
-    if (useUnrar) {
-        auto& unrar = app.GetUnrar();
-        if (rarTargetPaths.empty()) {
-            m_worker.Start([&unrar, archivePath, destDir = finalDest, password, sink]() -> HRESULT {
-                SHCreateDirectoryExW(nullptr, destDir.c_str(), nullptr);
-                const wchar_t* pw = password.empty() ? nullptr : password.c_str();
-                bool ok = unrar.ExtractArchive(archivePath.c_str(), destDir.c_str(), pw, sink);
-                return ok ? S_OK : E_FAIL;
-            }, m_hwnd, WM_APP_DONE);
-        } else {
-            m_worker.Start([&unrar, archivePath, destDir = finalDest, rarTargetPaths, password, sink]() -> HRESULT {
-                SHCreateDirectoryExW(nullptr, destDir.c_str(), nullptr);
-                const wchar_t* pw = password.empty() ? nullptr : password.c_str();
-                bool ok = unrar.ExtractArchiveSelected(archivePath.c_str(), destDir.c_str(),
-                                                       rarTargetPaths, pw, sink);
-                return ok ? S_OK : E_FAIL;
-            }, m_hwnd, WM_APP_DONE);
-        }
-    } else {
-        auto& sz = app.Get7z();
-        m_worker.Start([&sz, archivePath, indices, destDir = finalDest, password, sink]() -> HRESULT {
-            const wchar_t* pw = password.empty() ? nullptr : password.c_str();
-            return sz.Extract(archivePath.c_str(), indices, destDir.c_str(), pw, sink);
-        }, m_hwnd, WM_APP_DONE);
-    }
+    m_worker.Start([backend, indices, destDir = finalDest, password, sink]() -> HRESULT {
+        const wchar_t* pw = password.empty() ? nullptr : password.c_str();
+        return backend->Extract(indices, destDir.c_str(), pw, sink);
+    }, m_hwnd, WM_APP_DONE);
 
     HRESULT hrDone = progDlg.RunMessageLoop();
     m_worker.Wait();
