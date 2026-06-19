@@ -97,30 +97,97 @@ int CountTopLevelEntries(const std::vector<ArchiveItem>& items) {
     return (int)tops.size();
 }
 
-// Generate subfolder name from archive path (strip compound extensions: archive.tar.gz → archive,
-// archive.7z.001 → archive)
-std::wstring ArchiveBaseName(const std::wstring& archivePath, const SevenZip& sz) {
+// Generate subfolder name from archive path.
+// extStripMode: 0=strip all known compound exts (default; archive.tar.gz → archive,
+//               archive.7z.001 → archive) / 1=strip one ext / 2=keep all.
+// stripTrailingNum: if true, strip trailing digits/-/_/. /space from the resulting stem.
+std::wstring ArchiveBaseName(const std::wstring& archivePath, const SevenZip& sz,
+                             int extStripMode = 0, bool stripTrailingNum = false) {
     std::wstring name = PathFindFileNameW(archivePath.c_str());
-    bool stripped = true;
-    while (stripped) {
-        stripped = false;
+
+    if (extStripMode == 2) {
+        // keep: leave the filename as-is
+    } else if (extStripMode == 1) {
+        // strip one extension
         auto dot = name.rfind(L'.');
-        if (dot == std::wstring::npos || dot + 1 >= name.size()) break;
-        std::wstring ext = name.substr(dot + 1);
-        // Strip all-digit trailing extensions (.001 etc.)
-        bool allDigits = true;
-        for (auto c : ext) if (!iswdigit(c)) { allDigits = false; break; }
-        if (allDigits) {
-            name = name.substr(0, dot);
-            stripped = true;
-            continue;
-        }
-        if (sz.IsArchiveExt(ext.c_str())) {
-            name = name.substr(0, dot);
-            stripped = true;
+        if (dot != std::wstring::npos) name = name.substr(0, dot);
+    } else {
+        // strip all known compound extensions + numeric volume extensions (.001 etc.)
+        bool stripped = true;
+        while (stripped) {
+            stripped = false;
+            auto dot = name.rfind(L'.');
+            if (dot == std::wstring::npos || dot + 1 >= name.size()) break;
+            std::wstring ext = name.substr(dot + 1);
+            // Strip all-digit trailing extensions (.001 etc.)
+            bool allDigits = true;
+            for (auto c : ext) if (!iswdigit(c)) { allDigits = false; break; }
+            if (allDigits) {
+                name = name.substr(0, dot);
+                stripped = true;
+                continue;
+            }
+            if (sz.IsArchiveExt(ext.c_str())) {
+                name = name.substr(0, dot);
+                stripped = true;
+            }
         }
     }
+
+    if (stripTrailingNum && !name.empty()) {
+        // Noah StripTrailingNumber: strip trailing digits, hyphen, underscore, dot, space.
+        static const std::wstring kStripSet = L"0123456789-_. ";
+        size_t end = name.size();
+        while (end > 0 && kStripSet.find(name[end - 1]) != std::wstring::npos)
+            --end;
+        if (end > 0) name = name.substr(0, end);
+    }
+
     return name.empty() ? L"archive" : name;
+}
+
+// Noah break_ddir: if destDir contains exactly one direct child directory (and nothing else),
+// move its contents up to destDir and remove it. Silently skips on any error.
+void CollapseIfSingleSubfolder(const std::wstring& destDir) {
+    WIN32_FIND_DATAW fd = {};
+    std::wstring pattern = destDir + L"\\*";
+    HANDLE hFind = FindFirstFileW(pattern.c_str(), &fd);
+    if (hFind == INVALID_HANDLE_VALUE) return;
+
+    std::wstring subName;
+    int count = 0;
+    bool isDir = false;
+    do {
+        if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0) continue;
+        ++count;
+        if (count > 1) break;
+        subName = fd.cFileName;
+        isDir   = (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+    } while (FindNextFileW(hFind, &fd));
+    FindClose(hFind);
+
+    if (count != 1 || !isDir) return;
+
+    std::wstring subDir = destDir + L"\\" + subName;
+
+    // Enumerate items inside the single subdirectory and move each up to destDir.
+    pattern = subDir + L"\\*";
+    hFind   = FindFirstFileW(pattern.c_str(), &fd);
+    if (hFind == INVALID_HANDLE_VALUE) return;
+
+    std::vector<std::wstring> items;
+    do {
+        if (wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0) continue;
+        items.push_back(fd.cFileName);
+    } while (FindNextFileW(hFind, &fd));
+    FindClose(hFind);
+
+    for (const auto& item : items) {
+        std::wstring src = subDir + L"\\" + item;
+        std::wstring dst = destDir + L"\\" + item;
+        MoveFileExW(src.c_str(), dst.c_str(), MOVEFILE_REPLACE_EXISTING);
+    }
+    RemoveDirectoryW(subDir.c_str());
 }
 
 // Determine if subfolder should be created based on MkDir policy
@@ -1354,7 +1421,8 @@ void MainWindow::RunExtraction(std::vector<UINT32> indices, std::set<std::wstrin
     // Evaluate MkDir policy: use selected items when extracting a subset, full list otherwise.
     std::wstring finalDest = destDir;
     {
-        int mkDir = app.GetSettings().GetMkDir();
+        auto& s    = app.GetSettings();
+        int   mkDir = s.GetMkDir();
         bool makeSubfolder = false;
         if (!indices.empty()) {
             std::vector<ArchiveItem> sel;
@@ -1365,7 +1433,9 @@ void MainWindow::RunExtraction(std::vector<UINT32> indices, std::set<std::wstrin
             makeSubfolder = ShouldCreateSubfolder(mkDir, m_items);
         }
         if (makeSubfolder)
-            finalDest = std::wstring(destDir) + L"\\" + ArchiveBaseName(m_archivePath, app.Get7z());
+            finalDest = std::wstring(destDir) + L"\\" +
+                        ArchiveBaseName(m_archivePath, app.Get7z(),
+                                        s.GetExtStripMode(), s.GetStripTrailingNumber());
     }
 
     ProgressDlg progDlg;
@@ -1410,6 +1480,8 @@ void MainWindow::RunExtraction(std::vector<UINT32> indices, std::set<std::wstrin
     if (FAILED(hrDone) && hrDone != E_ABORT) {
         ShowError(I18n::Tr(IDS_ERR_EXTRACT_FAILED).c_str(), hrDone);
     } else if (SUCCEEDED(hrDone)) {
+        if (app.GetSettings().GetBreakDDir())
+            CollapseIfSingleSubfolder(finalDest);
         if (app.GetSettings().GetOpenFolderAfterExtract())
             OpenExtractedFolder(finalDest);
     }

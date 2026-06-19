@@ -45,6 +45,11 @@ INT_PTR SettingsDlg::HandleMsg(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case IDC_MKDIR_3:
             CheckRadioButton(hwnd, IDC_MKDIR_0, IDC_MKDIR_3, LOWORD(wp));
             break;
+        case IDC_EXT_STRIP_ALL:
+        case IDC_EXT_STRIP_ONE:
+        case IDC_EXT_STRIP_KEEP:
+            CheckRadioButton(hwnd, IDC_EXT_STRIP_ALL, IDC_EXT_STRIP_KEEP, LOWORD(wp));
+            break;
         case IDC_BROWSE_FONT:
             OnBrowseFont(hwnd);
             break;
@@ -108,6 +113,15 @@ void SettingsDlg::OnInit(HWND hwnd) {
         if (v > 3) v = 3;
         CheckRadioButton(hwnd, IDC_MKDIR_0, IDC_MKDIR_3, IDC_MKDIR_0 + v);
     }
+
+    // Extraction output-folder naming / structure
+    {
+        int v = s.GetExtStripMode();
+        if (v < 0 || v > 2) v = 0;
+        CheckRadioButton(hwnd, IDC_EXT_STRIP_ALL, IDC_EXT_STRIP_KEEP, IDC_EXT_STRIP_ALL + v);
+    }
+    CheckDlgButton(hwnd, IDC_STRIP_TRAILING_NUM,  s.GetStripTrailingNumber() ? BST_CHECKED : BST_UNCHECKED);
+    CheckDlgButton(hwnd, IDC_COLLAPSE_SINGLE_DIR, s.GetBreakDDir()           ? BST_CHECKED : BST_UNCHECKED);
 
     // DLL / exe paths: show saved value, or auto-detect if empty
     auto resolve = [](const std::wstring& saved, const std::wstring& detected) {
@@ -176,6 +190,17 @@ bool SettingsDlg::OnOK(HWND hwnd) {
         if (IsDlgButtonChecked(hwnd, IDC_MKDIR_0 + i) == BST_CHECKED) { mkDir = i; break; }
     }
     s.SetMkDir(mkDir);
+
+    // Extraction output-folder naming / structure
+    {
+        int extStrip = 0;
+        for (int i = 0; i <= 2; ++i) {
+            if (IsDlgButtonChecked(hwnd, IDC_EXT_STRIP_ALL + i) == BST_CHECKED) { extStrip = i; break; }
+        }
+        s.SetExtStripMode(extStrip);
+    }
+    s.SetStripTrailingNumber(IsDlgButtonChecked(hwnd, IDC_STRIP_TRAILING_NUM)  == BST_CHECKED);
+    s.SetBreakDDir(          IsDlgButtonChecked(hwnd, IDC_COLLAPSE_SINGLE_DIR) == BST_CHECKED);
 
     // If the path field was left at the auto-detected value (i.e. the saved setting was empty),
     // store an empty string so auto-detection continues to work next time.

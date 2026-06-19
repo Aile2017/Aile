@@ -38,6 +38,17 @@ void Settings::Load() {
     m_mkDir = _wtoi(buf);
     if (m_mkDir < 0 || m_mkDir > 3) m_mkDir = 2;
 
+    // Extraction output-folder naming / structure
+    GetPrivateProfileStringW(L"General", L"ExtStripMode", L"0", buf, 16, m_iniPath);
+    m_extStripMode = _wtoi(buf);
+    if (m_extStripMode < 0 || m_extStripMode > 2) m_extStripMode = 0;
+
+    GetPrivateProfileStringW(L"General", L"StripTrailingNumber", L"0", buf, 16, m_iniPath);
+    m_stripTrailingNumber = _wtoi(buf) != 0;
+
+    GetPrivateProfileStringW(L"General", L"BreakDDir", L"0", buf, 16, m_iniPath);
+    m_breakDDir = _wtoi(buf) != 0;
+
     // Advanced compress options
     m_advDictSize   = ReadStr(L"AdvancedCompress", L"DictSize",   L"");
     m_advWordSize   = ReadStr(L"AdvancedCompress", L"WordSize",   L"");
@@ -104,6 +115,12 @@ void Settings::Save() const {
 
     _itow_s(m_mkDir, buf, 10);
     WriteStr(L"General", L"MkDir", buf);
+
+    // Extraction output-folder naming / structure
+    _itow_s(m_extStripMode, buf, 10);
+    WriteStr(L"General", L"ExtStripMode", buf);
+    WriteStr(L"General", L"StripTrailingNumber", m_stripTrailingNumber ? L"1" : L"0");
+    WriteStr(L"General", L"BreakDDir",           m_breakDDir           ? L"1" : L"0");
 
     // Advanced compress options
     WriteStr(L"AdvancedCompress", L"DictSize",   m_advDictSize.c_str());
