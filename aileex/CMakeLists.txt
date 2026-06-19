@@ -32,7 +32,9 @@ add_executable(AileEx WIN32
     src/SettingsDlg.cpp
     src/Settings.cpp
     src/SevenZip.cpp
+    src/SevenZipBackend.cpp
     src/UnrarDll.cpp
+    src/RarBackend.cpp
     src/RarProcess.cpp
     ${COMMON_DIR}/I18n.cpp
     ${COMMON_DIR}/WorkerThread.cpp

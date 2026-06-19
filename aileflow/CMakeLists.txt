@@ -27,6 +27,7 @@ set(AILEFLOW_UI_SOURCES
     src/SettingsDlg.cpp
     src/Settings.cpp
     src/SevenZipB2e.cpp
+    src/SevenZipBackend.cpp
     ${COMMON_DIR}/I18n.cpp
     ${COMMON_DIR}/WorkerThread.cpp
     ${COMMON_DIR}/ProgressDlg.cpp

@@ -213,6 +213,7 @@ be revisited without re-running the whole analysis.
    `UnrarDll` and `SevenZip` both provide load/list/extract/test style functionality, but they are
    consumed through ad-hoc branching instead of a shared archive backend contract. This keeps each
    implementation simple locally, but increases drift and cross-backend conditionals in `MainWindow`.
+   See `backend-interface-refactor.md` for the accepted `IArchiveBackend` design and incremental plan.
 
 6. **Dialogs contain business rules in addition to presentation.**
    `CompressDlg` and related dialogs do more than gather input: they also decide extension rewriting,
