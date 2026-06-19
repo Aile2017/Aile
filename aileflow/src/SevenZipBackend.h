@@ -30,6 +30,11 @@ public:
     HRESULT GetComment(std::wstring& out) override;
     HRESULT SetComment(const std::wstring& text) override;
 
+    // Transition scaffolding: bind to an archive MainWindow already opened/listed,
+    // without re-opening. effectivePath is the operative path (== display path unless
+    // a split archive was auto-unwrapped). Removed once OpenArchive uses Open().
+    void Bind(const std::wstring& effectivePath) { m_effectivePath = effectivePath; }
+
     bool CanTest()    const override { return m_sz.CanTest(); }
     bool CanAdd()     const override { return m_sz.CanAddToCurrent(); }
     bool CanDelete()  const override { return m_sz.CanDelete(); }
