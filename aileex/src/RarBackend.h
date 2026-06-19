@@ -35,6 +35,10 @@ public:
     HRESULT GetComment(std::wstring& out) override;
     HRESULT SetComment(const std::wstring& text) override;
 
+    // Transition scaffolding: bind to an archive MainWindow already listed, without
+    // re-listing. Removed once OpenArchive itself uses Open().
+    void Bind(const std::wstring& path, const std::vector<ArchiveItem>& items);
+
     bool CanTest()    const override { return true; }   // unrar.dll tests any RAR
     bool CanAdd()     const override { return !m_rarExePath.empty(); }
     bool CanDelete()  const override { return !m_rarExePath.empty(); }

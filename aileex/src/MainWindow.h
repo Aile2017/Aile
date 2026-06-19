@@ -5,10 +5,12 @@
 #include <vector>
 #include <string>
 #include <set>
+#include <memory>
 #include "ArchiveItem.h"
 #include "WorkerThread.h"
 #include "CompressDlg.h"
 #include "RarProcess.h"
+#include "IArchiveBackend.h"
 
 class MainWindow {
 public:
@@ -50,12 +52,11 @@ private:
     void OnExtractSelected(const std::wstring& presetDest = L"");
     // Toolbar extract: extract selected items if any are selected, otherwise extract all.
     void OnExtractSmart();
-    // Common extraction driver. indices empty = extract all (7z path).
-    // rarTargetPaths empty = extract all (unrar path).
+    // Common extraction driver. indices empty = extract all; otherwise the active
+    // backend resolves the selected entries (RarBackend maps indices to paths).
     // presetDest: if non-empty, skip the folder picker and extract directly to this path.
     // Returns false only if the user cancelled the destination folder picker; true otherwise.
-    bool RunExtraction(std::vector<UINT32> indices, std::set<std::wstring> rarTargetPaths,
-                       std::wstring presetDest = L"");
+    bool RunExtraction(std::vector<UINT32> indices, std::wstring presetDest = L"");
     void OnContextMenu(HWND hwndFrom, int x, int y);
     HRESULT OnTest();
     void OnOpenAssoc();
@@ -117,6 +118,10 @@ private:
     std::wstring             m_password;             // Password used to open the current archive (empty if none)
     bool                     m_openedWithUnrar = false;
     bool                     m_isReadOnly      = false;  // Write operations disabled (e.g. split auto-unwrap)
+    // Polymorphic backend bound to the currently open archive. Operations are being
+    // migrated onto this incrementally (backend-interface-refactor.md Step 3); until
+    // the migration completes, m_openedWithUnrar is kept in sync for unmigrated paths.
+    std::unique_ptr<IArchiveBackend> m_backend;
     std::vector<ArchiveItem> m_items;
     std::vector<std::wstring> m_folderPaths;  // sorted; index matches TreeView lParam
     std::wstring             m_currentFolderPath; // currently displayed folder in ListView
