@@ -394,13 +394,32 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
     return 0;
 }
 
-int App::RunExtractDialogMode(const std::wstring& archivePath, int nCmdShow,
+int App::RunExtractDialogMode(const std::vector<std::wstring>& archivePaths, int nCmdShow,
                                const std::wstring& destDir) {
+    // Filter to actual archives; a shell/CLI selection may include non-archive files.
+    std::vector<std::wstring> archives;
+    for (const auto& p : archivePaths)
+        if (Get7z().IsArchivePath(p.c_str()))
+            archives.push_back(p);
+    if (archives.empty()) {
+        MessageBoxW(nullptr, I18n::Tr(IDS_ERR_OPEN_ARCHIVE).c_str(), L"AileEx", MB_ICONERROR);
+        return 1;
+    }
+
     MainWindow wnd;
-    // SW_HIDE: suppress list window; only the extract folder picker and progress dialog appear.
+    // SW_HIDE: suppress the list window; only the extract folder picker and progress dialog appear.
     if (!wnd.Create(m_hInst, SW_HIDE)) return 1;
-    wnd.OpenArchive(archivePath.c_str());
-    wnd.TriggerExtract(destDir);
+
+    // Extract each archive in turn. With -d (destDir non-empty) every archive goes there
+    // without prompting. Otherwise the first archive shows the folder picker, which stores
+    // the choice as the session override so the remaining archives reuse it (one prompt for
+    // the whole batch). Each archive still lands in its own MkDir subfolder, so no collision.
+    for (const auto& path : archives) {
+        if (!wnd.OpenArchive(path.c_str()))
+            continue;  // open failed (error already shown); skip without extracting
+        if (!wnd.TriggerExtract(destDir))
+            break;     // user cancelled the destination folder picker → abort the batch
+    }
     return 0;
 }
 

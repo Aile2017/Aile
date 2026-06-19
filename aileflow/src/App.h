@@ -30,7 +30,9 @@ public:
                             const std::wstring& typeOverride = L"",
                             const std::wstring& methodOverride = L"",
                             bool sfx = false);
-    int RunExtractDialogMode(const std::wstring& archivePath, int nCmdShow,
+    // x: extract one or more archives with the list window hidden. The destination is
+    // resolved once (via -d or a single folder prompt) and reused for every archive.
+    int RunExtractDialogMode(const std::vector<std::wstring>& archivePaths, int nCmdShow,
                              const std::wstring& destDir = L"");
     // t: integrity-test a single archive with the list window hidden.
     // Returns 0 on pass/cancel, 1 on failure or unsupported format (process exit code).

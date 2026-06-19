@@ -267,7 +267,7 @@ bool MainWindow::Create(HINSTANCE hInst, int nCmdShow) {
     return true;
 }
 
-void MainWindow::OpenArchive(const wchar_t* path) {
+bool MainWindow::OpenArchive(const wchar_t* path) {
     // Save state before attempting open; revert on failure to keep UI/state consistent
     const std::wstring prevPath = m_archivePath;
     const std::wstring prevEffPath = m_effectiveArchivePath;
@@ -387,7 +387,7 @@ void MainWindow::OpenArchive(const wchar_t* path) {
                 msg += I18n::Tr(IDS_ERR_7Z_WRONG_BITNESS);
         }
         ShowError(msg.c_str(), hr);
-        return;
+        return false;
     }
 
     // Delete previously unwrapped split temp file only after successful open
@@ -429,6 +429,7 @@ void MainWindow::OpenArchive(const wchar_t* path) {
     PopulateTree();
     PopulateList(L"");
     UpdateExtractDestEdit();
+    return true;
 }
 
 // ---- WndProc dispatch ----
@@ -1284,9 +1285,9 @@ void MainWindow::OnExtract(const std::wstring& presetDest) {
     RunExtraction({}, {}, presetDest);
 }
 
-void MainWindow::TriggerExtract(const std::wstring& presetDest) {
-    if (m_items.empty()) return;
-    RunExtraction({}, {}, presetDest);
+bool MainWindow::TriggerExtract(const std::wstring& presetDest) {
+    if (m_items.empty()) return true;  // nothing to extract; let a batch continue
+    return RunExtraction({}, {}, presetDest);
 }
 
 void MainWindow::OnExtractSmart() {
@@ -1367,12 +1368,12 @@ static void OpenExtractedFolder(const std::wstring& dir) {
     }
 }
 
-void MainWindow::RunExtraction(std::vector<UINT32> indices, std::set<std::wstring> rarTargetPaths,
+bool MainWindow::RunExtraction(std::vector<UINT32> indices, std::set<std::wstring> rarTargetPaths,
                                std::wstring presetDest) {
     App& app = App::Instance();
     bool useUnrar = m_openedWithUnrar;
 
-    if (!Ensure7zLoaded(useUnrar)) return;
+    if (!Ensure7zLoaded(useUnrar)) return false;
 
     // If password not yet known, check whether target items are encrypted and prompt.
     if (m_password.empty()) {
@@ -1386,7 +1387,8 @@ void MainWindow::RunExtraction(std::vector<UINT32> indices, std::set<std::wstrin
         }
         if (needPw) {
             m_password = PromptPassword();
-            if (m_password.empty()) return;
+            // Password cancelled: skip this archive but let a batch continue to the next.
+            if (m_password.empty()) return true;
         }
     }
 
@@ -1412,8 +1414,9 @@ void MainWindow::RunExtraction(std::vector<UINT32> indices, std::set<std::wstrin
             }
         }
         if (!BrowseFolderDialog(m_hwnd, IDS_TITLE_SELECT_DEST_FOLDER, &destDir))
-            return;
+            return false;  // destination cancelled → abort the batch
         // Keep edit box and override in sync with the user's folder picker choice.
+        // The chosen folder is reused for subsequent archives in a multi-archive batch.
         m_extractDestOverride = destDir;
         UpdateExtractDestEdit();
     }
@@ -1485,6 +1488,7 @@ void MainWindow::RunExtraction(std::vector<UINT32> indices, std::set<std::wstrin
         if (app.GetSettings().GetOpenFolderAfterExtract())
             OpenExtractedFolder(finalDest);
     }
+    return true;
 }
 
 void MainWindow::OnContextMenu(HWND /*hwndFrom*/, int x, int y) {

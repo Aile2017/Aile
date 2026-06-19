@@ -12,11 +12,14 @@
 class MainWindow {
 public:
     bool Create(HINSTANCE hInst, int nCmdShow);
-    void OpenArchive(const wchar_t* path);
+    // Returns true if the archive was opened successfully. On failure an error box is shown.
+    bool OpenArchive(const wchar_t* path);
     // Show the extract-destination dialog and perform extraction immediately.
-    // Called after OpenArchive when -x option is given; skips the list view entirely.
+    // Called after OpenArchive when the `x` action is given; skips the list view entirely.
     // presetDest: if non-empty, skip the folder picker and extract directly to this path.
-    void TriggerExtract(const std::wstring& presetDest = L"");
+    // Returns false only if the user cancelled the destination folder picker (so a
+    // multi-archive batch can stop); true otherwise (extracted, empty, or skipped).
+    bool TriggerExtract(const std::wstring& presetDest = L"");
     // Called after OpenArchive when the `t` action is given; fires the integrity test
     // directly. Returns the test result HRESULT (S_OK = passed/cancelled).
     // For unsupported formats or open failures, shows an error and returns a failure HRESULT.
@@ -49,7 +52,8 @@ private:
     void OnExtractSmart();
     // Common extraction driver. indices empty = extract all.
     // presetDest: if non-empty, skip the folder picker and extract directly to this path.
-    void RunExtraction(std::vector<UINT32> indices, std::wstring presetDest = L"");
+    // Returns false only if the user cancelled the destination folder picker; true otherwise.
+    bool RunExtraction(std::vector<UINT32> indices, std::wstring presetDest = L"");
     void OnContextMenu(HWND hwndFrom, int x, int y);
     HRESULT OnTest();
     void OnOpenAssoc();
