@@ -136,13 +136,16 @@ PostMessageW(hwnd, WM_APP_DONE, hr, 0) ──→
 
 ```
 Is .rar file?
-  ├─ Yes → RarExtractor setting is "unrar" and unrar.dll loaded?
-  │   ├─ Yes → Try unrar.ListArchive()
-  │   │   └─ Fail → Fallback to 7z.OpenArchive()
-  │   └─ No  → Try 7z.OpenArchive()
-  │       └─ Fail → Fallback to unrar.ListArchive() (if loaded)
+  ├─ Yes → unrar.dll loaded?
+  │   ├─ Yes → Try unrar.ListArchive()   (binds the writable RarBackend)
+  │   │   └─ Fail → Fallback to 7z.OpenArchive() (read-only)
+  │   └─ No  → Try 7z.OpenArchive() (read-only)
   └─ No  → Try 7z.OpenArchive() only
 ```
+
+For `.rar`, unrar is always preferred when loaded so the archive binds the
+writable `RarBackend` (read = unrar.dll, write = rar.exe); 7z is only a
+read-only fallback when unrar is unavailable.
 
 `SevenZip::OpenArchive(path)`:
 - Determine CLSID from extension → get handler with `CreateInArchive`

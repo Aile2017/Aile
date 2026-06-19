@@ -5,9 +5,11 @@
 #include <vector>
 #include <string>
 #include <set>
+#include <memory>
 #include "ArchiveItem.h"
 #include "WorkerThread.h"
 #include "CompressDlg.h"
+#include "IArchiveBackend.h"
 
 class MainWindow {
 public:
@@ -109,6 +111,10 @@ private:
     std::wstring             m_effectiveArchivePath; // Operative path (differs from m_archivePath only when a split archive is auto-unwrapped)
     std::wstring             m_password;             // Password used to open the current archive (empty if none)
     bool                     m_isReadOnly      = false;  // Write operations disabled (e.g. split auto-unwrap)
+    // Polymorphic backend bound to the currently open archive (single B2E-backed
+    // SevenZipBackend for AileFlow). Operations dispatch through this rather than
+    // talking to SevenZip directly (backend-interface-refactor.md Step 3).
+    std::unique_ptr<IArchiveBackend> m_backend;
     std::vector<ArchiveItem> m_items;
     std::vector<std::wstring> m_folderPaths;  // sorted; index matches TreeView lParam
     std::wstring             m_currentFolderPath; // currently displayed folder in ListView

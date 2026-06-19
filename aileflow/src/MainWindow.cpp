@@ -5,6 +5,7 @@
 #include "I18n.h"
 #include "ProgressDlg.h"
 #include "B2eBridge.h"
+#include "SevenZipBackend.h"
 #include "SettingsDlg.h"
 #include "resource.h"
 #include <shellapi.h>
@@ -423,6 +424,15 @@ bool MainWindow::OpenArchive(const wchar_t* path) {
     if (FAILED(hr)) {
         ShowError(I18n::Tr(IDS_ERR_OPEN_ARCHIVE).c_str(), hr);
         return false;
+    }
+
+    // Bind the polymorphic backend to the freshly opened archive. Transition
+    // scaffolding for the IArchiveBackend migration (Step 3): the open above is
+    // left intact and will be folded into backend->Open() later.
+    {
+        auto b = std::make_unique<SevenZipBackend>(app.Get7z());
+        b->Bind(m_effectiveArchivePath);
+        m_backend = std::move(b);
     }
 
     // Update MRU — normalize relative paths and mixed cases ("../" etc.) via GetFullPathNameW.
@@ -1152,8 +1162,7 @@ void MainWindow::OnListBeginDrag() {
 
     // Extract selected files to the temp dir.
     const wchar_t* pw = m_password.empty() ? nullptr : m_password.c_str();
-    HRESULT hr = App::Instance().Get7z().Extract(
-        m_effectiveArchivePath.c_str(), indices, m_tempViewDir.c_str(), pw, nullptr);
+    HRESULT hr = m_backend->Extract(indices, m_tempViewDir.c_str(), pw, nullptr);
     if (FAILED(hr)) return;
 
     // Build local filesystem paths for HDROP.
@@ -1305,17 +1314,18 @@ void MainWindow::OnOpenAssoc() {
     // if the user opens another archive during message dispatch.
     std::vector<UINT32> indices    = { idx };
     std::wstring        itemPath   = it.path;
-    std::wstring        archivePath = m_effectiveArchivePath;
     std::wstring        password   = m_password;
     std::wstring        tmpDir     = m_tempViewDir;
-    auto& sz = app.Get7z();
+    // The window is disabled for the duration, so m_backend cannot be replaced
+    // by a re-open while the worker runs; capturing the raw pointer is safe.
+    IArchiveBackend* backend = m_backend.get();
 
     HWND uiHwnd = m_hwnd;
     EnableWindow(m_hwnd, FALSE);
-    m_worker.Start([&sz, archivePath, indices, tmpDir, password, uiHwnd]() -> HRESULT {
+    m_worker.Start([backend, indices, tmpDir, password, uiHwnd]() -> HRESULT {
         B2e_SetDialogParent(uiHwnd);
-        HRESULT hr = sz.Extract(archivePath.c_str(), indices, tmpDir.c_str(),
-                                 password.empty() ? nullptr : password.c_str(), nullptr);
+        HRESULT hr = backend->Extract(indices, tmpDir.c_str(),
+                                      password.empty() ? nullptr : password.c_str(), nullptr);
         B2e_SetDialogParent(NULL);
         return hr;
     }, m_hwnd, WM_APP_DONE);
@@ -1489,13 +1499,14 @@ bool MainWindow::RunExtraction(std::vector<UINT32> indices, std::wstring presetD
                         ArchiveBaseName(m_archivePath, s.GetExtStripMode(), s.GetStripTrailingNumber());
     }
 
-    auto archivePath = m_effectiveArchivePath;
     std::wstring password = m_password;
 
-    auto& sz = app.Get7z();
+    // The window is disabled for the duration, so m_backend cannot be replaced by a
+    // re-open while the worker runs; capturing the raw pointer is safe.
+    IArchiveBackend* backend = m_backend.get();
     HWND uiHwnd = m_hwnd;
     EnableWindow(m_hwnd, FALSE);
-    m_worker.Start([&sz, archivePath, indices, destDir = finalDest, password, uiHwnd]() -> HRESULT {
+    m_worker.Start([backend, indices, destDir = finalDest, password, uiHwnd]() -> HRESULT {
         // B2e_Extract relies on SetCurrentDirectory(destDir) to set the extraction target.
         // SetCurrentDirectory fails if the directory does not yet exist, leaving the CWD
         // unchanged and causing extraction to land in the wrong place.  Create it first.
@@ -1504,7 +1515,7 @@ bool MainWindow::RunExtraction(std::vector<UINT32> indices, std::wstring presetD
             return HRESULT_FROM_WIN32(r);
         B2e_SetDialogParent(uiHwnd);
         const wchar_t* pw = password.empty() ? nullptr : password.c_str();
-        HRESULT hr = sz.Extract(archivePath.c_str(), indices, destDir.c_str(), pw, nullptr);
+        HRESULT hr = backend->Extract(indices, destDir.c_str(), pw, nullptr);
         B2e_SetDialogParent(NULL);
         return hr;
     }, m_hwnd, WM_APP_DONE);
@@ -1540,7 +1551,7 @@ bool MainWindow::RunExtraction(std::vector<UINT32> indices, std::wstring presetD
 void MainWindow::OnContextMenu(HWND /*hwndFrom*/, int x, int y) {
     if (m_archivePath.empty()) return;
 
-    bool readOnly = m_isReadOnly;
+    bool canDelete = m_backend && m_backend->CanDelete() && !m_isReadOnly;
     int selCount  = ListView_GetSelectedCount(m_hListView);
 
     HMENU hMenu = CreatePopupMenu();
@@ -1557,7 +1568,7 @@ void MainWindow::OnContextMenu(HWND /*hwndFrom*/, int x, int y) {
                 ID_OPEN_ASSOC, sOpenAssoc.c_str());
     AppendMenuW(hMenu, MF_STRING | MF_ENABLED, ID_TEST, sTest.c_str());
     AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(hMenu, MF_STRING | (!readOnly && selCount > 0 ? MF_ENABLED : MF_GRAYED),
+    AppendMenuW(hMenu, MF_STRING | (canDelete && selCount > 0 ? MF_ENABLED : MF_GRAYED),
                 ID_DELETE, sDelete.c_str());
 
     // When called from keyboard (x==-1, y==-1), position near the focused ListView item
@@ -1598,8 +1609,11 @@ static INT_PTR CALLBACK TestResultDlgProc(HWND h, UINT msg, WPARAM wp, LPARAM lp
 }
 
 HRESULT MainWindow::OnTest() {
-    if (m_archivePath.empty() || !App::Instance().Get7z().CanTest()) return E_FAIL;
+    if (m_archivePath.empty() || !m_backend || !m_backend->CanTest()) return E_FAIL;
 
+    // Test is issued directly on SevenZip (not via m_backend->Test) because the B2E
+    // engine returns the tool's textual output for the result dialog, which the
+    // format-agnostic IArchiveBackend::Test does not surface.
     std::wstring output;
     HRESULT hr = App::Instance().Get7z().Test(
         m_effectiveArchivePath.c_str(), nullptr, nullptr, &output);
@@ -1632,7 +1646,7 @@ HRESULT MainWindow::TriggerTest() {
                     I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
         return E_FAIL;
     }
-    if (!App::Instance().Get7z().CanTest()) {
+    if (!m_backend || !m_backend->CanTest()) {
         MessageBoxW(m_hwnd, I18n::Tr(IDS_ERR_TEST_NOT_SUPPORTED).c_str(),
                     I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
         return E_FAIL;
@@ -1831,11 +1845,11 @@ void MainWindow::OnInitMenuPopup(HMENU hMenu) {
     setEnabled(ID_CLOSE,      hasArchive);
     setEnabled(ID_EXTRACT,    hasArchive);
     setEnabled(ID_EXTRACT_SELECTED, hasArchive && selCount > 0);
-    setEnabled(ID_TEST,       hasArchive && App::Instance().Get7z().CanTest());
+    setEnabled(ID_TEST,       hasArchive && m_backend && m_backend->CanTest());
     setEnabled(ID_OPEN_ASSOC, hasArchive);
-    setEnabled(ID_ADD_TO_CURRENT, hasArchive && App::Instance().Get7z().CanAddToCurrent());
+    setEnabled(ID_ADD_TO_CURRENT, hasArchive && m_backend && m_backend->CanAdd() && !readOnly);
     setEnabled(ID_DELETE,     hasArchive && selCount > 0
-                              && App::Instance().Get7z().CanDelete());
+                              && m_backend && m_backend->CanDelete() && !readOnly);
 
     CheckMenuItem(hMenu, IDM_VIEW_TREE,
                   MF_BYCOMMAND | (m_treeVisible ? MF_CHECKED : MF_UNCHECKED));
@@ -1859,6 +1873,7 @@ void MainWindow::CloseArchive() {
     m_items.clear();
     m_folderPaths.clear();
     m_isReadOnly = false;
+    m_backend.reset();
 
     if (m_hTreeView) TreeView_DeleteAllItems(m_hTreeView);
     if (m_hListView) ListView_DeleteAllItems(m_hListView);
@@ -1890,7 +1905,7 @@ void MainWindow::OnAddFiles() {
 
 // Open a file picker and add the selected files to the current archive.
 void MainWindow::OnAddFilesToCurrentArchive() {
-    if (m_archivePath.empty() || !App::Instance().Get7z().CanAddToCurrent()) return;
+    if (m_archivePath.empty() || !m_backend || !m_backend->CanAdd()) return;
 
     auto files = BrowseMultipleFiles(m_hwnd, IDS_TITLE_SELECT_ADD);
     if (files.empty()) return;
@@ -1899,7 +1914,7 @@ void MainWindow::OnAddFilesToCurrentArchive() {
 }
 
 void MainWindow::AddFilesToCurrentArchive(std::vector<std::wstring> srcPaths) {
-    if (m_archivePath.empty() || !App::Instance().Get7z().CanAddToCurrent() || srcPaths.empty()) return;
+    if (m_archivePath.empty() || !m_backend || !m_backend->CanAdd() || srcPaths.empty()) return;
 
     App& app = App::Instance();
     const std::wstring archivePath = m_archivePath;
@@ -1912,12 +1927,12 @@ void MainWindow::AddFilesToCurrentArchive(std::vector<std::wstring> srcPaths) {
     m_pSink = sink;
     progDlg.SetSink(sink);
 
-    auto& sz = app.Get7z();
     int level = app.GetSettings().GetCompressionLevel();
-    m_worker.Start([&sz, archivePath, srcPaths, archiveFolder, level, sink]() -> HRESULT {
-        return sz.AddToArchive(archivePath.c_str(), srcPaths,
-                               archiveFolder.empty() ? nullptr : archiveFolder.c_str(),
-                               nullptr, level, L"", sink);
+    IArchiveBackend* backend = m_backend.get();
+    m_worker.Start([backend, srcPaths, archiveFolder, level, sink]() -> HRESULT {
+        return backend->Add(srcPaths,
+                            archiveFolder.empty() ? nullptr : archiveFolder.c_str(),
+                            nullptr, level, L"", sink);
     }, m_hwnd, WM_APP_DONE);
     HRESULT hrDone = progDlg.RunMessageLoop();
     m_worker.Wait();
@@ -1940,7 +1955,7 @@ void MainWindow::AddFilesToCurrentArchive(std::vector<std::wstring> srcPaths) {
 
 
 void MainWindow::OnDelete() {
-    if (m_archivePath.empty() || !App::Instance().Get7z().CanDelete()) return;
+    if (m_archivePath.empty() || !m_backend || !m_backend->CanDelete()) return;
 
     std::set<UINT32> indexSet;
     std::set<std::wstring> folderPaths;
@@ -1984,8 +1999,6 @@ void MainWindow::OnDelete() {
                     MB_YESNO | MB_ICONWARNING) != IDYES)
         return;
 
-    App& app = App::Instance();
-
     ProgressDlg progDlg;
     progDlg.Show(m_hwnd, I18n::Tr(IDS_PROGRESS_DELETING).c_str());
 
@@ -1993,12 +2006,12 @@ void MainWindow::OnDelete() {
     m_pSink = sink;
     progDlg.SetSink(sink);
 
-    auto archivePath = m_effectiveArchivePath;
+    const std::wstring reopenPath = m_archivePath;  // copy; OpenArchive reassigns the member
     std::vector<UINT32> deleteIndices(indexSet.begin(), indexSet.end());
-    auto& sz = app.Get7z();
+    IArchiveBackend* backend = m_backend.get();
     auto allItems = m_items;
-    m_worker.Start([&sz, archivePath, deleteIndices, allItems, sink]() -> HRESULT {
-        return sz.DeleteItems(archivePath.c_str(), deleteIndices, allItems, nullptr, sink);
+    m_worker.Start([backend, deleteIndices, allItems, sink]() -> HRESULT {
+        return backend->Delete(deleteIndices, allItems, nullptr, sink);
     }, m_hwnd, WM_APP_DONE);
     HRESULT hrDone = progDlg.RunMessageLoop();
     m_worker.Wait();
@@ -2013,7 +2026,7 @@ void MainWindow::OnDelete() {
     if (hrDone == E_ABORT) return;
 
     // Success → reload the archive
-    OpenArchive(archivePath.c_str());
+    OpenArchive(reopenPath.c_str());
 }
 
 void MainWindow::OnCompress(CompressDlg::Params& params, bool openAfterCompress) {
