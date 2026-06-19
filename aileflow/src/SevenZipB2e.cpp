@@ -97,8 +97,15 @@ HRESULT SevenZip::Compress(const std::vector<std::wstring>& srcPaths,
     bool sfx = adv && adv->sfx;
 
     // Determine which extension to use for format/method resolution.
+    // Prefer the explicit `format` selection (dropdown or -t<fmt>) over the output
+    // path's trailing extension. For a compound stream output like "aaa.tar.bz2" the
+    // last extension is "bz2", which is a *method* under the "tar" format, not a
+    // format of its own — deriving the lookup from the path fails the format match
+    // and silently falls back to the default method (index 0 = plain tar). The CLI
+    // dodged this only because it leaves the path as "aaa.tar" and lets the B2E
+    // script append ".bz2"; the dialog pre-builds the compound name, so it hit the bug.
     std::wstring lookupExt;
-    if (sfx && format && format[0]) {
+    if (format && format[0]) {
         lookupExt = format;
         for (wchar_t& c : lookupExt) c = (wchar_t)towlower(c);
     } else if (outPath) {
