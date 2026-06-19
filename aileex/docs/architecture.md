@@ -29,8 +29,13 @@ AileEx/
 │   ├── CommentDlg.h/.cpp          — Archive comment view/edit dialog
 │   ├── Settings.h/.cpp            — INI read/write, MRU management
 │   ├── SevenZip.h/.cpp            — 7z.dll wrapper (IIn/IOutArchive + DeleteItems + callbacks + Find7zDll)
+│   ├── FormatRegistry.h/.cpp      — Format/codec registry (ext→CLSID, writable formats, encoders, filters); composed by SevenZip
 │   ├── UnrarDll.h/.cpp            — unrar.dll C API wrapper
 │   ├── RarProcess.h/.cpp          — WinRAR.exe (GUI) / Rar.exe (console) subprocess (Compress / Delete)
+│   ├── IArchiveBackend.h          — Per-session archive backend interface (Open/Extract/Test/Add/Delete/comment + capabilities)
+│   ├── SevenZipBackend.h/.cpp     — IArchiveBackend adapter over 7z.dll
+│   ├── RarBackend.h/.cpp          — IArchiveBackend adapter over unrar.dll (read) + RarProcess (write)
+│   ├── ArchiveOpener.h/.cpp       — Backend selection / open-time fallback / password retry
 │   ├── ArchiveItem.h              — Archive entry POD struct
 │   ├── I18n.h/.cpp                — Localized string loading (en-US / ja-JP via SetProcessPreferredUILanguages)
 │   ├── WorkerThread.h/.cpp        — Worker thread + IExtractProgressSink + ProgressPostSink

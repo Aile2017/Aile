@@ -32,6 +32,7 @@ add_executable(AileEx WIN32
     src/SettingsDlg.cpp
     src/Settings.cpp
     src/SevenZip.cpp
+    src/FormatRegistry.cpp
     src/SevenZipBackend.cpp
     src/UnrarDll.cpp
     src/RarBackend.cpp

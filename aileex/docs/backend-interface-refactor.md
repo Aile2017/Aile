@@ -5,11 +5,15 @@ Design note and incremental plan for replacing the flag-based backend selection 
 `architecture.md` → *Main concerns* #4 (flags instead of polymorphism) and #5
 (RAR and 7z duplicate responsibilities without a shared interface).
 
-**Status:** Steps 1–4 done. Both apps' `MainWindow` now dispatch every archive
-operation and all menu/capability state through the bound `IArchiveBackend`, and
-backend selection + open-time fallback live in `ArchiveOpener` (AileEx).
-`m_openedWithUnrar` and the transition `Bind()` scaffolds have been removed. Step 5
-(separating the format registry from the per-session abstraction) is pending.
+**Status:** All steps done. Both apps' `MainWindow` dispatch every archive
+operation and all menu/capability state through the bound `IArchiveBackend`;
+backend selection + open-time fallback live in `ArchiveOpener` (AileEx);
+`m_openedWithUnrar` and the transition `Bind()` scaffolds are gone. Step 5 is
+complete for AileEx: the format/codec registry (extension→CLSID map, writable
+formats, encoder list, extension classification, filter pattern) is extracted
+into `FormatRegistry`, which `SevenZip` composes and delegates to — so `SevenZip`
+is now a per-session class, not also a format database. `SevenZip.h`'s public
+signatures are unchanged, so the cross-app contract and AileFlow are untouched.
 
 ---
 
@@ -126,8 +130,11 @@ contract simultaneously. Each step keeps the build green and behavior unchanged.
    fallback and password retry at open time. `m_openedWithUnrar` and the transition
    `Bind()` scaffolds are removed; the winning backend comes pre-bound from `Open()`.
    (Implemented as `ArchiveOpener` rather than the originally-named `ArchiveService`.)
-5. **Separate the format registry** (enumeration / filters / codecs) from the
-   per-session abstraction.
+5. ✅ **Separate the format registry** (enumeration / filters / codecs) from the
+   per-session abstraction. Done as `FormatRegistry`, composed by `SevenZip` and
+   populated at `Load()`; the per-session class delegates its format queries to it.
+   Kept internal to `SevenZip` (public API unchanged) to honor the cross-app
+   `SevenZip.h` contract — an internal extraction rather than an App-layer move.
 
 Mirror each step into AileFlow so the `SevenZip.h` / `MainWindow.cpp` contract
 holds throughout.
