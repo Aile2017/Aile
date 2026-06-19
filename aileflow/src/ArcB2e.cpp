@@ -654,15 +654,34 @@ void CArcB2e::CB2eCore::arc( const wchar_t* opt, const CharArray& a, const BoolA
 			}
 			else
 			{
-				// (arc.XXX) : replace last extension with .XXX
-				// (arc.)    : remove all extensions
+				// (arc.XXX) : replace the archive extension with .XXX
+				// (arc.)    : strip the archive extension only
 				if( opt[1]!=L'\0' )
 					add = opt;
-				switch(mycnf().extnum())
+
+				// Strip only a *recognized* archive extension, plus a preceding
+				// ".tar" for compound stream extensions (.tar.gz etc.). The old
+				// extnum-based cut removed everything after the first/last dot
+				// regardless of content, collapsing dotted base names like
+				// "111.222.333.444" down to "111". anm is the output name the UI
+				// or CLI already built, so its trailing component is always one of
+				// our formats' own extensions; everything before it is the base
+				// name and must be preserved (matches AileEx).
+				ext = anm + ki_strlen(anm);   // default: nothing to strip
+				const wchar_t* nm = kiPath::name(anm);
+				const wchar_t* lastdot = NULL;
+				for( const wchar_t* p=nm; *p; ++p )
+					if( *p==L'.' ) lastdot = p;
+				if( lastdot && lastdot>nm && mycnf().isArcExt(lastdot+1) )
 				{
-				case 0: ext = anm + ::lstrlenW(anm);break;
-				case 1: ext = kiPath::ext(anm);    break;
-				default:ext = kiPath::ext_all(anm);break;
+					ext = lastdot+1;
+					const wchar_t* prevdot = NULL;
+					for( const wchar_t* p=nm; p<lastdot; ++p )
+						if( *p==L'.' ) prevdot = p;
+					if( prevdot && prevdot>nm &&
+						(lastdot-prevdot-1)==3 &&
+						0==_wcsnicmp(prevdot+1, L"tar", 3) )
+						ext = prevdot+1;
 				}
 			}
 			if( *ext )

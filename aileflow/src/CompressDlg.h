@@ -34,7 +34,9 @@ private:
     void OnBrowseOutput(HWND hwnd);
     bool OnOK(HWND hwnd);
 
-    void UpdateOutputExt(HWND hwnd, const wchar_t* fmtId);
+    // Remove a trailing recognized archive extension (plus a preceding ".tar")
+    // from `path`, leaving any dotted base name intact. Mirrors AileEx.
+    void StripKnownArchiveExt(std::wstring& path) const;
 
     HWND   m_hwnd = nullptr;
     Params m_params;

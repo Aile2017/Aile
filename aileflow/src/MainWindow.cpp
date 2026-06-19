@@ -72,7 +72,7 @@ std::wstring ParentDir(const std::wstring& path) {
 }
 
 // Return the initial output path based on OutputDirMode setting and the given source files.
-// Returns "dir\stem" (no extension) so CompressDlg::UpdateOutputExt can append the right one.
+// Returns "dir\stem" (no extension); CompressDlg appends the format extension.
 std::wstring DefaultOutputPath(const Settings& s, const std::vector<std::wstring>& srcFiles) {
     std::wstring dir;
     if (s.GetOutputDirModeFixed())

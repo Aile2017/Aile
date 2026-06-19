@@ -222,19 +222,38 @@ void CompressDlg::UpdateOutputExt(HWND hwnd, const wchar_t* fmtId, const wchar_t
         ext = std::wstring(L".") + fmtId;
     }
 
-    // Strip existing archive extension from the path, including any .tar/.exe prefix
-    wchar_t* dot = wcsrchr(outPath, L'.');
-    if (dot && !wcschr(dot, L'\\') && !wcschr(dot, L'/')) {
-        *dot = L'\0';  // remove last extension
+    // Replace only a recognized *archive* extension, never a dotted part of the
+    // base name. The initial value is a bare stem from ComputeDefaultOutputPath,
+    // which strips just the source's real extension — so "111.222.333.444.log"
+    // arrives here as "111.222.333.444". Blindly dropping the last ".444" would
+    // diverge from the CLI `a -t<fmt>` path (EnsureArchiveExt only appends), so a
+    // segment is removed only when it is a known archive extension (or a .tar
+    // prefix of a compound stream extension such as archive.tar.gz).
+    std::wstring path(outPath);
+    size_t slash     = path.find_last_of(L"\\/");
+    size_t nameStart = (slash == std::wstring::npos) ? 0 : slash + 1;
+
+    auto isArchiveExt = [&](const std::wstring& e) -> bool {
+        if (_wcsicmp(e.c_str(), L"exe") == 0 || _wcsicmp(e.c_str(), L"tar") == 0)
+            return true;
+        for (const auto& wf : m_writableFormats)
+            if (_wcsicmp(e.c_str(), wf.ext.c_str()) == 0) return true;
+        return false;
+    };
+
+    size_t dot = path.find_last_of(L'.');
+    if (dot != std::wstring::npos && dot > nameStart &&
+        isArchiveExt(path.substr(dot + 1))) {
+        path.erase(dot);
+        // Strip a ".tar" prefix too (compound stream extension, e.g. .tar.gz).
+        size_t dot2 = path.find_last_of(L'.');
+        if (dot2 != std::wstring::npos && dot2 > nameStart &&
+            _wcsicmp(path.c_str() + dot2 + 1, L"tar") == 0)
+            path.erase(dot2);
     }
-    size_t blen = wcslen(outPath);
-    if (blen >= 4 && _wcsicmp(outPath + blen - 4, L".tar") == 0) {
-        outPath[blen - 4] = L'\0';
-    }
-    std::wstring newPath(outPath);
-    newPath += ext;
-    wcsncpy_s(outPath, newPath.c_str(), MAX_PATH - 1);
-    SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, outPath);
+
+    path += ext;
+    SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, path.c_str());
 }
 
 void CompressDlg::OnSfxChange(HWND hwnd) {

@@ -95,45 +95,6 @@ void CompressDlg::OnInit(HWND hwnd) {
     }
 }
 
-void CompressDlg::UpdateOutputExt(HWND hwnd, const wchar_t* fmtId) {
-    std::wstring outPath = GetDlgItemTextString(hwnd, IDC_OUTPUT_PATH);
-    if (!outPath[0] || !fmtId) return;
-
-    bool isStream = (wcscmp(fmtId, L"gz")  == 0 ||
-                     wcscmp(fmtId, L"bz2") == 0 ||
-                     wcscmp(fmtId, L"xz")  == 0);
-
-    bool needsTar = false;
-    if (isStream) {
-        needsTar = m_params.inputFiles.size() > 1;
-        if (!needsTar && m_params.inputFiles.size() == 1) {
-            DWORD attrs = GetFileAttributesW(m_params.inputFiles[0].c_str());
-            needsTar = (attrs != INVALID_FILE_ATTRIBUTES &&
-                        (attrs & FILE_ATTRIBUTE_DIRECTORY));
-        }
-    }
-
-    std::wstring ext;
-    if (needsTar) {
-        ext = std::wstring(L".tar.") + fmtId;
-    } else {
-        ext = std::wstring(L".") + fmtId;
-    }
-
-    // Strip existing archive extension from the path, including any .tar/.exe prefix
-    std::wstring::size_type dot = outPath.find_last_of(L'.');
-    std::wstring::size_type slash = outPath.find_last_of(L"\\/");
-    if (dot != std::wstring::npos &&
-        (slash == std::wstring::npos || dot > slash)) {
-        outPath.erase(dot);  // remove last extension
-    }
-    if (outPath.size() >= 4 && _wcsicmp(outPath.c_str() + outPath.size() - 4, L".tar") == 0) {
-        outPath.erase(outPath.size() - 4);
-    }
-    outPath += ext;
-    SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, outPath.c_str());
-}
-
 void CompressDlg::OnB2eMethodChange(HWND hwnd)
 {
     HWND hFmt = GetDlgItem(hwnd, IDC_FORMAT);
@@ -161,16 +122,52 @@ void CompressDlg::OnB2eMethodChange(HWND hwnd)
     std::wstring path = GetDlgItemTextString(hwnd, IDC_OUTPUT_PATH);
     if (!path[0]) return;
 
-    // Strip everything from the first dot in the filename portion.
-    std::wstring::size_type base = path.find_last_of(L"\\/");
-    base = (base == std::wstring::npos) ? 0 : base + 1;
-    std::wstring::size_type dot = path.find(L'.', base);
-    if (dot != std::wstring::npos)
-        path.erase(dot);
+    // Replace only a recognized archive extension; keep dotted base names intact
+    // (e.g. "111.222.333.444" must not collapse to "111"). Matches AileEx.
+    StripKnownArchiveExt(path);
 
     path += L'.';
     path += outExt;
     SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, path.c_str());
+}
+
+// Strip a trailing recognized archive extension (plus a preceding ".tar" for
+// compound stream extensions such as .tar.gz) from `path`. The recognized set is
+// derived from the loaded .b2e formats: each format extension plus every segment
+// of each method's outputExt (which may be compound, e.g. "tar.gz"), and "exe".
+void CompressDlg::StripKnownArchiveExt(std::wstring& path) const {
+    auto isKnownToken = [&](const std::wstring& tok) -> bool {
+        if (tok.empty()) return false;
+        if (_wcsicmp(tok.c_str(), L"exe") == 0) return true;
+        for (const auto& fi : m_b2eFormats) {
+            if (_wcsicmp(tok.c_str(), fi.ext.c_str()) == 0) return true;
+            for (const auto& m : fi.methods) {
+                const std::wstring& oe = m.outputExt;  // may be compound "tar.gz"
+                size_t s = 0;
+                while (s <= oe.size()) {
+                    size_t e = oe.find(L'.', s);
+                    std::wstring seg =
+                        oe.substr(s, (e == std::wstring::npos ? oe.size() : e) - s);
+                    if (!seg.empty() && _wcsicmp(seg.c_str(), tok.c_str()) == 0)
+                        return true;
+                    if (e == std::wstring::npos) break;
+                    s = e + 1;
+                }
+            }
+        }
+        return false;
+    };
+
+    size_t base = path.find_last_of(L"\\/");
+    base = (base == std::wstring::npos) ? 0 : base + 1;
+    size_t dot = path.find_last_of(L'.');
+    if (dot == std::wstring::npos || dot <= base) return;
+    if (!isKnownToken(path.substr(dot + 1))) return;
+    path.erase(dot);
+    size_t dot2 = path.find_last_of(L'.');
+    if (dot2 != std::wstring::npos && dot2 > base &&
+        _wcsicmp(path.c_str() + dot2 + 1, L"tar") == 0)
+        path.erase(dot2);
 }
 
 void CompressDlg::OnFormatChange(HWND hwnd) {
@@ -217,14 +214,9 @@ void CompressDlg::OnSfxChange(HWND hwnd) {
     std::wstring path = GetDlgItemTextString(hwnd, IDC_OUTPUT_PATH);
     if (path.empty()) return;
 
-    // Find the filename portion start.
-    auto base = path.find_last_of(L"\\/");
-    base = (base == std::wstring::npos) ? 0 : base + 1;
-
     if (checked) {
-        // Replace everything from the first dot in the filename with .exe
-        auto dot = path.find(L'.', base);
-        if (dot != std::wstring::npos) path.erase(dot);
+        // Replace only a recognized archive extension with .exe; keep dotted names.
+        StripKnownArchiveExt(path);
         path += L".exe";
     } else {
         // Restore the normal format extension via existing logic.
