@@ -9,6 +9,15 @@ set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 
 set(COMMON_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../common)
 
+# 32-bit builds (x86 Native Tools prompt) append "32" to every output binary so
+# they can sit beside their 64-bit siblings without colliding. Detected via the
+# pointer size, which Ninja+MSVC derives from the active toolchain environment.
+if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+    set(BITSUFFIX "32")
+else()
+    set(BITSUFFIX "")
+endif()
+
 add_executable(AileEx WIN32
     src/main.cpp
     src/App.cpp
@@ -55,6 +64,8 @@ target_link_libraries(AileEx PRIVATE
     comdlg32
     version
 )
+
+set_target_properties(AileEx PROPERTIES OUTPUT_NAME "AileEx${BITSUFFIX}")
 
 if(MSVC)
     target_compile_options(AileEx PRIVATE /W3 /utf-8)
@@ -111,7 +122,7 @@ target_compile_definitions(AileExShell PRIVATE
 target_link_libraries(AileExShell PRIVATE
     ole32 oleaut32 shlwapi shell32 advapi32 user32 uuid
 )
-set_target_properties(AileExShell PROPERTIES OUTPUT_NAME "AileExShell")
+set_target_properties(AileExShell PROPERTIES OUTPUT_NAME "AileExShell${BITSUFFIX}")
 if(MSVC)
     target_compile_options(AileExShell PRIVATE /W3 /utf-8)
     target_link_options(AileExShell PRIVATE
@@ -119,3 +130,20 @@ if(MSVC)
         "/DEF:${CMAKE_CURRENT_SOURCE_DIR}/shell/AileExShell.def"
     )
 endif()
+
+# Generate the per-user register/unregister helpers next to the shell DLL. The
+# name and the DLL they target carry the bit suffix, so a 64-bit tree produces
+# AileEx_register.bat (→ AileExShell.dll) and an x86 tree produces
+# AileEx32_register.bat (→ AileExShell32.dll). A 32-bit DLL must be (un)registered
+# by the SysWOW64 regsvr32 so it loads and writes into the 32-bit registry view.
+set(SHELL_APP "AileEx${BITSUFFIX}")
+set(SHELL_DLL "AileExShell${BITSUFFIX}.dll")
+if(BITSUFFIX)
+    set(SHELL_REGSVR "%SystemRoot%\\SysWOW64\\regsvr32.exe")
+else()
+    set(SHELL_REGSVR "regsvr32")
+endif()
+configure_file(${COMMON_DIR}/shell/register.bat.in
+               ${CMAKE_CURRENT_BINARY_DIR}/AileEx${BITSUFFIX}_register.bat   @ONLY)
+configure_file(${COMMON_DIR}/shell/unregister.bat.in
+               ${CMAKE_CURRENT_BINARY_DIR}/AileEx${BITSUFFIX}_unregister.bat @ONLY)

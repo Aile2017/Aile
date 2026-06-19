@@ -9,6 +9,15 @@ set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 
 set(COMMON_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../common)
 
+# 32-bit builds (x86 Native Tools prompt) append "32" to every output binary so
+# they can sit beside their 64-bit siblings without colliding. Detected via the
+# pointer size, which Ninja+MSVC derives from the active toolchain environment.
+if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+    set(BITSUFFIX "32")
+else()
+    set(BITSUFFIX "")
+endif()
+
 # AileEx UI layer (C++17, STL, exceptions enabled — Class A/B sources)
 set(AILEFLOW_UI_SOURCES
     src/main.cpp
@@ -70,6 +79,8 @@ target_link_libraries(AileFlow PRIVATE
     version
 )
 
+set_target_properties(AileFlow PROPERTIES OUTPUT_NAME "AileFlow${BITSUFFIX}")
+
 if(MSVC)
     target_compile_options(AileFlow PRIVATE /W3 /utf-8)
 
@@ -129,7 +140,7 @@ target_compile_definitions(AileFlowShell PRIVATE
 target_link_libraries(AileFlowShell PRIVATE
     ole32 oleaut32 shlwapi shell32 advapi32 user32 uuid
 )
-set_target_properties(AileFlowShell PROPERTIES OUTPUT_NAME "AileFlowShell")
+set_target_properties(AileFlowShell PROPERTIES OUTPUT_NAME "AileFlowShell${BITSUFFIX}")
 if(MSVC)
     target_compile_options(AileFlowShell PRIVATE /W3 /utf-8)
     target_link_options(AileFlowShell PRIVATE
@@ -137,6 +148,24 @@ if(MSVC)
         "/DEF:${CMAKE_CURRENT_SOURCE_DIR}/shell/AileFlowShell.def"
     )
 endif()
+
+# Generate the per-user register/unregister helpers next to the shell DLL. The
+# name and the DLL they target carry the bit suffix, so a 64-bit tree produces
+# AileFlow_register.bat (→ AileFlowShell.dll) and an x86 tree produces
+# AileFlow32_register.bat (→ AileFlowShell32.dll). A 32-bit DLL must be
+# (un)registered by the SysWOW64 regsvr32 so it loads and writes into the 32-bit
+# registry view.
+set(SHELL_APP "AileFlow${BITSUFFIX}")
+set(SHELL_DLL "AileFlowShell${BITSUFFIX}.dll")
+if(BITSUFFIX)
+    set(SHELL_REGSVR "%SystemRoot%\\SysWOW64\\regsvr32.exe")
+else()
+    set(SHELL_REGSVR "regsvr32")
+endif()
+configure_file(${COMMON_DIR}/shell/register.bat.in
+               ${CMAKE_CURRENT_BINARY_DIR}/AileFlow${BITSUFFIX}_register.bat   @ONLY)
+configure_file(${COMMON_DIR}/shell/unregister.bat.in
+               ${CMAKE_CURRENT_BINARY_DIR}/AileFlow${BITSUFFIX}_unregister.bat @ONLY)
 
 # Copy b2e scripts next to the exe after every build so the engine can find them.
 add_custom_command(TARGET AileFlow POST_BUILD
