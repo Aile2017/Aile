@@ -291,10 +291,11 @@ bool MainWindow::OpenArchive(const wchar_t* path) {
     const wchar_t* dotPos = wcsrchr(path, L'.');
     bool isRar = (dotPos && _wcsicmp(dotPos + 1, L"rar") == 0);
 
-    // Determine primary backend
-    bool preferUnrar = isRar &&
-                       app.GetSettings().GetRarExtractor() == L"unrar" &&
-                       app.GetUnrar().IsLoaded();
+    // For .rar, prefer unrar whenever it is loaded so the archive binds to the
+    // writable RarBackend (read=unrar, write=rar.exe). 7z opens .rar only as a
+    // read-only fallback when unrar is unavailable. (The RarExtractor setting no
+    // longer forces 7z for .rar while unrar is present.)
+    bool preferUnrar = isRar && app.GetUnrar().IsLoaded();
 
     HRESULT hr = E_FAIL;
     m_openedWithUnrar = false;
@@ -978,7 +979,7 @@ void MainWindow::OnDropFiles(HDROP hDrop) {
 
     if (!regular.empty()) {
         // If archive currently open and writable, let user choose add vs. create new
-        bool canAdd = !m_archivePath.empty() && !m_isReadOnly;
+        bool canAdd = !m_archivePath.empty() && m_backend && m_backend->CanAdd() && !m_isReadOnly;
         bool addToCurrent = false;
         if (canAdd) {
             // Show only 1-2 filenames for specificity
@@ -1489,7 +1490,7 @@ bool MainWindow::RunExtraction(std::vector<UINT32> indices, std::wstring presetD
 void MainWindow::OnContextMenu(HWND /*hwndFrom*/, int x, int y) {
     if (m_archivePath.empty()) return;
 
-    bool readOnly = m_openedWithUnrar || m_isReadOnly;
+    bool canDelete = m_backend && m_backend->CanDelete() && !m_isReadOnly;
     int selCount  = ListView_GetSelectedCount(m_hListView);
 
     HMENU hMenu = CreatePopupMenu();
@@ -1509,7 +1510,7 @@ void MainWindow::OnContextMenu(HWND /*hwndFrom*/, int x, int y) {
     AppendMenuW(hMenu, MF_STRING | (selCount > 0 ? MF_ENABLED : MF_GRAYED),
                 ID_INFO, sInfo.c_str());
     AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(hMenu, MF_STRING | (!readOnly && selCount > 0 ? MF_ENABLED : MF_GRAYED),
+    AppendMenuW(hMenu, MF_STRING | (canDelete && selCount > 0 ? MF_ENABLED : MF_GRAYED),
                 ID_DELETE, sDelete.c_str());
 
     // When called from keyboard (x==-1, y==-1), position near the focused ListView item
@@ -1839,8 +1840,11 @@ void MainWindow::OnToggleMenubar() {
 // Safe to call for all commands every time.
 void MainWindow::OnInitMenuPopup(HMENU hMenu) {
     bool hasArchive = !m_archivePath.empty();
-    bool readOnly   = m_openedWithUnrar || m_isReadOnly;
     int  selCount   = m_hListView ? ListView_GetSelectedCount(m_hListView) : 0;
+    // Enablement now follows the bound backend's capabilities rather than the
+    // m_openedWithUnrar flag (backend-interface-refactor.md Step 3).
+    bool canAdd     = hasArchive && m_backend && m_backend->CanAdd() && !m_isReadOnly;
+    bool canDelete  = hasArchive && m_backend && m_backend->CanDelete() && !m_isReadOnly;
 
     auto setEnabled = [hMenu](UINT id, bool enabled) {
         EnableMenuItem(hMenu, id, MF_BYCOMMAND | (enabled ? MF_ENABLED : MF_GRAYED));
@@ -1853,9 +1857,11 @@ void MainWindow::OnInitMenuPopup(HMENU hMenu) {
     setEnabled(ID_OPEN_ASSOC, hasArchive);
     setEnabled(ID_INFO,       selCount > 0);
     setEnabled(IDM_FILE_PROPERTIES, hasArchive);
+    // Comment viewer stays available for any open archive; the dialog itself goes
+    // read-only when the backend can't write a comment (CanComment()==false).
     setEnabled(ID_ARCHIVE_COMMENT, hasArchive);
-    setEnabled(ID_ADD_TO_CURRENT, hasArchive && !m_isReadOnly);
-    setEnabled(ID_DELETE,     hasArchive && !readOnly && selCount > 0);
+    setEnabled(ID_ADD_TO_CURRENT, canAdd);
+    setEnabled(ID_DELETE,     canDelete && selCount > 0);
 
     CheckMenuItem(hMenu, IDM_VIEW_TREE,
                   MF_BYCOMMAND | (m_treeVisible ? MF_CHECKED : MF_UNCHECKED));
@@ -1925,9 +1931,10 @@ void MainWindow::OnAddFilesToCurrentArchive() {
     AddFilesToCurrentArchive(std::move(files));
 }
 
-// Worker-driven file addition to the archive. RAR uses rar.exe `a`; everything else uses 7z.dll AddToArchive.
+// Worker-driven file addition to the archive, dispatched through the bound backend.
 void MainWindow::AddFilesToCurrentArchive(std::vector<std::wstring> srcPaths) {
     if (m_archivePath.empty() || m_isReadOnly || srcPaths.empty()) return;
+    if (!m_backend || !m_backend->CanAdd()) return;
 
     App& app = App::Instance();
 
@@ -1936,13 +1943,6 @@ void MainWindow::AddFilesToCurrentArchive(std::vector<std::wstring> srcPaths) {
     const std::wstring archivePath = m_archivePath;
     const std::wstring archiveFolder = SelectedFolderPath();  // "" means archive root
 
-    // RAR detection: extension is .rar, or the archive was opened via unrar.dll
-    bool isRar = m_openedWithUnrar;
-    if (!isRar) {
-        const wchar_t* dot = wcsrchr(archivePath.c_str(), L'.');
-        if (dot && _wcsicmp(dot + 1, L"rar") == 0) isRar = true;
-    }
-
     ProgressDlg progDlg;
     progDlg.Show(m_hwnd, I18n::Tr(IDS_PROGRESS_ADDING).c_str());
 
@@ -1950,45 +1950,20 @@ void MainWindow::AddFilesToCurrentArchive(std::vector<std::wstring> srcPaths) {
     ProgressPostSink* sink = sg.sink;
     progDlg.SetSink(sink);
 
+    // Level is the only format-specific input: RAR takes a 0..5 method index, 7z/zip
+    // a 0..9 level (method/advanced options are unified later — design note §3.6).
+    // Password is not forwarded here, matching the previous add path.
+    const auto& s = app.GetSettings();
+    int level = m_openedWithUnrar ? s.GetRarLevel() : s.GetCompressionLevel();
+    IArchiveBackend* backend = m_backend.get();
+    std::wstring folder = archiveFolder;
     HRESULT hrDone = S_OK;
-
-    if (isRar) {
-        // RAR: add via rar.exe `a`. No SFX/split (targeting an existing archive).
-        const auto& s = app.GetSettings();
-        wchar_t levelBuf[2] = { (wchar_t)(L'0' + (s.GetRarLevel() & 7)), L'\0' };
-        if (s.GetRarLevel() < 0 || s.GetRarLevel() > 5) levelBuf[0] = L'3';
-        std::wstring rarExe = s.GetRarExePath();
-
-        RarProcess rar;
-        if (!rar.Add(archivePath.c_str(), srcPaths,
-                     archiveFolder.empty() ? nullptr : archiveFolder.c_str(),
-                     levelBuf,
-                     rarExe.empty() ? nullptr : rarExe.c_str(),
-                     nullptr, false,
-                     m_hwnd, WM_APP_PROGRESS, WM_APP_DONE)) {
-            progDlg.Dismiss();
-            return;
-        }
-        hrDone = progDlg.RunMessageLoop([&]{ rar.Cancel(); });
-    } else {
-        // 7z/zip/tar etc.: SevenZip::AddToArchive
-        if (!app.Get7z().IsLoaded()) {
-            progDlg.Dismiss();
-            ShowError(I18n::Tr(IDS_ERR_7Z_NOT_LOADED).c_str());
-            return;
-        }
-        auto& sz = app.Get7z();
-
-        int  level  = app.GetSettings().GetCompressionLevel();
-        // Let the format decide the method (empty string → 7z.dll default)
-        m_worker.Start([&sz, archivePath, srcPaths, archiveFolder, level, sink]() -> HRESULT {
-            return sz.AddToArchive(archivePath.c_str(), srcPaths,
-                                   archiveFolder.empty() ? nullptr : archiveFolder.c_str(),
-                                   nullptr, level, L"", sink);
-        }, m_hwnd, WM_APP_DONE);
-        hrDone = progDlg.RunMessageLoop();
-        m_worker.Wait();
-    }
+    m_worker.Start([backend, srcPaths, folder, level, sink]() -> HRESULT {
+        return backend->Add(srcPaths, folder.empty() ? nullptr : folder.c_str(),
+                            nullptr, level, L"", sink);
+    }, m_hwnd, WM_APP_DONE);
+    hrDone = progDlg.RunMessageLoop();
+    m_worker.Wait();
 
     if (FAILED(hrDone) && hrDone != E_ABORT) {
         ShowError(I18n::Tr(IDS_ERR_ADD_FAILED).c_str(), hrDone);
@@ -2045,31 +2020,12 @@ void MainWindow::OnArchiveProperties() {
 void MainWindow::OnArchiveComment() {
     if (m_archivePath.empty()) return;
 
-    const std::wstring& target = m_effectiveArchivePath.empty()
-                                 ? m_archivePath
-                                 : m_effectiveArchivePath;
-
     std::wstring comment;
-    App& app = App::Instance();
+    if (m_backend) m_backend->GetComment(comment);
 
-    if (m_openedWithUnrar && app.GetUnrar().IsLoaded()) {
-        app.GetUnrar().GetArchiveComment(target.c_str(), comment);
-    }
-    if (comment.empty() && app.Get7z().IsLoaded()) {
-        const wchar_t* pw = m_password.empty() ? nullptr : m_password.c_str();
-        app.Get7z().GetArchiveComment(target.c_str(), pw, comment);
-    }
-
-    // Editability check: temp files from split auto-unwrap are read-only.
-    // ZIP can be edited directly without 7z.dll. RAR requires rar.exe. Others (7z/tar/iso etc.) are not editable.
-    const wchar_t* dot = wcsrchr(m_archivePath.c_str(), L'.');
-    std::wstring ext = dot ? std::wstring(dot + 1) : L"";
-    for (auto& c : ext) c = (wchar_t)towlower(c);
-
-    bool isZip = (ext == L"zip");
-    bool isRar = (ext == L"rar" || m_openedWithUnrar);
-
-    bool readOnly = m_isReadOnly || (!isZip && !isRar);
+    // Editable only when the backend reports a writable comment area (ZIP via
+    // 7z.dll, RAR via rar.exe) and the archive is not a read-only split unwrap.
+    bool readOnly = m_isReadOnly || !m_backend || !m_backend->CanComment();
 
     std::wstring leaf = m_archivePath;
     auto sl = leaf.find_last_of(L"\\/");
@@ -2079,36 +2035,22 @@ void MainWindow::OnArchiveComment() {
     CommentDlg dlg;
     if (!dlg.Show(m_hwnd, leaf, comment, readOnly, edited)) return;
 
-    // Save processing
-    HRESULT hrSave = E_FAIL;
-    if (isZip) {
-        if (app.Get7z().IsLoaded()) {
-            hrSave = app.Get7z().SetZipArchiveComment(m_archivePath.c_str(), edited);
-        } else {
-            ShowError(I18n::Tr(IDS_ERR_ZIP_COMMENT_NEEDS_7Z).c_str());
-            return;
-        }
-    } else if (isRar) {
-        // RAR: apply via rar.exe c -z. Wait for completion via WM_APP_DONE.
-        ProgressDlg progDlg;
-        progDlg.Show(m_hwnd, I18n::Tr(IDS_PROGRESS_SAVING_COMMENT).c_str());
-        auto* sink = new ProgressPostSink(m_hwnd, WM_APP_PROGRESS, WM_APP_DONE);
-        m_pSink = sink;
-        progDlg.SetSink(sink);
+    // Save through the bound backend (SevenZipBackend patches ZIP directly;
+    // RarBackend drives rar.exe). Run on the worker so the rar.exe bridge pumps
+    // off the UI thread.
+    ProgressDlg progDlg;
+    progDlg.Show(m_hwnd, I18n::Tr(IDS_PROGRESS_SAVING_COMMENT).c_str());
+    SinkGuard sg(m_hwnd, m_pSink);
+    ProgressPostSink* sink = sg.sink;
+    progDlg.SetSink(sink);
 
-        const std::wstring rarExe = app.GetSettings().GetRarExePath();
-        RarProcess rar;
-        if (!rar.SetComment(m_archivePath.c_str(), edited,
-                            rarExe.empty() ? nullptr : rarExe.c_str(),
-                            m_hwnd, WM_APP_DONE)) {
-            progDlg.Dismiss();
-            delete sink; m_pSink = nullptr;
-            ShowError(I18n::Tr(IDS_ERR_RAR_LAUNCH).c_str());
-            return;
-        }
-        hrSave = progDlg.RunMessageLoop([&]{ rar.Cancel(); });
-        delete sink; m_pSink = nullptr;
-    }
+    IArchiveBackend* backend = m_backend.get();
+    std::wstring newComment = edited;
+    m_worker.Start([backend, newComment]() -> HRESULT {
+        return backend->SetComment(newComment);
+    }, m_hwnd, WM_APP_DONE);
+    HRESULT hrSave = progDlg.RunMessageLoop();
+    m_worker.Wait();
 
     if (FAILED(hrSave) && hrSave != E_ABORT) {
         ShowError(I18n::Tr(IDS_ERR_COMMENT_SAVE_FAILED).c_str(), hrSave);
@@ -2122,14 +2064,15 @@ void MainWindow::OnArchiveComment() {
 }
 
 void MainWindow::OnDelete() {
-    if (m_archivePath.empty() || m_openedWithUnrar || m_isReadOnly) return;
+    if (m_archivePath.empty() || m_isReadOnly) return;
+    if (!m_backend || !m_backend->CanDelete()) return;
 
     // Resolve the ListView selection to a real entry set.
     //  - Real entry (lParam < m_items.size()): use that index.
     //    If a folder, also add all entries below it ("path/" prefix match).
     //  - Virtual folder (lParam >= m_items.size()): resolve children from m_folderPaths.
+    //  The backend maps these indices to entries (RarBackend → entry paths).
     std::set<UINT32> indexSet;
-    std::set<std::wstring> folderPaths;  // display paths used in the RAR path
     int item = -1;
     while ((item = ListView_GetNextItem(m_hListView, item, LVNI_SELECTED)) != -1) {
         LVITEMW lvi = {};
@@ -2141,9 +2084,7 @@ void MainWindow::OnDelete() {
         std::wstring folder;
         if (lp < (UINT32)m_items.size()) {
             indexSet.insert(lp);
-            const auto& it = m_items[lp];
-            if (it.isDir) folder = it.path;
-            else          folderPaths.insert(it.path);
+            if (m_items[lp].isDir) folder = m_items[lp].path;
         } else {
             int fpIdx = (int)(lp - (UINT32)m_items.size());
             if (fpIdx >= 0 && fpIdx < (int)m_folderPaths.size())
@@ -2151,7 +2092,6 @@ void MainWindow::OnDelete() {
         }
 
         if (!folder.empty()) {
-            folderPaths.insert(folder);
             std::wstring prefix = folder + L"/";
             for (UINT32 j = 0; j < (UINT32)m_items.size(); ++j) {
                 if (m_items[j].path.size() > prefix.size() &&
@@ -2161,7 +2101,7 @@ void MainWindow::OnDelete() {
             }
         }
     }
-    if (indexSet.empty() && folderPaths.empty()) return;
+    if (indexSet.empty()) return;
 
     // Confirm — show the original ListView selection count (more intuitive than the expanded count)
     int origCount = ListView_GetSelectedCount(m_hListView);
@@ -2170,10 +2110,6 @@ void MainWindow::OnDelete() {
                     MB_YESNO | MB_ICONWARNING) != IDYES)
         return;
 
-    App& app = App::Instance();
-    const wchar_t* dot = wcsrchr(m_archivePath.c_str(), L'.');
-    bool isRar = (dot && _wcsicmp(dot + 1, L"rar") == 0);
-
     ProgressDlg progDlg;
     progDlg.Show(m_hwnd, I18n::Tr(IDS_PROGRESS_DELETING).c_str());
 
@@ -2181,46 +2117,18 @@ void MainWindow::OnDelete() {
     ProgressPostSink* sink = sg.sink;
     progDlg.SetSink(sink);
 
-    HRESULT hrDone = S_OK;
-    auto archivePath = m_effectiveArchivePath;
     const std::wstring currentFolder = m_currentFolderPath;
-
-    if (isRar) {
-        // RAR: delete including folders via rar.exe d -y -r
-        std::vector<std::wstring> rarPaths;
-        rarPaths.reserve(folderPaths.size());
-        for (const auto& p : folderPaths) {
-            std::wstring bs = p;
-            for (auto& c : bs) if (c == L'/') c = L'\\';
-            rarPaths.push_back(std::move(bs));
-        }
-        RarProcess proc;
-        bool ok = proc.Delete(archivePath.c_str(), rarPaths,
-                              app.GetSettings().GetRarExePath().c_str(),
-                              m_hwnd, WM_APP_DONE);
-        if (!ok) {
-            progDlg.Dismiss();
-            return;
-        }
-        hrDone = progDlg.RunMessageLoop([&]{ proc.Cancel(); });
-        // proc destructor waits for reader/process handles and releases them
-    } else {
-        if (!app.Get7z().IsLoaded()) {
-            progDlg.Dismiss();
-            ShowError(I18n::Tr(IDS_ERR_7Z_NOT_LOADED).c_str());
-            return;
-        }
-        std::vector<UINT32> deleteIndices(indexSet.begin(), indexSet.end());
-        auto& sz = app.Get7z();
-        auto allItems = m_items;
-        std::wstring password = m_password;
-        m_worker.Start([&sz, archivePath, deleteIndices, allItems, password, sink]() -> HRESULT {
-            return sz.DeleteItems(archivePath.c_str(), deleteIndices, allItems,
-                                  password.empty() ? nullptr : password.c_str(), sink);
-        }, m_hwnd, WM_APP_DONE);
-        hrDone = progDlg.RunMessageLoop();
-        m_worker.Wait();
-    }
+    const std::wstring reopenPath    = m_archivePath;  // copy; OpenArchive reassigns the member
+    std::vector<UINT32> deleteIndices(indexSet.begin(), indexSet.end());
+    IArchiveBackend* backend = m_backend.get();
+    auto allItems = m_items;
+    std::wstring password = m_password;
+    m_worker.Start([backend, deleteIndices, allItems, password, sink]() -> HRESULT {
+        return backend->Delete(deleteIndices, allItems,
+                               password.empty() ? nullptr : password.c_str(), sink);
+    }, m_hwnd, WM_APP_DONE);
+    HRESULT hrDone = progDlg.RunMessageLoop();
+    m_worker.Wait();
 
     if (FAILED(hrDone) && hrDone != E_ABORT) {
         ShowError(I18n::Tr(IDS_ERR_DELETE_FAILED).c_str(), hrDone);
@@ -2229,7 +2137,7 @@ void MainWindow::OnDelete() {
     if (hrDone == E_ABORT) return;
 
     // Success → reload and restore folder position
-    OpenArchive(archivePath.c_str());
+    OpenArchive(reopenPath.c_str());
     if (!currentFolder.empty()) SelectTreeFolder(currentFolder);
 }
 
