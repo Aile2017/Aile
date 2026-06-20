@@ -18,7 +18,6 @@ void Settings::Load() {
     m_defaultFormat    = ReadStr(L"General", L"DefaultFormat",    L"7z");
     m_7zDllPath        = ReadStr(L"General", L"7zDllPath",        L"");
     m_unrarDllPath     = ReadStr(L"General", L"UnrarDllPath",     L"");
-    m_defaultSfxMode   = ReadStr(L"General", L"DefaultSfxMode",   L"");
     m_fontName         = ReadStr(L"General", L"FontName",         L"Segoe UI");
 
     wchar_t buf[16] = {};
@@ -99,7 +98,6 @@ void Settings::Save() const {
     WriteStr(L"General", L"DefaultFormat",    m_defaultFormat.c_str());
     WriteStr(L"General", L"7zDllPath",        m_7zDllPath.c_str());
     WriteStr(L"General", L"UnrarDllPath",     m_unrarDllPath.c_str());
-    WriteStr(L"General", L"DefaultSfxMode",   m_defaultSfxMode.c_str());
     WriteStr(L"General", L"FontName",         m_fontName.c_str());
     WriteStr(L"General", L"OpenFolderAfterExtract", m_openFolderAfterExtract ? L"1" : L"0");
     WriteStr(L"General", L"OpenFolderCommand",      m_openFolderCommand.c_str());

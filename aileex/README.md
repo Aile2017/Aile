@@ -132,7 +132,6 @@ DefaultFormat=7z         ; Default compression format
 CompressionLevel=5       ; 0-9
 RarLevel=3               ; RAR compression level 0-5
 MkDir=2                  ; Subfolder creation on extract: 0=never/1=single/2=multiple(default)/3=always
-DefaultSfxMode=          ; SFX mode "" / "gui" / "console" — last selected in compress dialog
 FontName=Segoe UI        ; Font used in main window controls
 OpenFolderAfterExtract=0 ; Open output folder in Explorer after extraction (0/1)
 OpenFolderCommand=       ; INI-only. Custom command to open folder (%1 = path). Empty = Explorer.
