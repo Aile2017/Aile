@@ -16,6 +16,13 @@ Format-specific support depends on whether the `.b2e` script has the correspondi
 | **Delete entries** | Available for formats with `delete:` section in their `.b2e` |
 | **SFX creation** | Available for formats with `sfx:` or `sfxd:` section in their `.b2e` |
 
+> **ZIP SFX — currently not producible (possible future task).**
+> ZIP self-extracting archives used to be created via the legacy `DECZIP64W.EXE`
+> self-extractor module, which has since been discontinued, so ZIP SFX output is no
+> longer available. SFX output still works for **7z** and **RAR** (RAR via WinRAR/`rar`).
+> Restoring ZIP SFX would require an alternative ZIP SFX stub; not currently planned,
+> recorded here as a candidate enhancement.
+
 ---
 
 ## Features with Degraded Behavior
