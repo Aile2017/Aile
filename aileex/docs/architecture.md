@@ -17,7 +17,11 @@ AileEx/
 ├── src/
 │   ├── main.cpp                   — wWinMain, argument parsing, mode routing
 │   ├── App.h/.cpp                 — Singleton, DLL load management, message loop
-│   ├── MainWindow.h/.cpp          — Browse window (menu + toolbar + TreeView + ListView + status bar)
+│   ├── MainWindow.h               — Browse window class (menu + toolbar + TreeView + ListView + status bar)
+│   ├── MainWindow.cpp             — window lifecycle, message routing, layout, menus, dialogs (core)
+│   ├── MainWindowView.cpp         — tree/list population, sorting, selection, navigation
+│   ├── MainWindowOps.cpp          — archive operations (open/extract/test/compress/add/delete/properties/comment)
+│   ├── MainWindowInternal.h       — file-local helpers shared by the three MainWindow TUs
 │   ├── CompressDlg.h/.cpp         — Compression settings dialog
 │   ├── AdvancedCompressDlg.h/.cpp — 7z/ZIP advanced compression options (dict/word/solid/threads/extra)
 │   ├── RarAdvancedDlg.h/.cpp      — RAR advanced compression options (recovery/volume etc.)
@@ -28,7 +32,13 @@ AileEx/
 │   ├── PropertiesDlg.h/.cpp       — Archive-wide properties dialog
 │   ├── CommentDlg.h/.cpp          — Archive comment view/edit dialog
 │   ├── Settings.h/.cpp            — INI read/write, MRU management
-│   ├── SevenZip.h/.cpp            — 7z.dll wrapper (IIn/IOutArchive + DeleteItems + callbacks + Find7zDll)
+│   ├── SevenZip.h                 — 7z.dll wrapper public API (per-session archive operations + format/codec queries)
+│   ├── SevenZip.cpp               — core: load/unload, format-CLSID cache, OpenArchiveWithFallback, comment get/set, properties
+│   ├── SevenZipRead.cpp           — read ops: OpenArchive (enumerate + split/tar unwrap), Test, Extract
+│   ├── SevenZipWrite.cpp          — write ops: Compress (split volumes + SFX), AddToArchive, DeleteItems
+│   ├── SevenZipInternal.h         — PropToUInt64 (helper shared between SevenZip.cpp and SevenZipRead.cpp)
+│   ├── SevenZipStreams.h/.cpp     — COM stream wrappers (CInFileStream/COutFileStream/CTempOutStream/CMultiVolOutStream) + ConcatFiles/ParseVolumeSize
+│   ├── SevenZipCallbacks.h/.cpp   — COM callbacks (COpen*/CTar*/CExtract*/CTest*/CUpdate*/CDelete*/CAdd*) + SrcEntry/EnumeratePaths/CanonicalizePath
 │   ├── FormatRegistry.h/.cpp      — Format/codec registry (ext→CLSID, writable formats, encoders, filters); composed by SevenZip
 │   ├── UnrarDll.h/.cpp            — unrar.dll C API wrapper
 │   ├── RarProcess.h/.cpp          — WinRAR.exe (GUI) / Rar.exe (console) subprocess (Compress / Delete)
@@ -195,11 +205,14 @@ be revisited without re-running the whole analysis.
 
 ### Main concerns
 
-1. **`MainWindow` is a controller-heavy god object.**
+1. **`MainWindow` is a controller-heavy class.**
    It owns window layout and message handling, but also archive open/extract/test/add/delete
    workflows, password prompting, MRU updates, temporary file lifecycle, and backend selection.
-   The current structure works, but it makes behavior changes risky because UI concerns and
-   archive-domain concerns are modified in the same class.
+   To contain this, its definition is now split across three translation units by concern —
+   `MainWindow.cpp` (window/message/menu core), `MainWindowView.cpp` (tree/list display) and
+   `MainWindowOps.cpp` (archive operations) — sharing leaf helpers via `MainWindowInternal.h`.
+   This is organizational only (one class, unchanged behavior); the UI and archive-domain
+   responsibilities still live on the same object, so further decoupling remains possible.
 
 2. **`App` acts as a singleton service locator plus startup orchestrator.**
    `App::Instance()` exposes `Settings`, `SevenZip`, and `UnrarDll` globally, while `App.cpp`
@@ -241,5 +254,10 @@ be revisited without re-running the whole analysis.
 
 - `IExtractProgressSink` / `ProgressPostSink` keep worker-thread progress reporting separate from
   archive implementations.
-- The internal callback/helper classes in `SevenZip.cpp` use localized ownership and RAII patterns,
-  which helps contain COM/Win32 lifetime complexity even though the file is large.
+- The COM callback/stream classes (now in `SevenZipCallbacks.h` / `SevenZipStreams.h`) use localized
+  ownership and RAII patterns, which helps contain COM/Win32 lifetime complexity. The original ~2990-line
+  `SevenZip.cpp` was decomposed in two passes: first the COM plumbing moved into the stream/callback
+  files, then the per-session operations were split by direction — `SevenZip.cpp` core (~690 lines:
+  lifecycle, cache, comment, properties), `SevenZipRead.cpp` (~500: open/test/extract) and
+  `SevenZipWrite.cpp` (~490: compress/add/delete). The public `SevenZip.h` API is unchanged throughout,
+  so the cross-app contract and AileFlow are untouched.

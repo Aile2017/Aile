@@ -22,6 +22,8 @@ add_executable(AileEx WIN32
     src/main.cpp
     src/App.cpp
     src/MainWindow.cpp
+    src/MainWindowView.cpp
+    src/MainWindowOps.cpp
     src/CompressDlg.cpp
     src/CompressHelper.cpp
     src/AdvancedCompressDlg.cpp
@@ -32,6 +34,10 @@ add_executable(AileEx WIN32
     src/SettingsDlg.cpp
     src/Settings.cpp
     src/SevenZip.cpp
+    src/SevenZipRead.cpp
+    src/SevenZipWrite.cpp
+    src/SevenZipStreams.cpp
+    src/SevenZipCallbacks.cpp
     src/FormatRegistry.cpp
     src/SevenZipBackend.cpp
     src/UnrarDll.cpp

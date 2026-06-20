@@ -143,9 +143,10 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
         params.format = typeOverride;
         if (!methodOverride.empty()) params.method = methodOverride;
         if (params.sfx) {
-            auto dot = params.outputPath.find_last_of(L'.');
-            if (dot != std::wstring::npos) params.outputPath.erase(dot);
-            params.outputPath += L".exe";
+            // DeriveOutputPath already returns an extension-less stem, so just append
+            // ".exe" — never strip a trailing dot, or a dotted stem like
+            // "111.222.333.444" would lose its ".444" segment.
+            EnsureArchiveExt(params.outputPath, L"exe");
         } else {
             EnsureArchiveExt(params.outputPath, params.format);
         }
@@ -202,9 +203,9 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
         baseParams.format = typeOverride;
         if (!methodOverride.empty()) baseParams.method = methodOverride;
         if (baseParams.sfx) {
-            auto dot = baseParams.outputPath.find_last_of(L'.');
-            if (dot != std::wstring::npos) baseParams.outputPath.erase(dot);
-            baseParams.outputPath += L".exe";
+            // See note in RunCompressMode: the stem is already extension-less, so
+            // append ".exe" rather than stripping a (non-existent) extension.
+            EnsureArchiveExt(baseParams.outputPath, L"exe");
         } else {
             EnsureArchiveExt(baseParams.outputPath, baseParams.format);
         }
@@ -221,9 +222,10 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
         params.inputFiles  = { file };
         params.outputPath  = DeriveOutputPath(m_settings, file, destDir);
         if (params.sfx) {
-            auto dot = params.outputPath.find_last_of(L'.');
-            if (dot != std::wstring::npos) params.outputPath.erase(dot);
-            params.outputPath += L".exe";
+            // DeriveOutputPath already returns an extension-less stem, so just append
+            // ".exe" — never strip a trailing dot, or a dotted stem like
+            // "111.222.333.444" would lose its ".444" segment.
+            EnsureArchiveExt(params.outputPath, L"exe");
         } else {
             EnsureArchiveExt(params.outputPath, params.format);
         }
