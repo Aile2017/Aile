@@ -32,6 +32,8 @@ add_executable(AileEx WIN32
     src/SettingsDlg.cpp
     src/Settings.cpp
     src/SevenZip.cpp
+    src/SevenZipRead.cpp
+    src/SevenZipWrite.cpp
     src/SevenZipStreams.cpp
     src/SevenZipCallbacks.cpp
     src/FormatRegistry.cpp

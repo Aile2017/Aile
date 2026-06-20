@@ -28,7 +28,11 @@ AileEx/
 │   ├── PropertiesDlg.h/.cpp       — Archive-wide properties dialog
 │   ├── CommentDlg.h/.cpp          — Archive comment view/edit dialog
 │   ├── Settings.h/.cpp            — INI read/write, MRU management
-│   ├── SevenZip.h/.cpp            — 7z.dll wrapper (per-session archive operations: Open/Extract/Test/Compress/Add/Delete/comment/properties + Find7zDll)
+│   ├── SevenZip.h                 — 7z.dll wrapper public API (per-session archive operations + format/codec queries)
+│   ├── SevenZip.cpp               — core: load/unload, format-CLSID cache, OpenArchiveWithFallback, comment get/set, properties
+│   ├── SevenZipRead.cpp           — read ops: OpenArchive (enumerate + split/tar unwrap), Test, Extract
+│   ├── SevenZipWrite.cpp          — write ops: Compress (split volumes + SFX), AddToArchive, DeleteItems
+│   ├── SevenZipInternal.h         — PropToUInt64 (helper shared between SevenZip.cpp and SevenZipRead.cpp)
 │   ├── SevenZipStreams.h/.cpp     — COM stream wrappers (CInFileStream/COutFileStream/CTempOutStream/CMultiVolOutStream) + ConcatFiles/ParseVolumeSize
 │   ├── SevenZipCallbacks.h/.cpp   — COM callbacks (COpen*/CTar*/CExtract*/CTest*/CUpdate*/CDelete*/CAdd*) + SrcEntry/EnumeratePaths/CanonicalizePath
 │   ├── FormatRegistry.h/.cpp      — Format/codec registry (ext→CLSID, writable formats, encoders, filters); composed by SevenZip
@@ -244,6 +248,9 @@ be revisited without re-running the whole analysis.
 - `IExtractProgressSink` / `ProgressPostSink` keep worker-thread progress reporting separate from
   archive implementations.
 - The COM callback/stream classes (now in `SevenZipCallbacks.h` / `SevenZipStreams.h`) use localized
-  ownership and RAII patterns, which helps contain COM/Win32 lifetime complexity. Extracting them out
-  of `SevenZip.cpp` shrank that file from ~2990 to ~1680 lines, leaving it focused on per-session
-  archive operations.
+  ownership and RAII patterns, which helps contain COM/Win32 lifetime complexity. The original ~2990-line
+  `SevenZip.cpp` was decomposed in two passes: first the COM plumbing moved into the stream/callback
+  files, then the per-session operations were split by direction — `SevenZip.cpp` core (~690 lines:
+  lifecycle, cache, comment, properties), `SevenZipRead.cpp` (~500: open/test/extract) and
+  `SevenZipWrite.cpp` (~490: compress/add/delete). The public `SevenZip.h` API is unchanged throughout,
+  so the cross-app contract and AileFlow are untouched.
