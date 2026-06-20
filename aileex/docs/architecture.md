@@ -17,7 +17,11 @@ AileEx/
 ├── src/
 │   ├── main.cpp                   — wWinMain, argument parsing, mode routing
 │   ├── App.h/.cpp                 — Singleton, DLL load management, message loop
-│   ├── MainWindow.h/.cpp          — Browse window (menu + toolbar + TreeView + ListView + status bar)
+│   ├── MainWindow.h               — Browse window class (menu + toolbar + TreeView + ListView + status bar)
+│   ├── MainWindow.cpp             — window lifecycle, message routing, layout, menus, dialogs (core)
+│   ├── MainWindowView.cpp         — tree/list population, sorting, selection, navigation
+│   ├── MainWindowOps.cpp          — archive operations (open/extract/test/compress/add/delete/properties/comment)
+│   ├── MainWindowInternal.h       — file-local helpers shared by the three MainWindow TUs
 │   ├── CompressDlg.h/.cpp         — Compression settings dialog
 │   ├── AdvancedCompressDlg.h/.cpp — 7z/ZIP advanced compression options (dict/word/solid/threads/extra)
 │   ├── RarAdvancedDlg.h/.cpp      — RAR advanced compression options (recovery/volume etc.)
@@ -201,11 +205,14 @@ be revisited without re-running the whole analysis.
 
 ### Main concerns
 
-1. **`MainWindow` is a controller-heavy god object.**
+1. **`MainWindow` is a controller-heavy class.**
    It owns window layout and message handling, but also archive open/extract/test/add/delete
    workflows, password prompting, MRU updates, temporary file lifecycle, and backend selection.
-   The current structure works, but it makes behavior changes risky because UI concerns and
-   archive-domain concerns are modified in the same class.
+   To contain this, its definition is now split across three translation units by concern —
+   `MainWindow.cpp` (window/message/menu core), `MainWindowView.cpp` (tree/list display) and
+   `MainWindowOps.cpp` (archive operations) — sharing leaf helpers via `MainWindowInternal.h`.
+   This is organizational only (one class, unchanged behavior); the UI and archive-domain
+   responsibilities still live on the same object, so further decoupling remains possible.
 
 2. **`App` acts as a singleton service locator plus startup orchestrator.**
    `App::Instance()` exposes `Settings`, `SevenZip`, and `UnrarDll` globally, while `App.cpp`
