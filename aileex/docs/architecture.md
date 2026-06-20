@@ -225,16 +225,16 @@ be revisited without re-running the whole analysis.
    The result is a useful but broad abstraction whose internal compatibility rules leak into callers
    through concepts such as `effectivePath`, cache invalidation, and format-specific caveats.
 
-4. **Archive backend behavior is selected by flags instead of polymorphism.**
-   `MainWindow` relies on flags such as `m_openedWithUnrar`, `m_isReadOnly`, and the distinction
-   between display path and operative path. This effectively encodes backend/session state in booleans
-   rather than in separate archive-session objects with explicit capabilities.
+4. **Archive backend behavior is selected by flags instead of polymorphism.** *(Resolved.)*
+   `MainWindow` previously relied on flags such as `m_openedWithUnrar`. Backend/session state now lives
+   in a polymorphic `IArchiveBackend` with explicit capability queries; `m_openedWithUnrar` is gone and
+   `ArchiveOpener` owns open-time backend selection. (`m_isReadOnly` and the display-vs-operative path
+   distinction remain.)
 
-5. **RAR and 7z backends duplicate responsibilities without sharing a common interface.**
-   `UnrarDll` and `SevenZip` both provide load/list/extract/test style functionality, but they are
-   consumed through ad-hoc branching instead of a shared archive backend contract. This keeps each
-   implementation simple locally, but increases drift and cross-backend conditionals in `MainWindow`.
-   See `backend-interface-refactor.md` for the accepted `IArchiveBackend` design and incremental plan.
+5. **RAR and 7z backends duplicate responsibilities without sharing a common interface.** *(Resolved.)*
+   `UnrarDll`/`RarProcess` and `SevenZip` are now consumed through the shared `IArchiveBackend` contract
+   (`SevenZipBackend`, `RarBackend`), removing the ad-hoc cross-backend branching in `MainWindow`.
+   See `backend-interface-refactor.md` for the design and the completed incremental plan.
 
 6. **Dialogs contain business rules in addition to presentation.**
    `CompressDlg` and related dialogs do more than gather input: they also decide extension rewriting,
@@ -243,12 +243,19 @@ be revisited without re-running the whole analysis.
 
 ### Refactoring priority
 
-- First priority: split archive operation orchestration out of `MainWindow` into smaller services
-  or session objects.
-- Second priority: define a clearer backend capability model (`canExtract`, `canDelete`, `canComment`,
-  etc.) rather than deriving behavior from several booleans.
-- Third priority: reduce `SevenZip` scope by separating pure 7z.dll adaptation from higher-level
-  archive session features such as split unwrap and caching.
+Done so far: the backend capability model (`IArchiveBackend` + `ArchiveOpener`, concerns #4/#5), and a
+file-level decomposition of the two largest sources (`SevenZip.cpp` → core/read/write + stream/callback
+files; `MainWindow.cpp` → core/view/ops, both apps). These were organizational/structural and did not
+change behavior.
+
+Remaining (each to be considered on its own, behavior-touching so higher risk):
+
+- Split archive operation orchestration out of `MainWindow` into smaller services or session objects
+  (the three `MainWindow*.cpp` files are still one class mixing UI and archive-domain concerns).
+- Reduce `SevenZip` scope further by separating pure 7z.dll adaptation from higher-level archive
+  session features (`effectivePath`, item caching, split unwrap) that still leak to callers (concern #3).
+- Decouple `App` from its singleton/service-locator role toward explicit dependency injection (concern #2).
+- Move archive policy (extension rewriting, default format/method) out of dialog code (concern #6).
 
 ### Existing strengths worth preserving
 
