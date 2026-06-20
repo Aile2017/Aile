@@ -209,9 +209,10 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
         if (params.sfxMode.empty()) {
             EnsureArchiveExt(params.outputPath, params.format);
         } else {
-            auto dot = params.outputPath.find_last_of(L'.');
-            if (dot != std::wstring::npos) params.outputPath.erase(dot);
-            params.outputPath += L".exe";
+            // ComputeDefaultOutputPath already returns an extension-less stem, so just
+            // append ".exe" — stripping a trailing dot would eat a dotted stem's last
+            // segment (e.g. "111.222.333.444" → "111.222.333").
+            EnsureArchiveExt(params.outputPath, L"exe");
         }
     } else {
         CompressDlg dlg;
