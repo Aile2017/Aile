@@ -23,7 +23,10 @@ void CompressDlg::Params::LoadFromSettings(const Settings& s) {
     rarRecoveryPct = s.GetRarAdvRecovery();
     rarSplitVolume = s.GetRarAdvVolume();
     rarExtra       = s.GetRarAdvExtra();
-    sfxMode        = s.GetDefaultSfxMode();
+    // SFX mode is intentionally NOT loaded from settings: the dialog must always
+    // open with SFX off, and CLI "a" (no -sfx) must never inherit a remembered SFX
+    // state. SFX is enabled only per-invocation (dialog checkbox or -sfx switch).
+    sfxMode.clear();
 }
 
 void CompressDlg::Params::SaveToSettings(Settings& s) const {
@@ -42,7 +45,7 @@ void CompressDlg::Params::SaveToSettings(Settings& s) const {
     s.SetRarAdvRecovery(rarRecoveryPct);
     s.SetRarAdvVolume(rarSplitVolume.c_str());
     s.SetRarAdvExtra(rarExtra.c_str());
-    s.SetDefaultSfxMode(sfxMode.c_str());
+    // SFX mode is intentionally not persisted (see LoadFromSettings).
 }
 
 struct MethodEntry { const wchar_t* label; const wchar_t* id; };
@@ -463,6 +466,22 @@ bool CompressDlg::OnOK(HWND hwnd) {
         const wchar_t* mId = (const wchar_t*)SendMessageW(hMethod, CB_GETITEMDATA, msel, 0);
         if (mId) m_params.method = mId;
     }
+    // Do not force the method property in two cases, because an explicit method
+    // (the "m" property) overrides the part of the level preset that selects the
+    // codec — including level 0, whose "Store" is realized by the level choosing
+    // the Copy method:
+    //   (1) Level 0 (Store) — must copy with no compression regardless of which
+    //       method is shown in the combo (mirrors 7-Zip's GUI, where the Store
+    //       level forces the Copy method).
+    //   (2) The user kept the format's default codec — forcing it is redundant
+    //       (levels 1-9 are byte-identical with or without it) and would only
+    //       suppress the level-0 Store.
+    // The level's tuning values (dict size, fast bytes, ...) still apply either
+    // way; method and level otherwise coexist normally for levels 1-9.
+    if (m_params.level == 0 ||
+        (m_params.format == L"7z"  && m_params.method == L"lzma2") ||
+        (m_params.format == L"zip" && m_params.method == L"deflate"))
+        m_params.method.clear();
     // For RAR, the compression level is passed as the method digit (-m0..-m5)
     if (m_params.format == L"rar") {
         m_params.rarLevel = m_params.level;

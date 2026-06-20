@@ -53,11 +53,6 @@ public:
     int  GetRarLevel() const                        { return m_rarLevel; }
     void SetRarLevel(int v)                         { m_rarLevel = v; }
 
-    // Self-extraction (SFX) mode — remembers the last selection in the compress dialog.
-    // Values: "" (none) / "gui" / "console".
-    const std::wstring& GetDefaultSfxMode() const   { return m_defaultSfxMode; }
-    void SetDefaultSfxMode(const wchar_t* v)        { m_defaultSfxMode = v; }
-
     // Advanced compress options (last-used values)
     const std::wstring& GetAdvDictSize() const      { return m_advDictSize; }
     const std::wstring& GetAdvWordSize() const      { return m_advWordSize; }
@@ -142,7 +137,6 @@ private:
     int          m_extStripMode;
     bool         m_stripTrailingNumber;
     bool         m_breakDDir;
-    std::wstring m_defaultSfxMode;
     std::wstring m_advDictSize;
     std::wstring m_advWordSize;
     std::wstring m_advSolidBlock;

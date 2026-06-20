@@ -172,7 +172,6 @@ RarLevel=3                   ; RAR compression level 0-5
 MkDir=2                      ; Subfolder creation on extract 0/1/2/3
 7zDllPath=                   ; Absolute path to 7z.dll (auto-detect from registry if empty)
 UnrarDllPath=                ; Absolute path to unrar.dll (same directory as AileEx.exe if empty)
-DefaultSfxMode=              ; SFX mode "" / "gui" / "console" — last selected in compress dialog
 FontName=Segoe UI            ; Font used in main window controls
 OpenFolderAfterExtract=0     ; Open output folder in Explorer after extraction (0/1)
 OpenFolderCommand=           ; INI-only. Custom command to open folder (%1 = path). Empty = Explorer (ShellExecuteW).

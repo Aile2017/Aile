@@ -152,6 +152,17 @@ static void ApplyOverrides(CompressDlg::Params& params,
     if (params.format == L"rar")
         params.method = std::to_wstring(params.rarLevel);
 
+    // Match the GUI dialog (CompressDlg::OnOK): do not force the "m" method
+    // property when it would override the level preset's codec choice. Level 0
+    // must Store (Copy) regardless of the requested method, and forcing the
+    // format's default codec is redundant (levels 1-9 are byte-identical with or
+    // without it). The level's tuning values still apply for levels 1-9.
+    if (params.format != L"rar" &&
+        (params.level == 0 ||
+         (params.format == L"7z"  && params.method == L"lzma2") ||
+         (params.format == L"zip" && params.method == L"deflate")))
+        params.method.clear();
+
     if (!sfxOverride.empty()) {
         if (_wcsicmp(params.format.c_str(), L"7z") == 0 || _wcsicmp(params.format.c_str(), L"rar") == 0) {
             params.sfxMode = sfxOverride;
