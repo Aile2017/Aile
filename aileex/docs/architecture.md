@@ -28,7 +28,9 @@ AileEx/
 │   ├── PropertiesDlg.h/.cpp       — Archive-wide properties dialog
 │   ├── CommentDlg.h/.cpp          — Archive comment view/edit dialog
 │   ├── Settings.h/.cpp            — INI read/write, MRU management
-│   ├── SevenZip.h/.cpp            — 7z.dll wrapper (IIn/IOutArchive + DeleteItems + callbacks + Find7zDll)
+│   ├── SevenZip.h/.cpp            — 7z.dll wrapper (per-session archive operations: Open/Extract/Test/Compress/Add/Delete/comment/properties + Find7zDll)
+│   ├── SevenZipStreams.h/.cpp     — COM stream wrappers (CInFileStream/COutFileStream/CTempOutStream/CMultiVolOutStream) + ConcatFiles/ParseVolumeSize
+│   ├── SevenZipCallbacks.h/.cpp   — COM callbacks (COpen*/CTar*/CExtract*/CTest*/CUpdate*/CDelete*/CAdd*) + SrcEntry/EnumeratePaths/CanonicalizePath
 │   ├── FormatRegistry.h/.cpp      — Format/codec registry (ext→CLSID, writable formats, encoders, filters); composed by SevenZip
 │   ├── UnrarDll.h/.cpp            — unrar.dll C API wrapper
 │   ├── RarProcess.h/.cpp          — WinRAR.exe (GUI) / Rar.exe (console) subprocess (Compress / Delete)
@@ -241,5 +243,7 @@ be revisited without re-running the whole analysis.
 
 - `IExtractProgressSink` / `ProgressPostSink` keep worker-thread progress reporting separate from
   archive implementations.
-- The internal callback/helper classes in `SevenZip.cpp` use localized ownership and RAII patterns,
-  which helps contain COM/Win32 lifetime complexity even though the file is large.
+- The COM callback/stream classes (now in `SevenZipCallbacks.h` / `SevenZipStreams.h`) use localized
+  ownership and RAII patterns, which helps contain COM/Win32 lifetime complexity. Extracting them out
+  of `SevenZip.cpp` shrank that file from ~2990 to ~1680 lines, leaving it focused on per-session
+  archive operations.
