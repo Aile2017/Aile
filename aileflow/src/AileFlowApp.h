@@ -17,24 +17,23 @@ inline AileFlowKiApp& aileflow_kiapp() {
 
 // --- Config stub ---
 
+// Dynamic archive-extension registry from B2eBridge: true when `ext` is handled by
+// a .b2e script in the b2e/ directory (cached map lookup; no engine re-entry).
+// Forward-declared here to avoid pulling B2eBridge.h's includes into this ANSI TU.
+bool B2e_IsArchiveExt(const wchar_t* ext);
+
 struct AileFlowCnf {
     bool miniboot() const { return false; }  // always run external tools normally
 
-    // True when `ext` (a single dot-separated token, no leading dot) is one of the
-    // archive/stream extensions our .b2e scripts emit. CArcB2e::arc() uses this to
-    // strip only a real archive extension when deriving the output base name, so a
-    // dotted source name like "111.222.333.444" is preserved (matches AileEx).
-    // Replaces Noah's positional extnum() cut, which collapsed such names to "111".
+    // True when `ext` (a single dot-separated token, no leading dot) is an archive
+    // extension handled by a loaded .b2e script. Driven entirely by the scripts —
+    // no hardcoded extension list — so user-added formats (e.g. zpaq) are recognized
+    // and the engine agrees with the UI. CArcB2e::arc() also recognizes the
+    // extension that the running (arc.XXX) is re-applying (e.g. .exe for SFX), so
+    // output-only extensions need no special case here either.
     bool isArcExt(const wchar_t* ext) const {
-        static const wchar_t* const k[] = {
-            L"7z", L"zip", L"zipx", L"rar",
-            L"tar", L"gz", L"bz2", L"xz", L"zst", L"liz", L"lz4", L"lz5", L"br",
-            L"cab", L"lzh", L"rpm", L"cpio",
-            L"exe",
-        };
-        for (const wchar_t* t : k)
-            if (_wcsicmp(ext, t) == 0) return true;
-        return false;
+        if (!ext || !ext[0]) return false;
+        return B2e_IsArchiveExt(ext);
     }
 };
 
