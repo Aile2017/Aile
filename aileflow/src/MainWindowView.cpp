@@ -33,7 +33,8 @@ void MainWindow::OnTreeSelChanged() {
 }
 
 void MainWindow::OnListBeginDrag() {
-    if (m_archivePath.empty() || m_items.empty()) return;
+    if (!m_session.IsOpen() || m_session.Items().empty()) return;
+    const auto& items = m_session.Items();
 
     // Collect selected file indices (skip directories and virtual folders).
     std::vector<UINT32> indices;
@@ -42,7 +43,7 @@ void MainWindow::OnListBeginDrag() {
         LVITEMW lvi = {}; lvi.iItem = item; lvi.mask = LVIF_PARAM;
         ListView_GetItem(m_hListView, &lvi);
         UINT32 idx = (UINT32)lvi.lParam;
-        if (idx < (UINT32)m_items.size() && !m_items[idx].isDir)
+        if (idx < (UINT32)items.size() && !items[idx].isDir)
             indices.push_back(idx);
     }
     if (indices.empty()) return;
@@ -51,14 +52,14 @@ void MainWindow::OnListBeginDrag() {
     if (!EnsureTempViewDir(I18n::Tr(IDS_ERR_EXTRACT_FILE_FAILED).c_str())) return;
 
     // Extract selected files to the temp dir.
-    const wchar_t* pw = m_password.empty() ? nullptr : m_password.c_str();
-    HRESULT hr = m_backend->Extract(indices, m_tempViewDir.c_str(), pw, nullptr);
+    const wchar_t* pw = m_session.Password().empty() ? nullptr : m_session.Password().c_str();
+    HRESULT hr = m_session.Backend()->Extract(indices, m_tempViewDir.c_str(), pw, nullptr);
     if (FAILED(hr)) return;
 
     // Build local filesystem paths for HDROP.
     std::vector<std::wstring> localPaths;
     for (UINT32 idx : indices) {
-        std::wstring rel = m_items[idx].path;
+        std::wstring rel = items[idx].path;
         for (auto& c : rel) if (c == L'/') c = L'\\';
         localPaths.push_back(m_tempViewDir + rel);
     }
@@ -86,16 +87,16 @@ void MainWindow::OnListDblClick() {
 
     // Handle ".." (parent directory)
     if (arcIdx == UINT32_MAX) {
-        if (m_currentFolderPath.empty()) return;
+        if (m_session.CurrentFolder().empty()) return;
         
         // Find parent folder path
-        size_t lastSlash = m_currentFolderPath.find_last_of(L"/\\");
+        size_t lastSlash = m_session.CurrentFolder().find_last_of(L"/\\");
         std::wstring parentPath = (lastSlash != std::wstring::npos) ?
-            m_currentFolderPath.substr(0, lastSlash) : L"";
+            m_session.CurrentFolder().substr(0, lastSlash) : L"";
         
-        // Find parent folder in m_folderPaths and navigate
-        for (int i = 0; i < (int)m_folderPaths.size(); ++i) {
-            if (m_folderPaths[i] == parentPath) {
+        // Find parent folder in m_session.FolderPaths() and navigate
+        for (int i = 0; i < (int)m_session.FolderPaths().size(); ++i) {
+            if (m_session.FolderPaths()[i] == parentPath) {
                 // Navigate via TreeView (same as folder navigation)
                 std::function<HTREEITEM(HTREEITEM)> findItem = [&](HTREEITEM h) -> HTREEITEM {
                     while (h) {
@@ -143,19 +144,19 @@ void MainWindow::OnListDblClick() {
         }
     };
 
-    if (arcIdx < (UINT32)m_items.size() && m_items[arcIdx].isDir) {
-        // Folder with actual entry in m_items
-        const std::wstring& targetPath = m_items[arcIdx].path;
-        for (int i = 0; i < (int)m_folderPaths.size(); ++i) {
-            if (m_folderPaths[i] == targetPath) {
+    if (arcIdx < (UINT32)m_session.Items().size() && m_session.Items()[arcIdx].isDir) {
+        // Folder with actual entry in m_session.Items()
+        const std::wstring& targetPath = m_session.Items()[arcIdx].path;
+        for (int i = 0; i < (int)m_session.FolderPaths().size(); ++i) {
+            if (m_session.FolderPaths()[i] == targetPath) {
                 navigateToFolderIndex(i);
                 break;
             }
         }
-    } else if (arcIdx >= (UINT32)m_items.size()) {
+    } else if (arcIdx >= (UINT32)m_session.Items().size()) {
         // Virtual folder (entries omitted by unrar.dll etc.)
-        int fpIdx = (int)(arcIdx - (UINT32)m_items.size());
-        if (fpIdx < (int)m_folderPaths.size())
+        int fpIdx = (int)(arcIdx - (UINT32)m_session.Items().size());
+        if (fpIdx < (int)m_session.FolderPaths().size())
             navigateToFolderIndex(fpIdx);
     } else {
         // File → open with associated application
@@ -164,7 +165,7 @@ void MainWindow::OnListDblClick() {
 }
 
 void MainWindow::OnOpenAssoc() {
-    if (m_archivePath.empty()) return;
+    if (!m_session.IsOpen()) return;
 
     App& app = App::Instance();
     if (!Ensure7zLoaded()) return;
@@ -180,9 +181,9 @@ void MainWindow::OnOpenAssoc() {
     lvi.mask  = LVIF_PARAM;
     ListView_GetItem(m_hListView, &lvi);
     UINT32 idx = (UINT32)lvi.lParam;
-    if (idx >= (UINT32)m_items.size()) return;
+    if (idx >= (UINT32)m_session.Items().size()) return;
 
-    const ArchiveItem& it = m_items[idx];
+    const ArchiveItem& it = m_session.Items()[idx];
     if (it.isDir) {
         MessageBoxW(m_hwnd, I18n::Tr(IDS_INFO_FOLDERS_NOT_VIEWABLE).c_str(),
                     I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONINFORMATION);
@@ -192,23 +193,24 @@ void MainWindow::OnOpenAssoc() {
     // If password not yet known, check whether target item is encrypted and prompt.
     // Note: in B2E mode B2e_List() never sets ArchiveItem::encrypted, so this is
     // a no-op for B2E archives. It guards against future non-B2E paths.
-    if (m_password.empty() && it.encrypted) {
-        m_password = PromptPassword();
-        if (m_password.empty()) return;
+    if (m_session.Password().empty() && it.encrypted) {
+        std::wstring pw = PromptPassword();
+        if (pw.empty()) return;
+        m_session.SetPassword(std::move(pw));
     }
 
     // Create a session-unique temp dir on first use (deleted on exit)
     if (!EnsureTempViewDir(I18n::Tr(IDS_ERR_EXTRACT_FILE_FAILED).c_str())) return;
 
-    // Copy data needed after the worker loop — m_items/m_archivePath may change
+    // Copy data needed after the worker loop — the session may change
     // if the user opens another archive during message dispatch.
     std::vector<UINT32> indices    = { idx };
     std::wstring        itemPath   = it.path;
-    std::wstring        password   = m_password;
+    std::wstring        password   = m_session.Password();
     std::wstring        tmpDir     = m_tempViewDir;
-    // The window is disabled for the duration, so m_backend cannot be replaced
+    // The window is disabled for the duration, so the backend cannot be replaced
     // by a re-open while the worker runs; capturing the raw pointer is safe.
-    IArchiveBackend* backend = m_backend.get();
+    IArchiveBackend* backend = m_session.Backend();
 
     HWND uiHwnd = m_hwnd;
     EnableWindow(m_hwnd, FALSE);
@@ -266,20 +268,20 @@ static int GetIconIndex(const std::wstring& name, bool isDir);  // forward decl
 
 void MainWindow::PopulateTree() {
     TreeView_DeleteAllItems(m_hTreeView);
-    m_folderPaths.clear();
+    const auto& items = m_session.Items();
 
     // Build a set of paths that are definitively files (isDir=false).
     // These must never appear as folder nodes in the tree, even if some archive
     // format incorrectly sets isDir=true for the same path.
     std::set<std::wstring> filePaths;
-    for (auto& it : m_items) {
+    for (auto& it : items) {
         if (!it.isDir) filePaths.insert(it.path);
     }
 
     // Collect all unique folder paths from items
     std::set<std::wstring> folderSet;
     folderSet.insert(L"");  // root (index 0)
-    for (auto& it : m_items) {
+    for (auto& it : items) {
         // Add explicit directory entry (skip if same path is also a file entry)
         if (it.isDir && !it.path.empty() && !filePaths.count(it.path))
             folderSet.insert(it.path);
@@ -294,17 +296,20 @@ void MainWindow::PopulateTree() {
         }
     }
 
-    // m_folderPaths[0] == "" (root), rest sorted alphabetically
-    m_folderPaths.assign(folderSet.begin(), folderSet.end());
+    // folderPaths[0] == "" (root), rest sorted alphabetically. Stored on the
+    // session; a local copy drives the rest of this build.
+    std::vector<std::wstring> folderPaths(folderSet.begin(), folderSet.end());
+    m_session.SetFolderPaths(folderPaths);
 
     // Build HTREEITEM map: folderPath → HTREEITEM
     std::map<std::wstring, HTREEITEM> treeItems;
 
-    const wchar_t* leaf = wcsrchr(m_archivePath.c_str(), L'\\');
-    std::wstring rootName = leaf ? (leaf + 1) : m_archivePath;
+    const std::wstring& archivePath = m_session.ArchivePath();
+    const wchar_t* leaf = wcsrchr(archivePath.c_str(), L'\\');
+    std::wstring rootName = leaf ? (leaf + 1) : archivePath;
 
     // Icon indices: archive file icon for root, closed/open folder icons for sub-nodes
-    int icoArchive = GetIconIndex(m_archivePath, false);
+    int icoArchive = GetIconIndex(archivePath, false);
     if (m_iconIndexFolder < 0)
         m_iconIndexFolder = GetIconIndex(L"folder", true);
     int icoFolder  = m_iconIndexFolder;
@@ -315,15 +320,15 @@ void MainWindow::PopulateTree() {
 
     tvi.hParent           = TVI_ROOT;
     tvi.item.pszText      = const_cast<wchar_t*>(rootName.c_str());
-    tvi.item.lParam       = 0;  // index into m_folderPaths
+    tvi.item.lParam       = 0;  // index into folderPaths
     tvi.item.iImage       = icoArchive;
     tvi.item.iSelectedImage = icoArchive;
     HTREEITEM hRoot       = TreeView_InsertItem(m_hTreeView, &tvi);
     treeItems[L""]        = hRoot;
 
     // Insert sub-folders in sorted order (parents guaranteed to appear before children)
-    for (int i = 1; i < (int)m_folderPaths.size(); ++i) {
-        const std::wstring& fp = m_folderPaths[i];
+    for (int i = 1; i < (int)folderPaths.size(); ++i) {
+        const std::wstring& fp = folderPaths[i];
 
         // Parent path
         std::wstring parentPath;
@@ -378,7 +383,9 @@ static int GetIconIndex(const std::wstring& name, bool isDir) {
 
 void MainWindow::PopulateList(const std::wstring& folderPath) {
     ListView_DeleteAllItems(m_hListView);
-    m_currentFolderPath = folderPath;  // Store current folder
+    m_session.SetCurrentFolder(folderPath);  // Store current folder
+    const auto& items       = m_session.Items();
+    const auto& folderPaths = m_session.FolderPaths();
 
     // Add ".." (parent directory) at the beginning if not at root
     if (!folderPath.empty()) {
@@ -405,8 +412,8 @@ void MainWindow::PopulateList(const std::wstring& folderPath) {
     // Collect items belonging to this folder, split into dirs and files
     struct Row { const ArchiveItem* it; };
     std::vector<Row> dirs, files;
-    std::set<std::wstring> explicitDirPaths;  // folder paths actually present in m_items
-    for (auto& it : m_items) {
+    std::set<std::wstring> explicitDirPaths;  // folder paths actually present in items
+    for (auto& it : items) {
         std::wstring itemDir;
         auto pos = it.path.find_last_of(L"/\\");
         if (pos != std::wstring::npos) itemDir = it.path.substr(0, pos);
@@ -459,13 +466,13 @@ void MainWindow::PopulateList(const std::wstring& folderPath) {
     rows.insert(rows.end(), files.begin(), files.end());
 
     // For archives where folder entries are omitted (e.g. unrar.dll):
-    // search m_folderPaths for immediate child folders of folderPath; add any that have no
-    // real entry in m_items as virtual folder rows prepended before real folder rows.
-    // Identified by lParam = m_items.size() + m_folderPaths index.
+    // search folderPaths for immediate child folders of folderPath; add any that have no
+    // real entry in items as virtual folder rows prepended before real folder rows.
+    // Identified by lParam = items.size() + folderPaths index.
     struct VirtualDirRow { std::wstring name; int fpIdx; };
     std::vector<VirtualDirRow> virtualDirs;
-    for (int i = 1; i < (int)m_folderPaths.size(); ++i) {
-        const std::wstring& fp = m_folderPaths[i];
+    for (int i = 1; i < (int)folderPaths.size(); ++i) {
+        const std::wstring& fp = folderPaths[i];
         // Check whether fp is a direct child of folderPath
         std::wstring parentPath;
         auto slash = fp.find_last_of(L"/\\");
@@ -495,8 +502,8 @@ void MainWindow::PopulateList(const std::wstring& folderPath) {
         lvi.mask     = LVIF_TEXT | LVIF_PARAM | LVIF_IMAGE;
         lvi.iItem    = row;
         lvi.iSubItem = 0;
-        // Identify as virtual folder via an offset outside the m_items range
-        lvi.lParam   = (LPARAM)((UINT32)m_items.size() + (UINT32)vd.fpIdx);
+        // Identify as virtual folder via an offset outside the items range
+        lvi.lParam   = (LPARAM)((UINT32)items.size() + (UINT32)vd.fpIdx);
         lvi.iImage   = icoFolder;
         lvi.pszText  = const_cast<wchar_t*>(vd.name.c_str());
         ListView_InsertItem(m_hListView, &lvi);
@@ -605,8 +612,8 @@ void MainWindow::OnColumnClick(int col) {
 void MainWindow::SelectTreeFolder(const std::wstring& folderPath) {
     if (!m_hTreeView) return;
     int targetIdx = -1;
-    for (int i = 0; i < (int)m_folderPaths.size(); ++i) {
-        if (m_folderPaths[i] == folderPath) { targetIdx = i; break; }
+    for (int i = 0; i < (int)m_session.FolderPaths().size(); ++i) {
+        if (m_session.FolderPaths()[i] == folderPath) { targetIdx = i; break; }
     }
     if (targetIdx < 0) return;
 
@@ -639,8 +646,8 @@ std::wstring MainWindow::SelectedFolderPath() const {
     TreeView_GetItem(m_hTreeView, &tvi);
 
     int idx = (int)tvi.lParam;
-    if (idx >= 0 && idx < (int)m_folderPaths.size())
-        return m_folderPaths[idx];
+    if (idx >= 0 && idx < (int)m_session.FolderPaths().size())
+        return m_session.FolderPaths()[idx];
     return L"";
 }
 

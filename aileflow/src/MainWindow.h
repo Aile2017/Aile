@@ -10,6 +10,7 @@
 #include "WorkerThread.h"
 #include "CompressDlg.h"
 #include "IArchiveBackend.h"
+#include "ArchiveSession.h"
 
 class MainWindow {
 public:
@@ -82,7 +83,7 @@ private:
     void PopulateTree();
     void PopulateList(const std::wstring& folderPath);
     std::wstring SelectedFolderPath() const;
-    // Search `m_folderPaths` for `folderPath` and select it in the tree. Does nothing if not found.
+    // Search the session's folder list for `folderPath` and select it in the tree. Does nothing if not found.
     void SelectTreeFolder(const std::wstring& folderPath);
     void ShowError(const wchar_t* msg, HRESULT hr = 0);
     // Returns false and shows error if B2E engine is not loaded.
@@ -107,17 +108,9 @@ private:
     HFONT       m_hFont        = nullptr;
 
     std::wstring             m_extractDestOverride;  // Set by -d option or [...] browse; overrides settings
-    std::wstring             m_archivePath;          // Display path (e.g. xx.001)
-    std::wstring             m_effectiveArchivePath; // Operative path (differs from m_archivePath only when a split archive is auto-unwrapped)
-    std::wstring             m_password;             // Password used to open the current archive (empty if none)
-    bool                     m_isReadOnly      = false;  // Write operations disabled (e.g. split auto-unwrap)
-    // Polymorphic backend bound to the currently open archive (single B2E-backed
-    // SevenZipBackend for AileFlow). Operations dispatch through this rather than
-    // talking to SevenZip directly (backend-interface-refactor.md Step 3).
-    std::unique_ptr<IArchiveBackend> m_backend;
-    std::vector<ArchiveItem> m_items;
-    std::vector<std::wstring> m_folderPaths;  // sorted; index matches TreeView lParam
-    std::wstring             m_currentFolderPath; // currently displayed folder in ListView
+    // Archive-domain state (open archive's paths, password, backend, listing).
+    // Holds the responsibilities that used to live directly on MainWindow.
+    ArchiveSession           m_session;
     WorkerThread             m_worker;
     ProgressPostSink*        m_pSink = nullptr;
     std::wstring             m_tempViewDir;   // session temp dir; deleted on exit

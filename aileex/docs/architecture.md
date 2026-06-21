@@ -205,14 +205,21 @@ be revisited without re-running the whole analysis.
 
 ### Main concerns
 
-1. **`MainWindow` is a controller-heavy class.**
+1. **`MainWindow` is a controller-heavy class.** *(Partially addressed.)*
    It owns window layout and message handling, but also archive open/extract/test/add/delete
    workflows, password prompting, MRU updates, temporary file lifecycle, and backend selection.
-   To contain this, its definition is now split across three translation units by concern —
+   To contain this, its definition is split across three translation units by concern —
    `MainWindow.cpp` (window/message/menu core), `MainWindowView.cpp` (tree/list display) and
    `MainWindowOps.cpp` (archive operations) — sharing leaf helpers via `MainWindowInternal.h`.
-   This is organizational only (one class, unchanged behavior); the UI and archive-domain
-   responsibilities still live on the same object, so further decoupling remains possible.
+   The archive-**domain** state and lifecycle have since moved off `MainWindow` into a UI-free
+   `ArchiveSession` (`common/ArchiveSession.{h,cpp}`, shared by both apps): the open archive's
+   display/effective paths, password, read-only flag, backend, and listing, plus `Adopt()`/`Close()`
+   (with split-unwrap temp cleanup) and domain helpers (`SelectionNeedsPassword`, capability
+   forwards). Each app's `MainWindow` keeps its open glue (AileEx `ArchiveOpener`, AileFlow B2E)
+   and all UI orchestration (dialogs, progress, worker), routing domain access through `m_session`.
+   What remains is the operation *orchestration* itself — the three `MainWindow*.cpp` files still
+   drive each workflow (prompt → progress → worker → post-process) on the window object; extracting
+   those into controller/service objects is the next step.
 
 2. **`App` acts as a singleton service locator plus startup orchestrator.**
    `App::Instance()` exposes `Settings`, `SevenZip`, and `UnrarDll` globally, while `App.cpp`
@@ -250,8 +257,9 @@ change behavior.
 
 Remaining (each to be considered on its own, behavior-touching so higher risk):
 
-- Split archive operation orchestration out of `MainWindow` into smaller services or session objects
-  (the three `MainWindow*.cpp` files are still one class mixing UI and archive-domain concerns).
+- Split archive operation *orchestration* out of `MainWindow` into smaller services or controllers.
+  The archive-domain state/lifecycle now lives in `ArchiveSession` (concern #1, done); what remains
+  is that the three `MainWindow*.cpp` files still drive each workflow's UI sequence on the window.
 - Reduce `SevenZip` scope further by separating pure 7z.dll adaptation from higher-level archive
   session features (`effectivePath`, item caching, split unwrap) that still leak to callers (concern #3).
 - Decouple `App` from its singleton/service-locator role toward explicit dependency injection (concern #2).

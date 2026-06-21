@@ -33,6 +33,7 @@ set(AILEFLOW_UI_SOURCES
     ${COMMON_DIR}/I18n.cpp
     ${COMMON_DIR}/WorkerThread.cpp
     ${COMMON_DIR}/ProgressDlg.cpp
+    ${COMMON_DIR}/ArchiveSession.cpp
 )
 
 # kilib + B2E engine (no STL, no exceptions, no RTTI — kilib convention)

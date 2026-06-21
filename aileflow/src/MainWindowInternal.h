@@ -96,7 +96,7 @@ inline std::wstring TopLevelName(const std::wstring& path) {
     return path.substr(0, sep);
 }
 
-// Return top-level entry count from archive m_items (unique first path components)
+// Return top-level entry count from the archive items (unique first path components)
 inline int CountTopLevelEntries(const std::vector<ArchiveItem>& items) {
     std::set<std::wstring> tops;
     for (const auto& item : items) {

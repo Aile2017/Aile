@@ -252,11 +252,8 @@ LRESULT MainWindow::HandleMsg(UINT msg, WPARAM wp, LPARAM lp) {
             fop.fFlags = FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
             SHFileOperationW(&fop);
         }
-        // split auto-unwrap: clean up any temporary file created
-        if (!m_effectiveArchivePath.empty() &&
-            _wcsicmp(m_effectiveArchivePath.c_str(), m_archivePath.c_str()) != 0) {
-            DeleteFileW(m_effectiveArchivePath.c_str());
-        }
+        // split auto-unwrap: delete any temporary file created (also clears state)
+        m_session.Close();
         // Clean up font
         if (m_hFont) DeleteObject(m_hFont);
         if (m_hToolbarImages) ImageList_Destroy(m_hToolbarImages);
@@ -554,14 +551,14 @@ void MainWindow::UpdateExtractDestEdit() {
     } else {
         // Same-as-source mode: show the archive's parent directory, or empty if none open.
         std::wstring dir;
-        if (!m_archivePath.empty()) {
+        if (m_session.IsOpen()) {
             // Normalize to absolute path so relative-path args (e.g. "test.zip") resolve correctly.
             wchar_t full[MAX_PATH] = {};
             std::wstring abs;
-            if (GetFullPathNameW(m_archivePath.c_str(), MAX_PATH, full, nullptr) != 0)
+            if (GetFullPathNameW(m_session.ArchivePath().c_str(), MAX_PATH, full, nullptr) != 0)
                 abs = full;
             else
-                abs = m_archivePath;
+                abs = m_session.ArchivePath();
             auto sl = abs.find_last_of(L"\\/");
             dir = (sl != std::wstring::npos) ? abs.substr(0, sl) : L"";
         }
@@ -594,7 +591,7 @@ void MainWindow::OnDropFiles(HDROP hDrop) {
         OpenArchive(archives[0].c_str()); // open first archive
     } else if (!regular.empty()) {
         // If archive currently open and writable, let user choose add vs. create new
-        bool canAdd = !m_archivePath.empty() && !m_isReadOnly;
+        bool canAdd = m_session.IsOpen() && !m_session.IsReadOnly();
         bool addToCurrent = false;
         if (canAdd) {
             // Show only 1-2 filenames for specificity
@@ -607,7 +604,7 @@ void MainWindow::OnDropFiles(HDROP hDrop) {
             }
             if (regular.size() > 2) sample += I18n::Tr(IDS_DND_ELLIPSIS);
 
-            std::wstring arcLeaf = m_archivePath;
+            std::wstring arcLeaf = m_session.ArchivePath();
             {
                 auto sl = arcLeaf.find_last_of(L"\\/");
                 if (sl != std::wstring::npos) arcLeaf = arcLeaf.substr(sl + 1);
@@ -712,9 +709,9 @@ void MainWindow::OnCommand(WORD id) {
 }
 
 void MainWindow::OnContextMenu(HWND /*hwndFrom*/, int x, int y) {
-    if (m_archivePath.empty()) return;
+    if (!m_session.IsOpen()) return;
 
-    bool canDelete = m_backend && m_backend->CanDelete() && !m_isReadOnly;
+    bool canDelete = m_session.CanDelete() && !m_session.IsReadOnly();
     int selCount  = ListView_GetSelectedCount(m_hListView);
 
     HMENU hMenu = CreatePopupMenu();
@@ -889,9 +886,10 @@ void MainWindow::OnToggleMenubar() {
 // so EnableMenuItem returns -1 without side effects when an ID is not in this popup.
 // Safe to call for all commands every time.
 void MainWindow::OnInitMenuPopup(HMENU hMenu) {
-    bool hasArchive = !m_archivePath.empty();
-    bool readOnly   = m_isReadOnly;
+    bool hasArchive = m_session.IsOpen();
+    bool readOnly   = m_session.IsReadOnly();
     int  selCount   = m_hListView ? ListView_GetSelectedCount(m_hListView) : 0;
+    IArchiveBackend* backend = m_session.Backend();
 
     auto setEnabled = [hMenu](UINT id, bool enabled) {
         EnableMenuItem(hMenu, id, MF_BYCOMMAND | (enabled ? MF_ENABLED : MF_GRAYED));
@@ -900,11 +898,11 @@ void MainWindow::OnInitMenuPopup(HMENU hMenu) {
     setEnabled(ID_CLOSE,      hasArchive);
     setEnabled(ID_EXTRACT,    hasArchive);
     setEnabled(ID_EXTRACT_SELECTED, hasArchive && selCount > 0);
-    setEnabled(ID_TEST,       hasArchive && m_backend && m_backend->CanTest());
+    setEnabled(ID_TEST,       hasArchive && backend && backend->CanTest());
     setEnabled(ID_OPEN_ASSOC, hasArchive);
-    setEnabled(ID_ADD_TO_CURRENT, hasArchive && m_backend && m_backend->CanAdd() && !readOnly);
+    setEnabled(ID_ADD_TO_CURRENT, hasArchive && backend && backend->CanAdd() && !readOnly);
     setEnabled(ID_DELETE,     hasArchive && selCount > 0
-                              && m_backend && m_backend->CanDelete() && !readOnly);
+                              && backend && backend->CanDelete() && !readOnly);
 
     CheckMenuItem(hMenu, IDM_VIEW_TREE,
                   MF_BYCOMMAND | (m_treeVisible ? MF_CHECKED : MF_UNCHECKED));

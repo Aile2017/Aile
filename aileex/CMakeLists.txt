@@ -47,6 +47,7 @@ add_executable(AileEx WIN32
     ${COMMON_DIR}/I18n.cpp
     ${COMMON_DIR}/WorkerThread.cpp
     ${COMMON_DIR}/ProgressDlg.cpp
+    ${COMMON_DIR}/ArchiveSession.cpp
     res/AileEx.rc
 )
 

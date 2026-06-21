@@ -254,11 +254,8 @@ LRESULT MainWindow::HandleMsg(UINT msg, WPARAM wp, LPARAM lp) {
             fop.fFlags = FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
             SHFileOperationW(&fop);
         }
-        // split auto-unwrap: clean up any temporary file created
-        if (!m_effectiveArchivePath.empty() &&
-            _wcsicmp(m_effectiveArchivePath.c_str(), m_archivePath.c_str()) != 0) {
-            DeleteFileW(m_effectiveArchivePath.c_str());
-        }
+        // split auto-unwrap: delete any temporary file created (also clears state)
+        m_session.Close();
         // Clean up font
         if (m_hFont) DeleteObject(m_hFont);
         if (m_hToolbarImages) ImageList_Destroy(m_hToolbarImages);
@@ -557,14 +554,14 @@ void MainWindow::UpdateExtractDestEdit() {
     } else {
         // Same-as-source mode: show the archive's parent directory, or empty if none open.
         std::wstring dir;
-        if (!m_archivePath.empty()) {
+        if (m_session.IsOpen()) {
             // Normalize to absolute path so relative-path args (e.g. "test.zip") resolve correctly.
             wchar_t full[MAX_PATH] = {};
             std::wstring abs;
-            if (GetFullPathNameW(m_archivePath.c_str(), MAX_PATH, full, nullptr) != 0)
+            if (GetFullPathNameW(m_session.ArchivePath().c_str(), MAX_PATH, full, nullptr) != 0)
                 abs = full;
             else
-                abs = m_archivePath;
+                abs = m_session.ArchivePath();
             auto sl = abs.find_last_of(L"\\/");
             dir = (sl != std::wstring::npos) ? abs.substr(0, sl) : L"";
         }
@@ -599,7 +596,7 @@ void MainWindow::OnDropFiles(HDROP hDrop) {
 
     if (!regular.empty()) {
         // If archive currently open and writable, let user choose add vs. create new
-        bool canAdd = !m_archivePath.empty() && m_backend && m_backend->CanAdd() && !m_isReadOnly;
+        bool canAdd = m_session.IsOpen() && m_session.CanAdd() && !m_session.IsReadOnly();
         bool addToCurrent = false;
         if (canAdd) {
             // Show only 1-2 filenames for specificity
@@ -614,7 +611,7 @@ void MainWindow::OnDropFiles(HDROP hDrop) {
 
             wchar_t arcLeaf[MAX_PATH];
             {
-                std::wstring a = m_archivePath;
+                std::wstring a = m_session.ArchivePath();
                 auto sl = a.find_last_of(L"\\/");
                 wcscpy_s(arcLeaf, (sl != std::wstring::npos) ? a.substr(sl + 1).c_str() : a.c_str());
             }
@@ -734,9 +731,9 @@ void MainWindow::OnCommand(WORD id) {
 }
 
 void MainWindow::OnContextMenu(HWND /*hwndFrom*/, int x, int y) {
-    if (m_archivePath.empty()) return;
+    if (!m_session.IsOpen()) return;
 
-    bool canDelete = m_backend && m_backend->CanDelete() && !m_isReadOnly;
+    bool canDelete = m_session.CanDelete() && !m_session.IsReadOnly();
     int selCount  = ListView_GetSelectedCount(m_hListView);
 
     HMENU hMenu = CreatePopupMenu();
@@ -994,11 +991,11 @@ void MainWindow::OnToggleMenubar() {
 // so EnableMenuItem returns -1 without side effects when an ID is not in this popup.
 // Safe to call for all commands every time.
 void MainWindow::OnInitMenuPopup(HMENU hMenu) {
-    bool hasArchive = !m_archivePath.empty();
+    bool hasArchive = m_session.IsOpen();
     int  selCount   = m_hListView ? ListView_GetSelectedCount(m_hListView) : 0;
     // Enablement follows the bound backend's capabilities.
-    bool canAdd     = hasArchive && m_backend && m_backend->CanAdd() && !m_isReadOnly;
-    bool canDelete  = hasArchive && m_backend && m_backend->CanDelete() && !m_isReadOnly;
+    bool canAdd     = hasArchive && m_session.CanAdd() && !m_session.IsReadOnly();
+    bool canDelete  = hasArchive && m_session.CanDelete() && !m_session.IsReadOnly();
 
     auto setEnabled = [hMenu](UINT id, bool enabled) {
         EnableMenuItem(hMenu, id, MF_BYCOMMAND | (enabled ? MF_ENABLED : MF_GRAYED));
@@ -1036,10 +1033,10 @@ void MainWindow::OnInfo() {
     lvi.mask  = LVIF_PARAM;
     ListView_GetItem(m_hListView, &lvi);
     UINT32 arcIdx = (UINT32)lvi.lParam;
-    if (arcIdx >= (UINT32)m_items.size()) return;
+    if (arcIdx >= (UINT32)m_session.Items().size()) return;
 
     InfoDlg dlg;
-    dlg.Show(m_hwnd, m_items[arcIdx]);
+    dlg.Show(m_hwnd, m_session.Items()[arcIdx]);
 }
 
 void MainWindow::ShowError(const wchar_t* msg, HRESULT hr) {
