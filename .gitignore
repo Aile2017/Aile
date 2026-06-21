@@ -44,3 +44,5 @@ Thumbs.db
 
 # Stray root-level scratch dir (a test archive 'a/b2e.7z' was once committed here)
 /a/
+
+.rtk/
