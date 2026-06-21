@@ -39,6 +39,7 @@ AileEx/
 │   ├── SevenZipRead.cpp           — read ops: OpenArchive (enumerate + split/tar unwrap), Test, Extract
 │   ├── SevenZipWrite.cpp          — write ops: Compress (split volumes + SFX), AddToArchive, DeleteItems
 │   ├── SevenZipInternal.h         — PropToUInt64 (helper shared between SevenZip.cpp and SevenZipRead.cpp)
+│   ├── SevenZipCache.h/.cpp       — format-by-path + items-by-key (LRU) caches owned by SevenZip
 │   ├── SevenZipStreams.h/.cpp     — COM stream wrappers (CInFileStream/COutFileStream/CTempOutStream/CMultiVolOutStream) + ConcatFiles/ParseVolumeSize
 │   ├── SevenZipCallbacks.h/.cpp   — COM callbacks (COpen*/CTar*/CExtract*/CTest*/CUpdate*/CDelete*/CAdd*) + SrcEntry/EnumeratePaths/CanonicalizePath
 │   ├── FormatRegistry.h/.cpp      — Format/codec registry (ext→CLSID, writable formats, encoders, filters); composed by SevenZip
@@ -228,11 +229,17 @@ be revisited without re-running the whole analysis.
    also owns message-loop startup modes (`browse`, `compress`, `extract`, `test`). This keeps
    call sites short, but hides dependencies and makes isolated testing or backend substitution harder.
 
-3. **`SevenZip` is wider than a normal backend wrapper.**
-   Besides 7z.dll loading, it also owns format enumeration, split-volume handling, RAR fallback,
-   temp-file unwrap logic, item caching, comment/property helpers, and many COM callback classes.
-   The result is a useful but broad abstraction whose internal compatibility rules leak into callers
-   through concepts such as `effectivePath`, cache invalidation, and format-specific caveats.
+3. **`SevenZip` is wider than a normal backend wrapper.** *(Partially addressed.)*
+   Besides 7z.dll loading it once also held, inline, the format/codec database, the format- and
+   item-listing caches, RAR5→RAR4 fallback, and the tar-in-stream / split-volume temp-unwrap logic.
+   These have been factored into focused units: format/codec → `FormatRegistry`; caches →
+   `SevenZipCache` (format-by-path + items-by-key LRU, with per-path invalidation); transparent
+   unwrap → `UnwrapTarStream` / `UnwrapSplitVolume` (so `OpenArchive` is open + enumerate). COM
+   plumbing already lives in `SevenZipStreams` / `SevenZipCallbacks`. What remains is the *public*
+   shape: `OpenArchive` still returns `effectivePath` and the path-based API carries format-specific
+   caveats. That leak is now contained by `ArchiveSession` (which owns the temp lifecycle), and the
+   API itself is frozen by the cross-app `SevenZip.h` contract, so narrowing it further is out of
+   scope unless that contract is revisited.
 
 4. **Archive backend behavior is selected by flags instead of polymorphism.** *(Resolved.)*
    `MainWindow` previously relied on flags such as `m_openedWithUnrar`. Backend/session state now lives
@@ -261,10 +268,12 @@ Also done (concern #1): archive domain state moved to `ArchiveSession`, then ope
 moved to `ArchiveController` behind an `IArchiveUI` seam (both apps). `MainWindow` is now window + view +
 UI-services, with operation logic in the controller.
 
+Also done (concern #3, internal): `SevenZip`'s caches and tar/split unwrap moved into `SevenZipCache`
+and `UnwrapTarStream`/`UnwrapSplitVolume`, leaving `OpenArchive` as open + enumerate. The remaining
+public-API leak (`effectivePath`) is contained by `ArchiveSession` and frozen by the cross-app contract.
+
 Remaining (each to be considered on its own, behavior-touching so higher risk):
 
-- Reduce `SevenZip` scope further by separating pure 7z.dll adaptation from higher-level archive
-  session features (`effectivePath`, item caching, split unwrap) that still leak to callers (concern #3).
 - Decouple `App` from its singleton/service-locator role toward explicit dependency injection (concern #2).
 - Move archive policy (extension rewriting, default format/method) out of dialog code (concern #6).
 
