@@ -45,6 +45,11 @@ std::vector<std::wstring> B2e_GetComponentVersions();
 // by a .b2e script (for listing or extraction).
 bool B2e_IsArchiveExt(const wchar_t* ext);
 
+// Returns "*.7z;*.zip;..." built from every extension handled by a loaded .b2e
+// script. Used as the open dialog's archive filter so it tracks the scripts.
+// Empty when no scripts are present.
+std::wstring B2e_GetExtensionFilterPattern();
+
 // List archive contents.
 // Returns S_OK and fills items on success.
 // Returns E_NOTIMPL if the extension has no .b2e handler.
