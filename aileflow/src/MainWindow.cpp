@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 #include "App.h"
 #include "CompressDlg.h"
+#include "CompressPolicy.h"
 #include "DialogUtils.h"
 #include "I18n.h"
 #include "ProgressDlg.h"
@@ -621,13 +622,13 @@ void MainWindow::OnDropFiles(HDROP hDrop) {
         } else {
             CompressDlg::Params params;
             params.inputFiles  = std::move(regular);
-            params.LoadFromSettings(m_svc.settings);
+            CompressPolicy::Load(params, m_svc.settings);
             params.outputPath  = DefaultOutputPath(m_svc.settings, params.inputFiles);
 
             CompressDlg dlg;
             if (dlg.Show(m_hwnd, params)) {
                 auto& s = m_svc.settings;
-                params.SaveToSettings(s);
+                CompressPolicy::Save(params, s);
                 s.Save();
                 OnCompress(params, /*openAfterCompress=*/true);
             }
