@@ -25,7 +25,8 @@ AileEx/
 │   ├── MainWindowInternal.h       — file-local helpers shared by the three MainWindow TUs
 │   ├── ArchiveController.h/.cpp    — archive operation orchestration (open/extract/test/add/delete/comment/compress)
 │   ├── IArchiveUI.h               — UI-services seam between ArchiveController and MainWindow
-│   ├── CompressDlg.h/.cpp         — Compression settings dialog
+│   ├── CompressDlg.h/.cpp         — Compression settings dialog (input gathering)
+│   ├── CompressPolicy.h/.cpp      — Archive policy: settings persistence, format/method/SFX + extension rules (shared by dialog + CLI)
 │   ├── AdvancedCompressDlg.h/.cpp — 7z/ZIP advanced compression options (dict/word/solid/threads/extra)
 │   ├── RarAdvancedDlg.h/.cpp      — RAR advanced compression options (recovery/volume etc.)
 │   ├── CompressHelper.h/.cpp      — Single entry point for RAR compression (`RunRarCompressSync`)
@@ -258,10 +259,13 @@ be revisited without re-running the whole analysis.
    (`SevenZipBackend`, `RarBackend`), removing the ad-hoc cross-backend branching in `MainWindow`.
    See `backend-interface-refactor.md` for the design and the completed incremental plan.
 
-6. **Dialogs contain business rules in addition to presentation.**
-   `CompressDlg` and related dialogs do more than gather input: they also decide extension rewriting,
-   default format/method policy, and settings persistence behavior. That logic is legitimate, but it
-   ties archive policy changes to dialog code changes.
+6. **Dialogs contain business rules in addition to presentation.** *(Resolved.)*
+   `CompressDlg`'s archive policy — settings persistence (which fields are saved), format/method/SFX
+   normalization, and output-extension rewriting — moved into a `CompressPolicy` unit. The dialog now
+   only gathers input and calls the policy; the CLI override path (`App::ApplyOverrides`) and the
+   drop/add compress flows call the same functions, so the normalization rule that was duplicated
+   between dialog and CLI is now single-sourced. (AileFlow's `CompressPolicy` carries persistence and
+   the extension rule only; its B2E methods are .b2e-driven indices with no normalization step.)
 
 ### Refactoring priority
 
@@ -281,9 +285,11 @@ public-API leak (`effectivePath`) is contained by `ArchiveSession` and frozen by
 Also done (concern #2): GUI service access now goes through an injected `AppServices` bundle instead of
 `App::Instance()`; the singleton remains only as the composition root and for HINSTANCE identity.
 
-Remaining (each to be considered on its own, behavior-touching so higher risk):
+Also done (concern #6): archive policy (settings persistence, format/method/SFX normalization, output
+extension) moved from `CompressDlg` into `CompressPolicy`, shared by the dialog and the CLI path.
 
-- Move archive policy (extension rewriting, default format/method) out of dialog code (concern #6).
+All six review concerns are now addressed (concern #3 to the extent the cross-app `SevenZip.h`
+contract allows). No further items from this review pass remain.
 
 ### Existing strengths worth preserving
 

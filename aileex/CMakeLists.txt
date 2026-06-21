@@ -26,6 +26,7 @@ add_executable(AileEx WIN32
     src/MainWindowOps.cpp
     src/ArchiveController.cpp
     src/CompressDlg.cpp
+    src/CompressPolicy.cpp
     src/CompressHelper.cpp
     src/AdvancedCompressDlg.cpp
     src/RarAdvancedDlg.cpp

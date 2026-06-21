@@ -15,9 +15,8 @@ public:
         std::wstring method;           // B2E method name (from .b2e type list)
         int          level  = 0;       // selected method index; persisted for Settings restore
         bool         sfx    = false;   // create self-extracting archive (not persisted)
-        // outputPath / inputFiles are excluded (these change per user action and are not persisted)
-        void LoadFromSettings(const Settings& s);
-        void SaveToSettings(Settings& s) const;
+        // Persistence and the archive-extension rewrite rule live in CompressPolicy,
+        // not here — see CompressPolicy.h.
     };
 
     bool Show(HWND hwndParent, Params& params);
@@ -33,10 +32,6 @@ private:
     void OnSfxChange(HWND hwnd);
     void OnBrowseOutput(HWND hwnd);
     bool OnOK(HWND hwnd);
-
-    // Remove a trailing recognized archive extension (plus a preceding ".tar")
-    // from `path`, leaving any dotted base name intact. Mirrors AileEx.
-    void StripKnownArchiveExt(std::wstring& path) const;
 
     HWND   m_hwnd = nullptr;
     Params m_params;

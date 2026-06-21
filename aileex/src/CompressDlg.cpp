@@ -1,4 +1,5 @@
 ﻿#include "CompressDlg.h"
+#include "CompressPolicy.h"
 #include "AdvancedCompressDlg.h"
 #include "DialogUtils.h"
 #include "I18n.h"
@@ -6,47 +7,6 @@
 #include "Settings.h"
 #include "resource.h"
 #include <commctrl.h>
-
-void CompressDlg::Params::LoadFromSettings(const Settings& s) {
-    format         = s.GetDefaultFormat();
-    level          = s.GetCompressionLevel();
-    rarLevel       = s.GetRarLevel();
-    dictSize       = s.GetAdvDictSize();
-    wordSize       = s.GetAdvWordSize();
-    solidBlock     = s.GetAdvSolidBlock();
-    threads        = s.GetAdvThreads();
-    extra          = s.GetAdvExtra();
-    volumeSize     = s.GetAdvVolume();
-    rarDictSize    = s.GetRarAdvDictSize();
-    rarSolid       = s.GetRarAdvSolid();
-    rarThreads     = s.GetRarAdvThreads();
-    rarRecoveryPct = s.GetRarAdvRecovery();
-    rarSplitVolume = s.GetRarAdvVolume();
-    rarExtra       = s.GetRarAdvExtra();
-    // SFX mode is intentionally NOT loaded from settings: the dialog must always
-    // open with SFX off, and CLI "a" (no -sfx) must never inherit a remembered SFX
-    // state. SFX is enabled only per-invocation (dialog checkbox or -sfx switch).
-    sfxMode.clear();
-}
-
-void CompressDlg::Params::SaveToSettings(Settings& s) const {
-    s.SetDefaultFormat(format.c_str());
-    s.SetCompressionLevel(level);
-    s.SetRarLevel(rarLevel);
-    s.SetAdvDictSize(dictSize.c_str());
-    s.SetAdvWordSize(wordSize.c_str());
-    s.SetAdvSolidBlock(solidBlock.c_str());
-    s.SetAdvThreads(threads.c_str());
-    s.SetAdvExtra(extra.c_str());
-    s.SetAdvVolume(volumeSize.c_str());
-    s.SetRarAdvDictSize(rarDictSize.c_str());
-    s.SetRarAdvSolid(rarSolid);
-    s.SetRarAdvThreads(rarThreads);
-    s.SetRarAdvRecovery(rarRecoveryPct);
-    s.SetRarAdvVolume(rarSplitVolume.c_str());
-    s.SetRarAdvExtra(rarExtra.c_str());
-    // SFX mode is intentionally not persisted (see LoadFromSettings).
-}
 
 struct MethodEntry { const wchar_t* label; const wchar_t* id; };
 
@@ -201,61 +161,11 @@ void CompressDlg::UpdateOutputExt(HWND hwnd, const wchar_t* fmtId, const wchar_t
     GetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, outPath, MAX_PATH);
     if (!outPath[0] || !fmtId) return;
 
-    bool isStream = SevenZip::IsStreamExt(fmtId);
-    bool is7z  = (wcscmp(fmtId, L"7z")  == 0);
-    bool isRar = (wcscmp(fmtId, L"rar") == 0);
-    bool sfxOn = (sfxMode && sfxMode[0] && (is7z || isRar));
+    bool needsTar = CompressPolicy::NeedsTarWrapper(fmtId, m_params.inputFiles);
+    std::wstring ext = CompressPolicy::OutputExtension(fmtId, sfxMode ? sfxMode : L"", needsTar);
 
-    bool needsTar = false;
-    if (isStream) {
-        needsTar = m_params.inputFiles.size() > 1;
-        if (!needsTar && m_params.inputFiles.size() == 1) {
-            DWORD attrs = GetFileAttributesW(m_params.inputFiles[0].c_str());
-            needsTar = (attrs != INVALID_FILE_ATTRIBUTES &&
-                        (attrs & FILE_ATTRIBUTE_DIRECTORY));
-        }
-    }
-
-    std::wstring ext;
-    if (sfxOn) {
-        ext = L".exe";
-    } else if (needsTar) {
-        ext = std::wstring(L".tar.") + fmtId;
-    } else {
-        ext = std::wstring(L".") + fmtId;
-    }
-
-    // Replace only a recognized *archive* extension, never a dotted part of the
-    // base name. The initial value is a bare stem from ComputeDefaultOutputPath,
-    // which strips just the source's real extension — so "111.222.333.444.log"
-    // arrives here as "111.222.333.444". Blindly dropping the last ".444" would
-    // diverge from the CLI `a -t<fmt>` path (EnsureArchiveExt only appends), so a
-    // segment is removed only when it is a known archive extension (or a .tar
-    // prefix of a compound stream extension such as archive.tar.gz).
     std::wstring path(outPath);
-    size_t slash     = path.find_last_of(L"\\/");
-    size_t nameStart = (slash == std::wstring::npos) ? 0 : slash + 1;
-
-    auto isArchiveExt = [&](const std::wstring& e) -> bool {
-        if (_wcsicmp(e.c_str(), L"exe") == 0 || _wcsicmp(e.c_str(), L"tar") == 0)
-            return true;
-        for (const auto& wf : m_writableFormats)
-            if (_wcsicmp(e.c_str(), wf.ext.c_str()) == 0) return true;
-        return false;
-    };
-
-    size_t dot = path.find_last_of(L'.');
-    if (dot != std::wstring::npos && dot > nameStart &&
-        isArchiveExt(path.substr(dot + 1))) {
-        path.erase(dot);
-        // Strip a ".tar" prefix too (compound stream extension, e.g. .tar.gz).
-        size_t dot2 = path.find_last_of(L'.');
-        if (dot2 != std::wstring::npos && dot2 > nameStart &&
-            _wcsicmp(path.c_str() + dot2 + 1, L"tar") == 0)
-            path.erase(dot2);
-    }
-
-    path += ext;
+    CompressPolicy::ApplyOutputExtension(path, ext, m_writableFormats);
     SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, path.c_str());
 }
 
@@ -466,30 +376,6 @@ bool CompressDlg::OnOK(HWND hwnd) {
         const wchar_t* mId = (const wchar_t*)SendMessageW(hMethod, CB_GETITEMDATA, msel, 0);
         if (mId) m_params.method = mId;
     }
-    // Do not force the method property in two cases, because an explicit method
-    // (the "m" property) overrides the part of the level preset that selects the
-    // codec — including level 0, whose "Store" is realized by the level choosing
-    // the Copy method:
-    //   (1) Level 0 (Store) — must copy with no compression regardless of which
-    //       method is shown in the combo (mirrors 7-Zip's GUI, where the Store
-    //       level forces the Copy method).
-    //   (2) The user kept the format's default codec — forcing it is redundant
-    //       (levels 1-9 are byte-identical with or without it) and would only
-    //       suppress the level-0 Store.
-    // The level's tuning values (dict size, fast bytes, ...) still apply either
-    // way; method and level otherwise coexist normally for levels 1-9.
-    if (m_params.level == 0 ||
-        (m_params.format == L"7z"  && m_params.method == L"lzma2") ||
-        (m_params.format == L"zip" && m_params.method == L"deflate"))
-        m_params.method.clear();
-    // For RAR, the compression level is passed as the method digit (-m0..-m5)
-    if (m_params.format == L"rar") {
-        m_params.rarLevel = m_params.level;
-        m_params.method   = std::to_wstring(m_params.level);
-    } else if (m_params.format != L"7z" && m_params.format != L"zip") {
-        m_params.method.clear();
-    }
-
     // Read password
     wchar_t pw[256] = {};
     GetDlgItemTextW(hwnd, IDC_PASSWORD, pw, 256);
@@ -497,7 +383,7 @@ bool CompressDlg::OnOK(HWND hwnd) {
 
     m_params.encryptHeaders = (IsDlgButtonChecked(hwnd, IDC_ENCRYPT_HDR) == BST_CHECKED);
 
-    // Read SFX mode (forced to "" for formats other than 7z / RAR)
+    // Read SFX mode (combo value as-is; format applicability is enforced below).
     HWND hSfx = GetDlgItem(hwnd, IDC_SFX_MODE);
     int  ssel = (int)SendMessageW(hSfx, CB_GETCURSEL, 0, 0);
     if (ssel != CB_ERR) {
@@ -506,8 +392,9 @@ bool CompressDlg::OnOK(HWND hwnd) {
     } else {
         m_params.sfxMode.clear();
     }
-    if (m_params.format != L"7z" && m_params.format != L"rar")
-        m_params.sfxMode.clear();
+
+    // Apply the format/method/SFX policy in one place (shared with the CLI path).
+    CompressPolicy::NormalizeForFormat(m_params);
 
     return true;
 }

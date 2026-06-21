@@ -27,6 +27,7 @@ set(AILEFLOW_UI_SOURCES
     src/MainWindowOps.cpp
     src/ArchiveController.cpp
     src/CompressDlg.cpp
+    src/CompressPolicy.cpp
     src/SettingsDlg.cpp
     src/Settings.cpp
     src/SevenZipB2e.cpp

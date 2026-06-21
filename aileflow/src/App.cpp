@@ -1,6 +1,7 @@
 ﻿#include "App.h"
 #include "MainWindow.h"
 #include "CompressDlg.h"
+#include "CompressPolicy.h"
 #include "DialogUtils.h"
 #include "I18n.h"
 #include "WorkerThread.h"
@@ -127,7 +128,7 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
     CompressDlg::Params params;
     params.inputFiles = filePaths;
     params.sfx        = sfx;
-    params.LoadFromSettings(m_settings);
+    CompressPolicy::Load(params, m_settings);
     if (!filePaths.empty()) {
         params.outputPath = DeriveOutputPath(m_settings, filePaths[0], destDir);
     } else if (!destDir.empty()) {
@@ -153,7 +154,7 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
         if (!dlg.Show(wnd.Hwnd(), params)) {
             return 0;
         }
-        params.SaveToSettings(m_settings);
+        CompressPolicy::Save(params, m_settings);
         m_settings.Save();
     }
 
@@ -194,7 +195,7 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
     CompressDlg::Params baseParams;
     baseParams.inputFiles = { filePaths[0] };
     baseParams.sfx        = sfx;
-    baseParams.LoadFromSettings(m_settings);
+    CompressPolicy::Load(baseParams, m_settings);
     baseParams.outputPath = DeriveOutputPath(m_settings, filePaths[0], destDir);
 
     if (!typeOverride.empty()) {
@@ -210,7 +211,7 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
     } else {
         CompressDlg dlg;
         if (!dlg.Show(wnd.Hwnd(), baseParams)) return 0;
-        baseParams.SaveToSettings(m_settings);
+        CompressPolicy::Save(baseParams, m_settings);
         m_settings.Save();
     }
 
