@@ -1,6 +1,7 @@
 ﻿#include "App.h"
 #include "MainWindow.h"
 #include "CompressDlg.h"
+#include "CompressPolicy.h"
 #include "CompressHelper.h"
 #include "I18n.h"
 #include "ProgressDlg.h"
@@ -148,20 +149,10 @@ static void ApplyOverrides(CompressDlg::Params& params,
         }
     }
 
-    // rar.exe expects -mN; sync method = level digit whenever format is RAR
-    if (params.format == L"rar")
-        params.method = std::to_wstring(params.rarLevel);
-
-    // Match the GUI dialog (CompressDlg::OnOK): do not force the "m" method
-    // property when it would override the level preset's codec choice. Level 0
-    // must Store (Copy) regardless of the requested method, and forcing the
-    // format's default codec is redundant (levels 1-9 are byte-identical with or
-    // without it). The level's tuning values still apply for levels 1-9.
-    if (params.format != L"rar" &&
-        (params.level == 0 ||
-         (params.format == L"7z"  && params.method == L"lzma2") ||
-         (params.format == L"zip" && params.method == L"deflate")))
-        params.method.clear();
+    // Apply the shared format/method/SFX policy (same rule as the dialog's OnOK):
+    // RAR method = level digit, stream/tar take no method, 7z/zip drop a method
+    // that only restates the level preset. (sfxOverride is applied afterwards.)
+    CompressPolicy::NormalizeForFormat(params);
 
     if (!sfxOverride.empty()) {
         if (_wcsicmp(params.format.c_str(), L"7z") == 0 || _wcsicmp(params.format.c_str(), L"rar") == 0) {
@@ -197,7 +188,7 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
 
     CompressDlg::Params params;
     params.inputFiles = filePaths;
-    params.LoadFromSettings(m_settings);
+    CompressPolicy::Load(params, m_settings);
     params.outputPath = Settings::ComputeDefaultOutputPath(m_settings, filePaths, destDir);
     ApplyOverrides(params, typeOverride, methodOverride, levelOverride, sfxOverride);
 
@@ -229,7 +220,7 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
         CompressDlg dlg;
         if (!dlg.Show(wnd.Hwnd(), params, enc, wf, rarAvailable))
             return 0;
-        params.SaveToSettings(m_settings);
+        CompressPolicy::Save(params, m_settings);
         m_settings.Save();
     }
 
@@ -308,7 +299,7 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
     // Show dialog once for the first file; apply chosen settings to all files.
     CompressDlg::Params baseParams;
     baseParams.inputFiles = { filePaths[0] };
-    baseParams.LoadFromSettings(m_settings);
+    CompressPolicy::Load(baseParams, m_settings);
     baseParams.outputPath = Settings::ComputeDefaultOutputPath(m_settings, { filePaths[0] }, destDir);
     ApplyOverrides(baseParams, typeOverride, methodOverride, levelOverride, sfxOverride);
 
@@ -327,7 +318,7 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
     } else {
         CompressDlg dlg;
         if (!dlg.Show(wnd.Hwnd(), baseParams, enc, wf, rarAvailable)) return 0;
-        baseParams.SaveToSettings(m_settings);
+        CompressPolicy::Save(baseParams, m_settings);
         m_settings.Save();
     }
 

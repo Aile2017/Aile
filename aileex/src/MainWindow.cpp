@@ -1,6 +1,7 @@
 ﻿#include "MainWindow.h"
 #include "App.h"
 #include "CompressDlg.h"
+#include "CompressPolicy.h"
 #include "CompressHelper.h"
 #include "CommentDlg.h"
 #include "DialogUtils.h"
@@ -629,7 +630,7 @@ void MainWindow::OnDropFiles(HDROP hDrop) {
 
             CompressDlg::Params params;
             params.inputFiles  = std::move(regular);
-            params.LoadFromSettings(m_svc.settings);
+            CompressPolicy::Load(params, m_svc.settings);
             params.outputPath  = DefaultOutputPath(m_svc.settings, params.inputFiles);
 
             CompressDlg dlg;
@@ -638,7 +639,7 @@ void MainWindow::OnDropFiles(HDROP hDrop) {
             const auto* wf  = &sz7.GetWritableFormats();
             if (dlg.Show(m_hwnd, params, enc, wf)) {
                 auto& s = m_svc.settings;
-                params.SaveToSettings(s);
+                CompressPolicy::Save(params, s);
                 s.Save();
                 OnCompress(params, /*openAfterCompress=*/true);
             }

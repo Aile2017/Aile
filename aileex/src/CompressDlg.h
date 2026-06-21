@@ -34,11 +34,8 @@ public:
         // Self-extraction (SFX) mode — "" = none / "gui" / "console"
         // Valid for 7z and rar only. Non-empty values force the output extension to .exe.
         std::wstring sfxMode;
-
-        // outputPath / inputFiles / password / encryptHeaders are excluded
-        // (these change per user action and are not persisted)
-        void LoadFromSettings(const Settings& s);
-        void SaveToSettings(Settings& s) const;
+        // Persistence (which fields are saved) and format/method policy live in
+        // CompressPolicy, not here — see CompressPolicy.h.
     };
 
     // Returns true if user clicked OK.
