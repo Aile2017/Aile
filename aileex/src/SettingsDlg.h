@@ -1,9 +1,11 @@
 #pragma once
 #include <windows.h>
+#include "AppServices.h"
 
 class SettingsDlg {
 public:
-    void Show(HWND hwndParent);
+    // Services (Settings + DLL-reload action) are injected, not reached via App::Instance().
+    void Show(HWND hwndParent, const AppServices& svc);
 
     static INT_PTR CALLBACK DlgProc(HWND, UINT, WPARAM, LPARAM);
     INT_PTR HandleMsg(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
@@ -17,4 +19,5 @@ private:
     bool OnOK(HWND hwnd);
 
     HWND m_hwnd = nullptr;
+    const AppServices* m_svc = nullptr;
 };

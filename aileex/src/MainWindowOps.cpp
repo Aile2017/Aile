@@ -48,7 +48,7 @@ HRESULT MainWindow::RunRarCompress(const CompressDlg::Params& params) {
     progDlg.SetSink(sink);
 
     return RunRarCompressSync(m_hwnd, params,
-                              App::Instance().GetSettings().GetRarExePath().c_str(),
+                              m_svc.settings.GetRarExePath().c_str(),
                               progDlg, sink);
 }
 
@@ -187,7 +187,7 @@ void MainWindow::OnFileOpen() {
     };
     std::wstring archiveLabel, archivePat, allLabel, allPat;
     split(I18n::Tr(IDS_FILTER_ARCHIVE), archiveLabel, archivePat);
-    std::wstring dynPat = App::Instance().Get7z().GetExtensionFilterPattern();
+    std::wstring dynPat = m_svc.sevenZip.GetExtensionFilterPattern();
     if (!dynPat.empty()) archivePat = dynPat;
     split(I18n::Tr(IDS_FILTER_ALL_FILES), allLabel, allPat);
     COMDLG_FILTERSPEC filter[] = {
@@ -233,15 +233,15 @@ void MainWindow::OnAddFiles() {
 
     CompressDlg::Params params;
     params.inputFiles  = std::move(files);
-    params.LoadFromSettings(App::Instance().GetSettings());
-    params.outputPath  = DefaultOutputPath(App::Instance().GetSettings(), params.inputFiles);
+    params.LoadFromSettings(m_svc.settings);
+    params.outputPath  = DefaultOutputPath(m_svc.settings, params.inputFiles);
 
     CompressDlg dlg;
-    auto& sz7 = App::Instance().Get7z();
+    auto& sz7 = m_svc.sevenZip;
     const auto* enc = &sz7.GetEncoderNames();
     const auto* wf  = &sz7.GetWritableFormats();
     if (dlg.Show(m_hwnd, params, enc, wf)) {
-        auto& s = App::Instance().GetSettings();
+        auto& s = m_svc.settings;
         params.SaveToSettings(s);
         s.Save();
         OnCompress(params, /*openAfterCompress=*/true);
@@ -275,7 +275,7 @@ void MainWindow::OnArchiveProperties() {
 
     // Archives opened via unrar.dll are unlikely to be readable by 7z.dll (e.g. dll without RAR support).
     // Try anyway; if it fails, fall back to displaying info from items.
-    auto& sz7 = App::Instance().Get7z();
+    auto& sz7 = m_svc.sevenZip;
     if (sz7.IsLoaded()) {
         const wchar_t* pw = m_session.Password().empty() ? nullptr : m_session.Password().c_str();
         HRESULT hr = sz7.GetArchiveProperties(target.c_str(), pw, props);

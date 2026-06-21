@@ -65,7 +65,7 @@ void App::ReloadDlls() {
 
 int App::RunBrowseMode(const std::vector<std::wstring>& archivePaths, int nCmdShow,
                        const std::wstring& destDir) {
-    MainWindow wnd;
+    MainWindow wnd(Services());
     if (!wnd.Create(m_hInst, nCmdShow)) return 1;
 
     if (!destDir.empty())
@@ -192,7 +192,7 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
                          const std::wstring& methodOverride,
                          const std::wstring& levelOverride,
                          const std::wstring& sfxOverride) {
-    MainWindow wnd;
+    MainWindow wnd(Services());
     if (!wnd.Create(m_hInst, nCmdShow)) return 1;
 
     CompressDlg::Params params;
@@ -296,7 +296,7 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
                              const std::wstring& sfxOverride) {
     if (filePaths.empty()) return 0;
 
-    MainWindow wnd;
+    MainWindow wnd(Services());
     if (!wnd.Create(m_hInst, SW_HIDE)) return 1;
 
     if (!m_sevenZip.IsLoaded()) {
@@ -418,7 +418,7 @@ int App::RunExtractDialogMode(const std::vector<std::wstring>& archivePaths, int
         return 1;
     }
 
-    MainWindow wnd;
+    MainWindow wnd(Services());
     // SW_HIDE: suppress the list window; only the extract folder picker and progress dialog appear.
     if (!wnd.Create(m_hInst, SW_HIDE)) return 1;
 
@@ -436,7 +436,7 @@ int App::RunExtractDialogMode(const std::vector<std::wstring>& archivePaths, int
 }
 
 int App::RunTestMode(const std::wstring& archivePath, int /*nCmdShow*/) {
-    MainWindow wnd;
+    MainWindow wnd(Services());
     // SW_HIDE: suppress list window; only the progress dialog and result box appear.
     if (!wnd.Create(m_hInst, SW_HIDE)) return 1;
     wnd.OpenArchive(archivePath.c_str());

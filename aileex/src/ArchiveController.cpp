@@ -2,20 +2,20 @@
 // Domain decisions + sequencing live here; UI (progress/worker, prompts, dialogs,
 // view refresh) is delegated to IArchiveUI. AileEx-only.
 #include "ArchiveController.h"
-#include "App.h"
 #include "I18n.h"
 #include "CompressHelper.h"
 #include "RarProcess.h"
 #include "ArchiveOpener.h"
 #include "SevenZip.h"
+#include "Settings.h"
 #include "resource.h"
 #include <shellapi.h>
 #include <algorithm>
 #include "MainWindowInternal.h"  // ShouldCreateSubfolder / ArchiveBaseName / CollapseIfSingleSubfolder
 
 // Open the extracted folder via the configured command (or Explorer by default).
-static void OpenExtractedFolder(const std::wstring& dir) {
-    const std::wstring& cmd = App::Instance().GetSettings().GetOpenFolderCommand();
+static void OpenExtractedFolder(const Settings& settings, const std::wstring& dir) {
+    const std::wstring& cmd = settings.GetOpenFolderCommand();
     if (cmd.empty()) {
         ShellExecuteW(nullptr, L"open", dir.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
     } else {
@@ -36,28 +36,26 @@ static void OpenExtractedFolder(const std::wstring& dir) {
 }
 
 bool ArchiveController::Open(const wchar_t* path) {
-    App& app = App::Instance();
-
     // Resolve the rar.exe writer path once (used by RarBackend for write ops).
-    std::wstring rarExe = app.GetSettings().GetRarExePath();
+    std::wstring rarExe = m_svc.settings.GetRarExePath();
     if (rarExe.empty()) rarExe = RarProcess::FindRarExe();
 
     // Delegate backend selection, fallback and password retry to ArchiveOpener.
     // The session is left untouched until the open succeeds, so a failed open
     // needs no rollback; reuse the current password as the first retry guess.
-    ArchiveOpener opener(app.Get7z(), app.GetUnrar(), rarExe);
+    ArchiveOpener opener(m_svc.sevenZip, m_svc.unrar, rarExe);
     ArchiveOpener::Result opened =
         opener.Open(path, m_session.Password(), [this]{ return m_ui.PromptPassword(); });
 
     if (!opened.backend) {
         std::wstring msg = I18n::Tr(IDS_ERR_OPEN_ARCHIVE);
-        if (!app.Get7z().IsLoaded() && !app.GetUnrar().IsLoaded()) {
+        if (!m_svc.sevenZip.IsLoaded() && !m_svc.unrar.IsLoaded()) {
             msg += I18n::Tr(IDS_ERR_OPEN_ARCHIVE_7Z_UNRAR);
-            if (app.Get7z().IsWrongBitness())
+            if (m_svc.sevenZip.IsWrongBitness())
                 msg += I18n::Tr(IDS_ERR_7Z_WRONG_BITNESS);
-        } else if (!app.Get7z().IsLoaded()) {
+        } else if (!m_svc.sevenZip.IsLoaded()) {
             msg += I18n::Tr(IDS_ERR_OPEN_ARCHIVE_7Z);
-            if (app.Get7z().IsWrongBitness())
+            if (m_svc.sevenZip.IsWrongBitness())
                 msg += I18n::Tr(IDS_ERR_7Z_WRONG_BITNESS);
         }
         m_ui.ShowError(msg.c_str(), E_FAIL);
@@ -75,9 +73,8 @@ bool ArchiveController::Open(const wchar_t* path) {
         wchar_t full[MAX_PATH] = {};
         if (GetFullPathNameW(path, MAX_PATH, full, nullptr) == 0)
             wcsncpy_s(full, path, MAX_PATH - 1);
-        auto& s = app.GetSettings();
-        s.AddMru(full);
-        s.Save();
+        m_svc.settings.AddMru(full);
+        m_svc.settings.Save();
     }
 
     m_ui.OnArchiveOpened();
@@ -85,8 +82,6 @@ bool ArchiveController::Open(const wchar_t* path) {
 }
 
 bool ArchiveController::Extract(std::vector<UINT32> indices, std::wstring presetDest) {
-    App& app = App::Instance();
-
     // If password not yet known, check whether target items are encrypted and prompt.
     if (m_session.Password().empty() && m_session.SelectionNeedsPassword(indices)) {
         std::wstring pw = m_ui.PromptPassword();
@@ -103,7 +98,7 @@ bool ArchiveController::Extract(std::vector<UINT32> indices, std::wstring preset
         if (!savedDest.empty()) {
             destDir = savedDest;
         } else {
-            const Settings& st = app.GetSettings();
+            const Settings& st = m_svc.settings;
             if (st.GetOutputDirModeFixed()) {
                 destDir = st.GetDefaultOutputDir();
             } else {
@@ -126,7 +121,7 @@ bool ArchiveController::Extract(std::vector<UINT32> indices, std::wstring preset
     // Evaluate MkDir policy: use selected items when extracting a subset, full list otherwise.
     std::wstring finalDest = destDir;
     {
-        auto& s     = app.GetSettings();
+        Settings& s = m_svc.settings;
         int   mkDir = s.GetMkDir();
         bool makeSubfolder = false;
         if (!indices.empty()) {
@@ -140,7 +135,7 @@ bool ArchiveController::Extract(std::vector<UINT32> indices, std::wstring preset
         }
         if (makeSubfolder)
             finalDest = std::wstring(destDir) + L"\\" +
-                        ArchiveBaseName(m_session.ArchivePath(), app.Get7z(),
+                        ArchiveBaseName(m_session.ArchivePath(), m_svc.sevenZip,
                                         s.GetExtStripMode(), s.GetStripTrailingNumber());
     }
 
@@ -157,10 +152,10 @@ bool ArchiveController::Extract(std::vector<UINT32> indices, std::wstring preset
     if (FAILED(res.hr) && res.hr != E_ABORT) {
         m_ui.ShowError(I18n::Tr(IDS_ERR_EXTRACT_FAILED).c_str(), res.hr);
     } else if (SUCCEEDED(res.hr)) {
-        if (app.GetSettings().GetBreakDDir())
+        if (m_svc.settings.GetBreakDDir())
             CollapseIfSingleSubfolder(finalDest);
-        if (app.GetSettings().GetOpenFolderAfterExtract())
-            OpenExtractedFolder(finalDest);
+        if (m_svc.settings.GetOpenFolderAfterExtract())
+            OpenExtractedFolder(m_svc.settings, finalDest);
     }
     return true;
 }
@@ -196,7 +191,6 @@ void ArchiveController::Add(std::vector<std::wstring> srcPaths) {
     if (!m_session.IsOpen() || m_session.IsReadOnly() || srcPaths.empty()) return;
     if (!m_session.CanAdd()) return;
 
-    App& app = App::Instance();
     // The operative path (split-unwrap temp) is read-only, so the display path is
     // the target here (already guarded by IsReadOnly()).
     const std::wstring archivePath   = m_session.ArchivePath();
@@ -204,7 +198,7 @@ void ArchiveController::Add(std::vector<std::wstring> srcPaths) {
 
     // Level is the only format-specific input: RAR takes a 0..5 method index, 7z/zip
     // a 0..9 level. Only RarBackend writes .rar, so the extension picks the scale.
-    const auto& s = app.GetSettings();
+    const Settings& s = m_svc.settings;
     const wchar_t* dot = wcsrchr(archivePath.c_str(), L'.');
     bool isRar = dot && _wcsicmp(dot + 1, L"rar") == 0;
     int level = isRar ? s.GetRarLevel() : s.GetCompressionLevel();
@@ -283,12 +277,11 @@ void ArchiveController::Compress(CompressDlg::Params params, bool openAfterCompr
         hrDone = m_ui.RunRarCompress(params);
         if (hrDone == E_FAIL) return;  // launch failure, already surfaced
     } else {
-        App& app = App::Instance();
-        if (!app.Get7z().IsLoaded()) {
+        if (!m_svc.sevenZip.IsLoaded()) {
             m_ui.ShowError(I18n::Tr(IDS_ERR_7Z_NOT_LOADED).c_str(), 0);
             return;
         }
-        auto& sz = app.Get7z();
+        auto& sz = m_svc.sevenZip;
 
         // Resolve the 7z SFX module (search in the same folder as 7z.dll if specified).
         std::wstring sfxModulePath;
