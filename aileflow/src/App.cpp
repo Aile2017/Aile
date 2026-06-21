@@ -86,35 +86,14 @@ int App::RunBrowseMode(const std::vector<std::wstring>& archivePaths, int nCmdSh
     return (int)msg.wParam;
 }
 
-// Derive output path for a single source file (no extension, CompressDlg appends it).
-// destDir overrides the OutputDirMode setting when non-empty (CLI -o or D&D target).
-static std::wstring DeriveOutputPath(const Settings& s, const std::wstring& srcFile,
-                                     const std::wstring& destDir) {
-    std::wstring outDir;
-    if (!destDir.empty()) {
-        outDir = destDir;
-    } else if (s.GetOutputDirModeFixed()) {
-        outDir = s.GetDefaultOutputDir();
-    } else {
-        auto sl = srcFile.find_last_of(L"\\/");
-        outDir  = (sl != std::wstring::npos) ? srcFile.substr(0, sl) : L"";
-    }
-    std::wstring stem = StemFromPath(srcFile);
-    return outDir.empty() ? stem : outDir + L"\\" + stem;
-}
-
-// Append ".<format>" unless the path already ends with it (case-insensitive).
-// A "does the path contain any dot" test is wrong: a dotted stem such as
-// "v-internalGW.log" (StemFromPath strips only the last extension) would then
-// keep its ".log" tail, leaving the archive without its real extension. The B2E
-// backend resolves the format/method from the output extension, so a missing
-// ".7z" makes the method lookup (e.g. "password") fail silently — no archive,
-// no password prompt. Match strictly on the trailing extension instead.
-static void EnsureArchiveExt(std::wstring& path, const std::wstring& format) {
-    const std::wstring suffix = L"." + format;
-    if (path.size() < suffix.size() ||
-        _wcsicmp(path.c_str() + path.size() - suffix.size(), suffix.c_str()) != 0)
-        path += suffix;
+// Derive the output FOLDER (no file name / extension — the .b2e script decides those).
+// destDir overrides the OutputDirMode setting when non-empty (CLI -d or D&D target).
+static std::wstring DeriveOutputFolder(const Settings& s, const std::wstring& srcFile,
+                                       const std::wstring& destDir) {
+    if (!destDir.empty()) return destDir;
+    if (s.GetOutputDirModeFixed()) return s.GetDefaultOutputDir();
+    auto sl = srcFile.find_last_of(L"\\/");
+    return (sl != std::wstring::npos) ? srcFile.substr(0, sl) : L"";
 }
 
 int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdShow,
@@ -129,26 +108,14 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
     params.inputFiles = filePaths;
     params.sfx        = sfx;
     CompressPolicy::Load(params, m_settings);
-    if (!filePaths.empty()) {
-        params.outputPath = DeriveOutputPath(m_settings, filePaths[0], destDir);
-    } else if (!destDir.empty()) {
-        params.outputPath = destDir;
-    } else if (m_settings.GetOutputDirModeFixed()) {
-        params.outputPath = m_settings.GetDefaultOutputDir();
-    }
+    // outputPath holds the destination FOLDER; the script names the file.
+    params.outputPath = DeriveOutputFolder(m_settings,
+                                           filePaths.empty() ? L"" : filePaths[0], destDir);
 
     // Apply -t/-m CLI overrides (skip dialog); otherwise show CompressDlg.
     if (!typeOverride.empty()) {
         params.format = typeOverride;
         if (!methodOverride.empty()) params.method = methodOverride;
-        if (params.sfx) {
-            // DeriveOutputPath already returns an extension-less stem, so just append
-            // ".exe" — never strip a trailing dot, or a dotted stem like
-            // "111.222.333.444" would lose its ".444" segment.
-            EnsureArchiveExt(params.outputPath, L"exe");
-        } else {
-            EnsureArchiveExt(params.outputPath, params.format);
-        }
     } else {
         CompressDlg dlg;
         if (!dlg.Show(wnd.Hwnd(), params)) {
@@ -157,6 +124,11 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
         CompressPolicy::Save(params, m_settings);
         m_settings.Save();
     }
+
+    // Build the extension-less base; the .b2e (arc.XXX) appends the real extension.
+    params.outputPath = CompressPolicy::MakeOutputBase(
+        params.outputPath, filePaths.empty() ? L"" : filePaths[0]);
+    if (params.outputPath.empty()) return 0;
 
     {
         auto& sz = m_sevenZip;
@@ -196,18 +168,12 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
     baseParams.inputFiles = { filePaths[0] };
     baseParams.sfx        = sfx;
     CompressPolicy::Load(baseParams, m_settings);
-    baseParams.outputPath = DeriveOutputPath(m_settings, filePaths[0], destDir);
+    // outputPath holds the destination FOLDER; the script names each file.
+    baseParams.outputPath = DeriveOutputFolder(m_settings, filePaths[0], destDir);
 
     if (!typeOverride.empty()) {
         baseParams.format = typeOverride;
         if (!methodOverride.empty()) baseParams.method = methodOverride;
-        if (baseParams.sfx) {
-            // See note in RunCompressMode: the stem is already extension-less, so
-            // append ".exe" rather than stripping a (non-existent) extension.
-            EnsureArchiveExt(baseParams.outputPath, L"exe");
-        } else {
-            EnsureArchiveExt(baseParams.outputPath, baseParams.format);
-        }
     } else {
         CompressDlg dlg;
         if (!dlg.Show(wnd.Hwnd(), baseParams)) return 0;
@@ -219,15 +185,11 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
     for (const auto& file : filePaths) {
         CompressDlg::Params params = baseParams;
         params.inputFiles  = { file };
-        params.outputPath  = DeriveOutputPath(m_settings, file, destDir);
-        if (params.sfx) {
-            // DeriveOutputPath already returns an extension-less stem, so just append
-            // ".exe" — never strip a trailing dot, or a dotted stem like
-            // "111.222.333.444" would lose its ".444" segment.
-            EnsureArchiveExt(params.outputPath, L"exe");
-        } else {
-            EnsureArchiveExt(params.outputPath, params.format);
-        }
+        // Per-file destination folder (each file's own parent in same-as-source mode).
+        std::wstring folder = DeriveOutputFolder(m_settings, file, destDir);
+        // Extension-less base; the .b2e (arc.XXX) appends the real extension.
+        params.outputPath = CompressPolicy::MakeOutputBase(folder, file);
+        if (params.outputPath.empty()) continue;
 
         {
             auto& sz = m_sevenZip;

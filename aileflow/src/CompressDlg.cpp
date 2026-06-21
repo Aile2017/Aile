@@ -39,12 +39,6 @@ INT_PTR CompressDlg::HandleMsg(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case IDC_FORMAT:
             if (HIWORD(wp) == CBN_SELCHANGE) OnFormatChange(hwnd);
             break;
-        case IDC_METHOD:
-            if (HIWORD(wp) == CBN_SELCHANGE) OnB2eMethodChange(hwnd);
-            break;
-        case IDC_CREATE_SFX:
-            if (HIWORD(wp) == BN_CLICKED) OnSfxChange(hwnd);
-            break;
         case IDC_BROWSE:
             OnBrowseOutput(hwnd);
             break;
@@ -71,55 +65,17 @@ void CompressDlg::OnInit(HWND hwnd) {
     if (SendMessageW(hFmt, CB_GETCURSEL, 0, 0) == CB_ERR)
         SendMessageW(hFmt, CB_SETCURSEL, 0, 0);
 
-    // Output path
+    // Output folder (the .b2e script decides the file name + extension at run time).
     SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, m_params.outputPath.c_str());
 
     OnFormatChange(hwnd);
 
-    // Pre-check SFX if requested (e.g. -ca flag); only when the format supports it.
+    // Pre-check SFX if requested (e.g. -sfx flag); only when the format supports it.
     if (m_params.sfx) {
         HWND hSfx = GetDlgItem(hwnd, IDC_CREATE_SFX);
-        if (IsWindowEnabled(hSfx)) {
+        if (IsWindowEnabled(hSfx))
             SendMessageW(hSfx, BM_SETCHECK, BST_CHECKED, 0);
-            OnSfxChange(hwnd);
-        }
     }
-}
-
-void CompressDlg::OnB2eMethodChange(HWND hwnd)
-{
-    HWND hFmt = GetDlgItem(hwnd, IDC_FORMAT);
-    int fsel = (int)SendMessageW(hFmt, CB_GETCURSEL, 0, 0);
-    if (fsel == CB_ERR) return;
-    const wchar_t* fmtId = (const wchar_t*)SendMessageW(hFmt, CB_GETITEMDATA, fsel, 0);
-    if (!fmtId) return;
-
-    // Find the B2eFormatInfo for this format.
-    const B2eFormatInfo* info = nullptr;
-    for (const auto& fi : m_b2eFormats)
-        if (fi.ext == fmtId) { info = &fi; break; }
-
-    // Get the selected method's outputExt.
-    std::wstring outExt = std::wstring(fmtId);  // default = format ext
-    if (info && !info->methods.empty()) {
-        HWND hMethod = GetDlgItem(hwnd, IDC_METHOD);
-        int msel = (int)SendMessageW(hMethod, CB_GETCURSEL, 0, 0);
-        int idx  = (msel != CB_ERR) ? (int)SendMessageW(hMethod, CB_GETITEMDATA, msel, 0) : 0;
-        if (idx >= 0 && idx < (int)info->methods.size())
-            outExt = info->methods[idx].outputExt;
-    }
-
-    // Update the output path extension.
-    std::wstring path = GetDlgItemTextString(hwnd, IDC_OUTPUT_PATH);
-    if (!path[0]) return;
-
-    // Replace only a recognized archive extension; keep dotted base names intact
-    // (e.g. "111.222.333.444" must not collapse to "111"). Matches AileEx.
-    CompressPolicy::StripKnownArchiveExt(path, m_b2eFormats);
-
-    path += L'.';
-    path += outExt;
-    SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, path.c_str());
 }
 
 void CompressDlg::OnFormatChange(HWND hwnd) {
@@ -156,38 +112,17 @@ void CompressDlg::OnFormatChange(HWND hwnd) {
     EnableWindow(hSfx, fmtCanSfx);
     if (!fmtCanSfx)
         SendMessageW(hSfx, BM_SETCHECK, BST_UNCHECKED, 0);
-
-    OnB2eMethodChange(hwnd);
-}
-
-void CompressDlg::OnSfxChange(HWND hwnd) {
-    bool checked = SendMessageW(GetDlgItem(hwnd, IDC_CREATE_SFX),
-                                BM_GETCHECK, 0, 0) == BST_CHECKED;
-    std::wstring path = GetDlgItemTextString(hwnd, IDC_OUTPUT_PATH);
-    if (path.empty()) return;
-
-    if (checked) {
-        // Replace only a recognized archive extension with .exe; keep dotted names.
-        CompressPolicy::StripKnownArchiveExt(path, m_b2eFormats);
-        path += L".exe";
-    } else {
-        // Restore the normal format extension via existing logic.
-        SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, path.c_str());
-        OnB2eMethodChange(hwnd);
-        return;
-    }
-    SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, path.c_str());
 }
 
 void CompressDlg::OnBrowseOutput(HWND hwnd) {
-    std::wstring path = GetDlgItemTextString(hwnd, IDC_OUTPUT_PATH);
-    if (BrowseForFile(hwnd, IDS_TITLE_SELECT_OUTPUT, IDS_FILTER_ALL_FILES,
-                      OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST, &path, true))
-        SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, path.c_str());
+    // The output field is a destination folder; the .b2e script names the file.
+    std::wstring dir = GetDlgItemTextString(hwnd, IDC_OUTPUT_PATH);
+    if (BrowseFolderDialog(hwnd, IDS_TITLE_SELECT_DEST_FOLDER, &dir))
+        SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, dir.c_str());
 }
 
 bool CompressDlg::OnOK(HWND hwnd) {
-    // Read output path
+    // Read output folder (file name + extension are decided by the .b2e script).
     std::wstring path = GetDlgItemTextString(hwnd, IDC_OUTPUT_PATH);
     if (!path[0]) {
         MessageBoxW(hwnd, I18n::Tr(IDS_INFO_SPECIFY_OUTPUT).c_str(),

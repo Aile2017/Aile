@@ -11,9 +11,11 @@
 #include "WorkerThread.h"
 
 // One entry from the (type ...) line of a .b2e load: section.
+// The output extension is intentionally NOT modeled here: AileFlow does not predict
+// the produced file name — the .b2e script's (arc.XXX) commands decide it. See the
+// compress flow, which passes an extension-less base path plus the format hint.
 struct B2eMethodInfo {
     std::wstring name;       // e.g. L"LZMA2", L"gzip"
-    std::wstring outputExt;  // output file extension, e.g. L"7z", L"tar.gz"
     bool         isDefault;  // marked with * in the type list
 };
 

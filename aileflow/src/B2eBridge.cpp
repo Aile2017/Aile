@@ -130,13 +130,6 @@ static bool GetB2eDir(wchar_t* buf, int bufSize)
     return SUCCEEDED(StringCchCopyW(buf, bufSize, dir.c_str()));
 }
 
-// Output extension for tar sub-formats (method name → ext).
-static const struct { const wchar_t* method; const wchar_t* ext; } kTarMethodExts[] = {
-    { L"tar",    L"tar"     }, { L"gzip",   L"tar.gz"  }, { L"bzip2",  L"tar.bz2" },
-    { L"xz",     L"tar.xz"  }, { L"zstd",   L"tar.zst" }, { L"lizard", L"tar.liz" },
-    { L"lz4",    L"tar.lz4" }, { L"lz5",    L"tar.lz5" }, { L"brotli", L"tar.br"  },
-};
-
 // Scans b2e/*.b2e and parses each (type ...) line into a B2eFormatInfo list.
 // Heavy (directory scan + file read + parse per script), so the public entry
 // point below caches the result for the process lifetime — same approach as
@@ -190,10 +183,8 @@ static std::vector<B2eFormatInfo> BuildWritableFormats()
         std::wstring fmtExt = tok;
         if (!seenExts.insert(fmtExt).second) continue;  // skip duplicate format ext
 
-        bool isTar = (fmtExt == L"tar");
-
         // Remaining tokens = method names (* prefix marks the default).
-        struct MethodW { std::wstring name, outputExt; bool isDefault; };
+        struct MethodW { std::wstring name; bool isDefault; };
         std::vector<MethodW> methods;
         while (*p && *p != L')') {
             while (*p == L' ' || *p == L'\t') ++p;
@@ -209,11 +200,6 @@ static std::vector<B2eFormatInfo> BuildWritableFormats()
             MethodW m;
             m.name = tok;
             m.isDefault = isDef;
-            m.outputExt = fmtExt;  // default output ext = format ext
-            if (isTar) {
-                for (const auto& te : kTarMethodExts)
-                    if (m.name == te.method) { m.outputExt = te.ext; break; }
-            }
             methods.push_back(m);
         }
         if (methods.empty()) continue;
@@ -235,7 +221,6 @@ static std::vector<B2eFormatInfo> BuildWritableFormats()
         for (const auto& m : methods) {
             B2eMethodInfo mi;
             mi.name      = m.name;
-            mi.outputExt = m.outputExt;
             mi.isDefault = m.isDefault;
             info.methods.push_back(mi);
         }

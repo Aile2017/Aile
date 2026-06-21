@@ -22,7 +22,7 @@
 #include <objbase.h>
 #include <memory>
 #include <set>
-#include "MainWindowInternal.h"   // shared file-local helpers (DefaultOutputPath, DropSource, BuildHDrop, ...)
+#include "MainWindowInternal.h"   // shared file-local helpers (DefaultOutputFolder, DropSource, BuildHDrop, ...)
 
 #pragma comment(lib, "version.lib")
 
@@ -623,7 +623,7 @@ void MainWindow::OnDropFiles(HDROP hDrop) {
             CompressDlg::Params params;
             params.inputFiles  = std::move(regular);
             CompressPolicy::Load(params, m_svc.settings);
-            params.outputPath  = DefaultOutputPath(m_svc.settings, params.inputFiles);
+            params.outputPath  = DefaultOutputFolder(m_svc.settings, params.inputFiles);
 
             CompressDlg dlg;
             if (dlg.Show(m_hwnd, params)) {

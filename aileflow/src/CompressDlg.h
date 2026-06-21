@@ -28,8 +28,6 @@ private:
 
     void OnInit(HWND hwnd);
     void OnFormatChange(HWND hwnd);
-    void OnB2eMethodChange(HWND hwnd);
-    void OnSfxChange(HWND hwnd);
     void OnBrowseOutput(HWND hwnd);
     bool OnOK(HWND hwnd);
 

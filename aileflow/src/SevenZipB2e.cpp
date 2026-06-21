@@ -137,9 +137,11 @@ HRESULT SevenZip::Compress(const std::vector<std::wstring>& srcPaths,
         }
     }
 
-    // When sfx=true, pass the format extension so B2e_Compress can find the right script
-    // despite the output path ending in .exe.
-    const wchar_t* fmtHint = (sfx && format && format[0]) ? format : nullptr;
+    // Always pass the format as the script-lookup hint: outPath is now an
+    // extension-less base (the .b2e (arc.XXX) appends the real extension), so the
+    // script cannot be resolved from outPath's extension. The hint also covers SFX,
+    // where the eventual output is .exe.
+    const wchar_t* fmtHint = (format && format[0]) ? format : nullptr;
     return B2e_Compress(srcPaths, outPath, effectiveLevel, sink, sfx, fmtHint);
 }
 
