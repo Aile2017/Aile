@@ -16,7 +16,8 @@ AileEx/
 │   └── rar-extra-params.md       — rar.exe switch reference for RAR compression
 ├── src/
 │   ├── main.cpp                   — wWinMain, argument parsing, mode routing
-│   ├── App.h/.cpp                 — Singleton, DLL load management, message loop
+│   ├── App.h/.cpp                 — Singleton, DLL load management, message loop; Services() builds AppServices
+│   ├── AppServices.h              — Injected service bundle (Settings/SevenZip/UnrarDll + reloadDlls) for the GUI
 │   ├── MainWindow.h               — Browse window class (menu + toolbar + TreeView + ListView + status bar)
 │   ├── MainWindow.cpp             — window lifecycle, message routing, layout, menus, dialogs (core)
 │   ├── MainWindowView.cpp         — tree/list population, sorting, selection, navigation
@@ -224,10 +225,15 @@ be revisited without re-running the whole analysis.
    unified in one place. (AileFlow keeps its synchronous, dialog-only integrity test in the window
    layer, and adds a second `RunBackgroundOp` seam for B2E ops that show their own dialog.)
 
-2. **`App` acts as a singleton service locator plus startup orchestrator.**
-   `App::Instance()` exposes `Settings`, `SevenZip`, and `UnrarDll` globally, while `App.cpp`
-   also owns message-loop startup modes (`browse`, `compress`, `extract`, `test`). This keeps
-   call sites short, but hides dependencies and makes isolated testing or backend substitution harder.
+2. **`App` acts as a singleton service locator plus startup orchestrator.** *(Service-locator part resolved.)*
+   `App` still owns `Settings`/`SevenZip`/`UnrarDll` and the startup modes, but the GUI no longer
+   reaches them through `App::Instance()`. Services are now injected as an `AppServices` bundle
+   (`AppServices.h`): `App::Services()` builds it, `MainWindow` takes it at construction and forwards
+   it to `ArchiveController`, and the settings/about dialogs receive it too (AileEx's bundle also
+   carries a `reloadDlls` action so the settings dialog needn't reach the singleton). `App::Instance()`
+   now appears only at the composition root (`main.cpp`/`App.cpp`) and for `GetInstance` (HINSTANCE
+   identity), not service access. The startup-orchestration role of `App.cpp` (the `Run*Mode` methods)
+   is left as-is — it is the app's entry point, not the service-locator smell this concern targeted.
 
 3. **`SevenZip` is wider than a normal backend wrapper.** *(Partially addressed.)*
    Besides 7z.dll loading it once also held, inline, the format/codec database, the format- and
@@ -272,9 +278,11 @@ Also done (concern #3, internal): `SevenZip`'s caches and tar/split unwrap moved
 and `UnwrapTarStream`/`UnwrapSplitVolume`, leaving `OpenArchive` as open + enumerate. The remaining
 public-API leak (`effectivePath`) is contained by `ArchiveSession` and frozen by the cross-app contract.
 
+Also done (concern #2): GUI service access now goes through an injected `AppServices` bundle instead of
+`App::Instance()`; the singleton remains only as the composition root and for HINSTANCE identity.
+
 Remaining (each to be considered on its own, behavior-touching so higher risk):
 
-- Decouple `App` from its singleton/service-locator role toward explicit dependency injection (concern #2).
 - Move archive policy (extension rewriting, default format/method) out of dialog code (concern #6).
 
 ### Existing strengths worth preserving

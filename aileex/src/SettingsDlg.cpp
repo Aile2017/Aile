@@ -10,7 +10,8 @@
 #include <shobjidl_core.h>
 #include <commdlg.h>
 
-void SettingsDlg::Show(HWND hwndParent) {
+void SettingsDlg::Show(HWND hwndParent, const AppServices& svc) {
+    m_svc = &svc;
     DialogBoxParamW(
         GetModuleHandleW(nullptr),
         MAKEINTRESOURCEW(IDD_SETTINGS),
@@ -78,7 +79,7 @@ INT_PTR SettingsDlg::HandleMsg(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 }
 
 void SettingsDlg::OnInit(HWND hwnd) {
-    Settings& s = App::Instance().GetSettings();
+    Settings& s = m_svc->settings;
 
     // Font — show current name; user opens ChooseFont via "..." button.
     SetDlgItemTextW(hwnd, IDC_FONT_NAME, s.GetFontName().c_str());
@@ -154,7 +155,7 @@ void SettingsDlg::OnBrowseFile(HWND hwnd, int pathCtrlId, UINT filterId, UINT ti
 }
 
 bool SettingsDlg::OnOK(HWND hwnd) {
-    Settings& s = App::Instance().GetSettings();
+    Settings& s = m_svc->settings;
 
     s.SetOutputDirModeFixed(IsDlgButtonChecked(hwnd, IDC_OUTDIR_FIXED) == BST_CHECKED);
 
@@ -203,6 +204,6 @@ bool SettingsDlg::OnOK(HWND hwnd) {
     saveAutoPath(IDC_RAR_EXE_PATH,   s.GetRarExePath(),   RarProcess::FindRarExe(), &Settings::SetRarExePath);
 
     s.Save();
-    App::Instance().ReloadDlls();
+    m_svc->reloadDlls();
     return true;
 }

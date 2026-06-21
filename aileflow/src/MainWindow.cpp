@@ -40,7 +40,7 @@ bool MainWindow::RegisterClass(HINSTANCE hInst) {
 }
 
 bool MainWindow::Create(HINSTANCE hInst, int nCmdShow) {
-    auto& s = App::Instance().GetSettings();
+    auto& s = m_svc.settings;
     m_treeWidth       = s.GetSplitterPos();
     m_treeVisible     = s.GetTreeVisible();
     m_toolbarVisible  = s.GetToolbarVisible();
@@ -231,7 +231,7 @@ LRESULT MainWindow::HandleMsg(UINT msg, WPARAM wp, LPARAM lp) {
             GetWindowPlacement(m_hwnd, &wp);
             bool maximized = (wp.showCmd == SW_SHOWMAXIMIZED);
             RECT& r = wp.rcNormalPosition;
-            auto& s = App::Instance().GetSettings();
+            auto& s = m_svc.settings;
             s.SetWindowPlacement((int)r.left, (int)r.top,
                                  (int)(r.right - r.left), (int)(r.bottom - r.top),
                                  maximized);
@@ -522,7 +522,7 @@ void MainWindow::ResizePanes(int cx, int cy) {
 void MainWindow::ApplyFontToControls() {
     if (m_hFont) DeleteObject(m_hFont);
 
-    const std::wstring& fontName = App::Instance().GetSettings().GetFontName();
+    const std::wstring& fontName = m_svc.settings.GetFontName();
     m_hFont = CreateFontW(-12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
                           DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                           CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE,
@@ -545,7 +545,7 @@ void MainWindow::UpdateExtractDestEdit() {
         SetWindowTextW(m_hExtractEdit, m_extractDestOverride.c_str());
         return;
     }
-    const auto& st = App::Instance().GetSettings();
+    const auto& st = m_svc.settings;
     if (st.GetOutputDirModeFixed()) {
         SetWindowTextW(m_hExtractEdit, st.GetDefaultOutputDir().c_str());
     } else {
@@ -580,7 +580,7 @@ void MainWindow::OnDropFiles(HDROP hDrop) {
         const wchar_t* dot = wcsrchr(path.c_str(), L'.');
         bool isArchive = false;
         if (dot) {
-            auto& sz7 = App::Instance().Get7z();
+            auto& sz7 = m_svc.sevenZip;
             isArchive = sz7.IsLoaded() && sz7.IsArchiveExt(dot + 1);
         }
         (isArchive ? archives : regular).push_back(std::move(path));
@@ -621,12 +621,12 @@ void MainWindow::OnDropFiles(HDROP hDrop) {
         } else {
             CompressDlg::Params params;
             params.inputFiles  = std::move(regular);
-            params.LoadFromSettings(App::Instance().GetSettings());
-            params.outputPath  = DefaultOutputPath(App::Instance().GetSettings(), params.inputFiles);
+            params.LoadFromSettings(m_svc.settings);
+            params.outputPath  = DefaultOutputPath(m_svc.settings, params.inputFiles);
 
             CompressDlg dlg;
             if (dlg.Show(m_hwnd, params)) {
-                auto& s = App::Instance().GetSettings();
+                auto& s = m_svc.settings;
                 params.SaveToSettings(s);
                 s.Save();
                 OnCompress(params, /*openAfterCompress=*/true);
@@ -665,7 +665,7 @@ void MainWindow::OnCommand(WORD id) {
         break;
     case ID_SETTINGS_DLG: {
         SettingsDlg dlg;
-        dlg.Show(m_hwnd);
+        dlg.Show(m_hwnd, m_svc);
         ApplyFontToControls();
         break;
     }
@@ -748,8 +748,6 @@ void MainWindow::OnContextMenu(HWND /*hwndFrom*/, int x, int y) {
 
 static INT_PTR CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM /*lp*/) {
     if (msg == WM_INITDIALOG) {
-        App& app = App::Instance();
-
         // B2E backend: list external tools from .b2e scripts with their versions.
         // Each line is pre-formatted by CArcModule::ver() as "%-12s version".
         auto comps = B2e_GetComponentVersions();
@@ -803,7 +801,7 @@ void MainWindow::OnAbout() {
 }
 
 void MainWindow::OnMruOpen(int idx) {
-    auto& settings = App::Instance().GetSettings();
+    auto& settings = m_svc.settings;
     const auto& mru = settings.GetMruPaths();
     if (idx < 0 || idx >= (int)mru.size()) return;
 
@@ -825,7 +823,7 @@ void MainWindow::RebuildMruMenu() {
     // Delete all existing items
     while (DeleteMenu(m_hMruMenu, 0, MF_BYPOSITION)) {}
 
-    const auto& mru = App::Instance().GetSettings().GetMruPaths();
+    const auto& mru = m_svc.settings.GetMruPaths();
     if (mru.empty()) {
         AppendMenuW(m_hMruMenu, MF_STRING | MF_GRAYED, IDM_FILE_MRU_PH,
                     I18n::Tr(IDS_MRU_NO_HISTORY).c_str());
@@ -932,7 +930,7 @@ bool MainWindow::EnsureTempViewDir(const wchar_t* errorMsg) {
 }
 
 bool MainWindow::Ensure7zLoaded() {
-    if (!App::Instance().Get7z().IsLoaded()) {
+    if (!m_svc.sevenZip.IsLoaded()) {
         ShowError(I18n::Tr(IDS_ERR_7Z_NOT_LOADED).c_str());
         return false;
     }

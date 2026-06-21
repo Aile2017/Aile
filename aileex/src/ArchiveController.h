@@ -5,6 +5,7 @@
 #include "ArchiveSession.h"
 #include "IArchiveUI.h"
 #include "CompressDlg.h"
+#include "AppServices.h"
 
 // Owns the orchestration of archive operations (open/extract/test/add/delete/
 // comment/compress): the domain decisions and sequencing that used to live on
@@ -13,8 +14,8 @@
 // never touches a window directly. AileEx-only; mirrored separately in AileFlow.
 class ArchiveController {
 public:
-    ArchiveController(ArchiveSession& session, IArchiveUI& ui)
-        : m_session(session), m_ui(ui) {}
+    ArchiveController(ArchiveSession& session, IArchiveUI& ui, const AppServices& svc)
+        : m_session(session), m_ui(ui), m_svc(svc) {}
 
     // Open `path`: select/bind a backend, commit the session, update MRU, and
     // refresh the view. Returns false (and shows an error) on failure.
@@ -43,4 +44,5 @@ public:
 private:
     ArchiveSession& m_session;
     IArchiveUI&     m_ui;
+    AppServices     m_svc;   // injected service references (Settings/7z/Unrar)
 };

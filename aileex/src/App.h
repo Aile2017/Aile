@@ -5,6 +5,7 @@
 #include "Settings.h"
 #include "SevenZip.h"
 #include "UnrarDll.h"
+#include "AppServices.h"
 
 class App {
 public:
@@ -17,6 +18,9 @@ public:
     Settings& GetSettings()       { return m_settings; }
     SevenZip& Get7z()             { return m_sevenZip; }
     UnrarDll& GetUnrar()          { return m_unrar; }
+    // Reference bundle injected into the GUI object graph (see AppServices.h).
+    AppServices Services()        { return { m_settings, m_sevenZip, m_unrar,
+                                             [this]{ ReloadDlls(); } }; }
 
     // Reload DLLs after settings change.
     void ReloadDlls();

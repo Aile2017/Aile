@@ -42,7 +42,7 @@ void App::Shutdown() {
 
 int App::RunBrowseMode(const std::vector<std::wstring>& archivePaths, int nCmdShow,
                        const std::wstring& destDir) {
-    MainWindow wnd;
+    MainWindow wnd(Services());
     if (!wnd.Create(m_hInst, nCmdShow)) return 1;
 
     if (!destDir.empty())
@@ -121,7 +121,7 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
                          const std::wstring& typeOverride,
                          const std::wstring& methodOverride,
                          bool sfx) {
-    MainWindow wnd;
+    MainWindow wnd(Services());
     if (!wnd.Create(m_hInst, nCmdShow)) return 1;
 
     CompressDlg::Params params;
@@ -187,7 +187,7 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
                              bool sfx) {
     if (filePaths.empty()) return 0;
 
-    MainWindow wnd;
+    MainWindow wnd(Services());
     if (!wnd.Create(m_hInst, SW_HIDE)) return 1;
 
     // Show CompressDlg once for the first file; apply same settings to all files.
@@ -266,7 +266,7 @@ int App::RunExtractDialogMode(const std::vector<std::wstring>& archivePaths, int
         return 1;
     }
 
-    MainWindow wnd;
+    MainWindow wnd(Services());
     // SW_HIDE: suppress the list window; only the extract folder picker and progress dialog appear.
     if (!wnd.Create(m_hInst, SW_HIDE)) return 1;
 
@@ -284,7 +284,7 @@ int App::RunExtractDialogMode(const std::vector<std::wstring>& archivePaths, int
 }
 
 int App::RunTestMode(const std::wstring& archivePath, int /*nCmdShow*/) {
-    MainWindow wnd;
+    MainWindow wnd(Services());
     // SW_HIDE: suppress list window; only the result dialog appears.
     if (!wnd.Create(m_hInst, SW_HIDE)) return 1;
     // CanTest() must be evaluated after OpenArchive — the B2E script is loaded there.

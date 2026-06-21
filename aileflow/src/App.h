@@ -4,6 +4,7 @@
 #include <string>
 #include "Settings.h"
 #include "SevenZip.h"
+#include "AppServices.h"
 
 class App {
 public:
@@ -15,6 +16,8 @@ public:
     HINSTANCE GetInstance() const { return m_hInst; }
     Settings& GetSettings()       { return m_settings; }
     SevenZip& Get7z()             { return m_sevenZip; }
+    // Reference bundle injected into the GUI object graph (see AppServices.h).
+    AppServices Services()        { return { m_settings, m_sevenZip }; }
 
     // Called from WinMain after arg parsing.
     int RunBrowseMode(const std::vector<std::wstring>& archivePaths, int nCmdShow,

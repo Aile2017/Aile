@@ -13,9 +13,13 @@
 #include "ArchiveSession.h"
 #include "IArchiveUI.h"
 #include "ArchiveController.h"
+#include "AppServices.h"
 
 class MainWindow : public IArchiveUI {
 public:
+    // Services (Settings/7z) are injected rather than reached via App::Instance().
+    explicit MainWindow(const AppServices& svc) : m_svc(svc) {}
+
     bool Create(HINSTANCE hInst, int nCmdShow);
     // Returns true if the archive was opened successfully. On failure an error box is shown.
     bool OpenArchive(const wchar_t* path);
@@ -118,12 +122,15 @@ private:
     HFONT       m_hFont        = nullptr;
 
     std::wstring             m_extractDestOverride;  // Set by -d option or [...] browse; overrides settings
+    // App-owned services (Settings/7z) injected at construction. Declared before
+    // m_controller so it can be passed into the controller's initializer.
+    AppServices              m_svc;
     // Archive-domain state (open archive's paths, password, backend, listing).
     // Holds the responsibilities that used to live directly on MainWindow.
     ArchiveSession           m_session;
     // Orchestrates archive operations against m_session, using this window as its
-    // UI (IArchiveUI). Declared after m_session so the reference is valid.
-    ArchiveController        m_controller{ m_session, *this };
+    // UI (IArchiveUI). Declared after m_session/m_svc so the references are valid.
+    ArchiveController        m_controller{ m_session, *this, m_svc };
     WorkerThread             m_worker;
     ProgressPostSink*        m_pSink = nullptr;
     std::wstring             m_tempViewDir;   // session temp dir; deleted on exit
