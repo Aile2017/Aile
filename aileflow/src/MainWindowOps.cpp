@@ -7,6 +7,7 @@
 #include "App.h"
 #include "CompressDlg.h"
 #include "CompressPolicy.h"
+#include "B2eBridge.h"
 #include "DialogUtils.h"
 #include "I18n.h"
 #include "ProgressDlg.h"
@@ -293,6 +294,10 @@ void MainWindow::OnFileOpen() {
     };
     std::wstring archiveLabel, archivePat, allLabel, allPat;
     split(I18n::Tr(IDS_FILTER_ARCHIVE),   archiveLabel, archivePat);
+    // Override the static pattern with one built from the loaded .b2e scripts, so
+    // newly added formats appear in the archive filter without editing resources.
+    std::wstring dynPat = B2e_GetExtensionFilterPattern();
+    if (!dynPat.empty()) archivePat = dynPat;
     split(I18n::Tr(IDS_FILTER_ALL_FILES), allLabel,     allPat);
     COMDLG_FILTERSPEC filter[] = {
         { archiveLabel.c_str(), archivePat.c_str() },
