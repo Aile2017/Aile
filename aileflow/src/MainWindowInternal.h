@@ -71,19 +71,13 @@ inline std::wstring ParentDir(const std::wstring& path) {
     return (sl != std::wstring::npos) ? path.substr(0, sl) : path;
 }
 
-// Return the initial output path based on OutputDirMode setting and the given source files.
-// Returns "dir\stem" (no extension); CompressDlg appends the format extension.
-inline std::wstring DefaultOutputPath(const Settings& s, const std::vector<std::wstring>& srcFiles) {
-    std::wstring dir;
+// Return the initial output FOLDER based on the OutputDirMode setting and the given
+// source files. The compress dialog shows a destination folder; the file name and
+// extension are decided by the .b2e script at run time (not predicted here).
+inline std::wstring DefaultOutputFolder(const Settings& s, const std::vector<std::wstring>& srcFiles) {
     if (s.GetOutputDirModeFixed())
-        dir = s.GetDefaultOutputDir();
-    else
-        dir = srcFiles.empty() ? s.GetDefaultOutputDir() : ParentDir(srcFiles[0]);
-
-    if (srcFiles.empty()) return dir;
-
-    std::wstring stem = StemFromPath(srcFiles[0]);
-    return dir.empty() ? stem : dir + L"\\" + stem;
+        return s.GetDefaultOutputDir();
+    return srcFiles.empty() ? s.GetDefaultOutputDir() : ParentDir(srcFiles[0]);
 }
 
 // Return the top-level component of an archive path.

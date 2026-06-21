@@ -70,8 +70,8 @@ CAPTION "Compress"
 FONT 9, "Segoe UI", 400, 0, 0x1
 BEGIN
     GROUPBOX        "Output",            IDC_STATIC,     7,   4, 346,  28
-    LTEXT           "File name:",        IDC_STATIC,    14,  16,  42,   8
-    EDITTEXT        IDC_OUTPUT_PATH,     58,  14, 240,  14, ES_AUTOHSCROLL
+    LTEXT           "Output folder:",    IDC_STATIC,    14,  16,  52,   8
+    EDITTEXT        IDC_OUTPUT_PATH,     68,  14, 230,  14, ES_AUTOHSCROLL
     PUSHBUTTON      "Browse...",         IDC_BROWSE,   302,  13,  44,  15
 
     GROUPBOX        "Compression",       IDC_STATIC,     7,  38, 346,  46
@@ -338,8 +338,8 @@ CAPTION "圧縮"
 FONT 9, "Segoe UI", 400, 0, 0x1
 BEGIN
     GROUPBOX        "出力先",          IDC_STATIC,     7,   4, 346,  28
-    LTEXT           "ファイル名:",      IDC_STATIC,    14,  16,  42,   8
-    EDITTEXT        IDC_OUTPUT_PATH,   58,  14, 240,  14, ES_AUTOHSCROLL
+    LTEXT           "出力先フォルダ:",  IDC_STATIC,    14,  16,  60,   8
+    EDITTEXT        IDC_OUTPUT_PATH,   76,  14, 222,  14, ES_AUTOHSCROLL
     PUSHBUTTON      "参照...",          IDC_BROWSE,   302,  13,  44,  15
 
     GROUPBOX        "圧縮設定",         IDC_STATIC,     7,  38, 346,  46

@@ -335,7 +335,7 @@ void MainWindow::OnAddFiles() {
     CompressDlg::Params params;
     params.inputFiles  = std::move(files);
     CompressPolicy::Load(params, m_svc.settings);
-    params.outputPath  = DefaultOutputPath(m_svc.settings, params.inputFiles);
+    params.outputPath  = DefaultOutputFolder(m_svc.settings, params.inputFiles);
 
     CompressDlg dlg;
     if (dlg.Show(m_hwnd, params)) {

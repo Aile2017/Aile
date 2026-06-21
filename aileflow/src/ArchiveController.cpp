@@ -5,6 +5,7 @@
 #include "I18n.h"
 #include "SevenZipBackend.h"
 #include "B2eBridge.h"
+#include "CompressPolicy.h"
 #include "Settings.h"
 #include "resource.h"
 #include <shlobj.h>
@@ -177,23 +178,49 @@ void ArchiveController::Delete(std::vector<UINT32> indices) {
     Open(reopenPath.c_str());
 }
 
+// Return the newest "<base>.*" file (full path), or "" if none. Used to locate the
+// archive a .b2e script just produced without predicting its extension.
+static std::wstring FindNewestProduced(const std::wstring& base) {
+    std::wstring pattern = base + L".*";
+    WIN32_FIND_DATAW fd = {};
+    HANDLE h = FindFirstFileW(pattern.c_str(), &fd);
+    if (h == INVALID_HANDLE_VALUE) return {};
+    auto sl = base.find_last_of(L"\\/");
+    std::wstring folder = (sl == std::wstring::npos) ? L"" : base.substr(0, sl + 1);
+    std::wstring best;
+    FILETIME bestT = {};
+    do {
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+        if (best.empty() || CompareFileTime(&fd.ftLastWriteTime, &bestT) >= 0) {
+            bestT = fd.ftLastWriteTime;
+            best  = folder + fd.cFileName;
+        }
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+    return best;
+}
+
 void ArchiveController::Compress(CompressDlg::Params params, bool openAfterCompress) {
     if (params.inputFiles.empty() || params.outputPath.empty()) return;
 
     auto inputs  = params.inputFiles;
-    auto outPath = params.outputPath;
     auto format  = params.format;
     int  level   = params.level;
     auto method  = params.method;
     bool sfx     = params.sfx;
 
+    // Extension-less base (folder + first input's stem); the .b2e script appends the
+    // real extension. AileFlow never predicts the output file name.
+    std::wstring base = CompressPolicy::MakeOutputBase(params.outputPath, inputs[0]);
+    if (base.empty()) return;
+
     auto& sz = m_svc.sevenZip;
     OpResult res = m_ui.RunBackgroundOp(
-        [&sz, inputs, outPath, format, level, method, sfx](HWND uiHwnd) -> HRESULT {
+        [&sz, inputs, base, format, level, method, sfx](HWND uiHwnd) -> HRESULT {
             CompressAdvanced adv;
             adv.sfx = sfx;
             B2e_SetDialogParent(uiHwnd);
-            HRESULT hr = sz.Compress(inputs, outPath.c_str(), format.c_str(),
+            HRESULT hr = sz.Compress(inputs, base.c_str(), format.c_str(),
                                      level, method.c_str(), nullptr, nullptr, &adv);
             B2e_SetDialogParent(NULL);
             return hr;
@@ -203,7 +230,9 @@ void ArchiveController::Compress(CompressDlg::Params params, bool openAfterCompr
     if (FAILED(res.hr) && res.hr != E_ABORT) {
         m_ui.ShowError(I18n::Tr(IDS_ERR_COMPRESS_FAILED).c_str(), res.hr);
     } else if (SUCCEEDED(res.hr) && openAfterCompress && !sfx) {
-        // SFX output is .exe which has no B2E list handler; skip opening.
-        Open(params.outputPath.c_str());
+        // The script chose the extension; observe the produced file rather than
+        // predicting it. SFX output is a .exe with no B2E list handler, so skip it.
+        std::wstring produced = FindNewestProduced(base);
+        if (!produced.empty()) Open(produced.c_str());
     }
 }
