@@ -15,6 +15,152 @@
 #include <set>
 
 // ============================================================
+// Transparent unwrap helpers (split out of OpenArchive)
+// ============================================================
+
+// Identify the inner archive format of a split volume from its leading bytes.
+// Returns the extension OpenArchive should dispatch on, or nullptr if unknown.
+static const wchar_t* DetectInnerExt(const BYTE* magic, DWORD readBytes) {
+    if (readBytes >= 6 && memcmp(magic, "7z\xBC\xAF\x27\x1C", 6) == 0) return L"7z";
+    if (readBytes >= 4 && memcmp(magic, "PK\x03\x04", 4) == 0)        return L"zip";
+    if (readBytes >= 4 && memcmp(magic, "Rar!", 4) == 0)             return L"rar";
+    if (readBytes >= 6 && memcmp(magic, "\xFD" "7zXZ\x00", 6) == 0)  return L"xz";
+    if (readBytes >= 3 && memcmp(magic, "BZh", 3) == 0)              return L"bz2";
+    if (readBytes >= 2 && memcmp(magic, "\x1F\x8B", 2) == 0)         return L"gz";
+    if (readBytes >= 4 && memcmp(magic, "MSCF", 4) == 0)             return L"cab";
+    if (readBytes >= 262 && memcmp(magic + 257, "ustar", 5) == 0)    return L"tar";
+    return nullptr;
+}
+
+// Transparent tar-in-stream detection: .tar.gz / .tar.bz2 / .tar.xz / .tar.zst / etc.
+// When the outer archive wraps exactly one non-directory item whose name ends in
+// ".tar", extract it to a temp file and re-enumerate so the caller sees the inner
+// tar contents directly. The temp .tar is kept (addressed by index on later Extract)
+// and the caller cleans it up via effectivePath on close.
+bool SevenZip::UnwrapTarStream(const wchar_t* path, const wchar_t* password, IInArchive* archive,
+                               std::vector<ArchiveItem>& items, std::wstring& resolvedPath,
+                               std::wstring* effectivePath) {
+    std::wstring outerExt = ExtOfPath(path);
+    if (!IsStreamFormat(outerExt.c_str()) || items.size() != 1 || items[0].isDir)
+        return false;
+
+    // Determine inner name: prefer item path/name, but bz2/xz may store no filename —
+    // fall back to stripping the outer extension.
+    const wchar_t* innerName = (!items[0].path.empty())
+        ? items[0].path.c_str()
+        : (!items[0].name.empty() ? items[0].name.c_str() : nullptr);
+    bool likelyTar = false;
+    if (innerName && ExtOfPath(innerName) == L"tar") {
+        likelyTar = true;
+    } else {
+        // e.g. "aa.tar.bz2" → strip ".bz2" → "aa.tar" → ext "tar"
+        std::wstring outerBase(path);
+        auto lastDot = outerBase.rfind(L'.');
+        if (lastDot != std::wstring::npos &&
+            ExtOfPath(outerBase.substr(0, lastDot).c_str()) == L"tar")
+            likelyTar = true;
+    }
+    if (!likelyTar) return false;
+
+    wchar_t tmpDir[MAX_PATH];
+    GetTempPathW(MAX_PATH, tmpDir);
+    wchar_t tmpTar[MAX_PATH];
+    swprintf_s(tmpTar, L"%sailex_%llu.tar", tmpDir, (unsigned long long)GetTickCount64());
+
+    CTempOutStream* outStream = new CTempOutStream();
+    bool keepTmp = false;
+    if (outStream->Create(tmpTar)) {
+        CTarExtractCallback* cb = new CTarExtractCallback(outStream);
+        UInt32 zeroIdx = 0;
+        HRESULT hrEx = archive->Extract(&zeroIdx, 1, 0, cb);
+        cb->Release();
+        outStream->Release();
+        if (SUCCEEDED(hrEx)) {
+            std::vector<ArchiveItem> tarItems;
+            if (SUCCEEDED(OpenArchive(tmpTar, tarItems, password))) {
+                items = std::move(tarItems);
+                resolvedPath = tmpTar;
+                if (effectivePath) *effectivePath = resolvedPath;
+                keepTmp = true;
+            }
+        }
+    } else {
+        outStream->Release();
+    }
+    if (!keepTmp) DeleteFileW(tmpTar);
+    return keepTmp;
+}
+
+// Auto-unwrap for split archives: if opening .001 yields a single concatenated file,
+// extract it to a temp file, detect the inner format from magic bytes, rename to the
+// correct extension, re-open, and show inner entries directly. Returns true (with
+// items/effectivePath set) when fully handled; cleans up its temp file on failure.
+bool SevenZip::UnwrapSplitVolume(const wchar_t* path, const wchar_t* password, bool isSplit,
+                                 IInArchive* archive, std::vector<ArchiveItem>& items,
+                                 std::wstring* effectivePath) {
+    if (!isSplit || items.size() != 1 || items[0].isDir) return false;
+
+    std::wstring innerName = !items[0].name.empty() ? items[0].name : items[0].path;
+    if (innerName.empty()) innerName = L"archive";
+    // Replace characters invalid in filenames
+    for (auto& c : innerName)
+        if (c == L'\\' || c == L'/' || c == L':' || c == L'*' || c == L'?') c = L'_';
+
+    wchar_t tmpDir[MAX_PATH];
+    GetTempPathW(MAX_PATH, tmpDir);
+    wchar_t tmpInner[MAX_PATH];
+    swprintf_s(tmpInner, L"%saileex_split_%llu_%s",
+               tmpDir, (unsigned long long)GetTickCount64(), innerName.c_str());
+
+    CTempOutStream* outStream = new CTempOutStream();
+    bool extractOk = false;
+    if (outStream->Create(tmpInner)) {
+        CTarExtractCallback* cb = new CTarExtractCallback(outStream);
+        UInt32 zeroIdx = 0;
+        HRESULT hrEx = archive->Extract(&zeroIdx, 1, 0, cb);
+        cb->Release();
+        outStream->Release();
+        extractOk = SUCCEEDED(hrEx);
+    } else {
+        outStream->Release();
+    }
+    if (!extractOk) return false;
+
+    // OpenArchive dispatches via extension→CLSID map, so the correct extension is
+    // essential. Undetectable files are treated as unsupported (abort unwrap).
+    BYTE magic[512] = {};
+    DWORD readBytes = 0;
+    HANDLE hMagic = CreateFileW(tmpInner, GENERIC_READ, FILE_SHARE_READ,
+                                 nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (hMagic != INVALID_HANDLE_VALUE) {
+        ReadFile(hMagic, magic, sizeof(magic), &readBytes, nullptr);
+        CloseHandle(hMagic);
+    }
+    const wchar_t* detectedExt = DetectInnerExt(magic, readBytes);
+
+    std::wstring tmpFinal = tmpInner;
+    if (detectedExt) {
+        std::wstring curExt = ExtOfPath(tmpFinal.c_str());
+        if (_wcsicmp(curExt.c_str(), detectedExt) != 0) {
+            std::wstring withExt = tmpFinal + L".";
+            withExt += detectedExt;
+            if (MoveFileW(tmpFinal.c_str(), withExt.c_str()))
+                tmpFinal = std::move(withExt);
+        }
+
+        std::vector<ArchiveItem> innerItems;
+        if (SUCCEEDED(OpenArchive(tmpFinal.c_str(), innerItems, password))) {
+            items = std::move(innerItems);
+            if (effectivePath) *effectivePath = tmpFinal;
+            return true;
+        }
+    }
+    // Unwrap failed (magic undetected or inner OpenArchive failed) — clean up temp file
+    DeleteFileW(tmpFinal.c_str());
+    return false;
+}
+
+// ============================================================
 // OpenArchive — enumerate all entries into items vector
 // ============================================================
 
@@ -69,27 +215,14 @@ HRESULT SevenZip::OpenArchive(const wchar_t* path, std::vector<ArchiveItem>& ite
         return hr;
     }
 
-    // Build cache key: need actual format GUID after potential fallback
-    // If path is in m_pathFormatCache, we had a RAR5→RAR4 fallback
-    std::wstring cacheKey;
+    // Resolve the actual format GUID (after any RAR5→RAR4 fallback) for the cache key,
+    // then try a cache hit before enumerating.
     GUID actualFormat = primaryGuid;
-    {
-        auto it = m_pathFormatCache.find(path);
-        if (it != m_pathFormatCache.end()) {
-            actualFormat = it->second;
-        }
-        cacheKey = BuildCacheKey(path, password, actualFormat);
-    }
-
-    // Try cache lookup before enumeration
-    {
-        auto cacheIt = m_itemsCache.find(cacheKey);
-        if (cacheIt != m_itemsCache.end()) {
-            items = cacheIt->second.items;
-            if (effectivePath) *effectivePath = path;
-            archive->Release();
-            return S_OK;
-        }
+    m_cache.TryGetFormat(path, actualFormat);
+    if (m_cache.TryGetItems(path, password, actualFormat, items)) {
+        if (effectivePath) *effectivePath = path;
+        archive->Release();
+        return S_OK;
     }
 
     // Enumerate items
@@ -195,181 +328,22 @@ HRESULT SevenZip::OpenArchive(const wchar_t* path, std::vector<ArchiveItem>& ite
         items.push_back(std::move(it));
     }
 
-    // Transparent tar-in-stream detection: .tar.gz / .tar.bz2 / .tar.xz / .tar.zst / etc.
-    // When the outer archive wraps exactly one non-directory item whose name ends
-    // in ".tar", extract it to a temp file and re-enumerate so the caller sees
-    // the inner tar contents directly.
-    {
-        std::wstring outerExt = ExtOfPath(path);
-        if (IsStreamFormat(outerExt.c_str()) &&
-            items.size() == 1 && !items[0].isDir)
-        {
-            // Determine inner name: prefer item path/name, but bz2/xz may
-            // store no filename — fall back to stripping the outer extension
-            const wchar_t* innerName = (!items[0].path.empty())
-                ? items[0].path.c_str()
-                : (!items[0].name.empty() ? items[0].name.c_str() : nullptr);
-            bool likelyTar = false;
-            if (innerName && ExtOfPath(innerName) == L"tar") {
-                likelyTar = true;
-            } else {
-                // e.g. "aa.tar.bz2" → strip ".bz2" → "aa.tar" → ext "tar"
-                std::wstring outerBase(path);
-                auto lastDot = outerBase.rfind(L'.');
-                if (lastDot != std::wstring::npos) {
-                    if (ExtOfPath(outerBase.substr(0, lastDot).c_str()) == L"tar")
-                        likelyTar = true;
-                }
-            }
-            if (likelyTar) {
-                wchar_t tmpDir[MAX_PATH];
-                GetTempPathW(MAX_PATH, tmpDir);
-                wchar_t tmpTar[MAX_PATH];
-                swprintf_s(tmpTar, L"%sailex_%llu.tar",
-                           tmpDir, (unsigned long long)GetTickCount64());
-                CTempOutStream* outStream = new CTempOutStream();
-                bool keepTmp = false;
-                if (outStream->Create(tmpTar)) {
-                    CTarExtractCallback* cb = new CTarExtractCallback(outStream);
-                    UInt32 zeroIdx = 0;
-                    HRESULT hrEx = archive->Extract(&zeroIdx, 1, 0, cb);
-                    cb->Release();
-                    outStream->Release();
-                    if (SUCCEEDED(hrEx)) {
-                        std::vector<ArchiveItem> tarItems;
-                        HRESULT hrTar = OpenArchive(tmpTar, tarItems, password);
-                        if (SUCCEEDED(hrTar)) {
-                            items = std::move(tarItems);
-                            // Keep temp .tar so Extract() can later address items by index.
-                            // Caller (MainWindow) cleans it up via effectivePath on close.
-                            resolvedPath = tmpTar;
-                            if (effectivePath) *effectivePath = resolvedPath;
-                            keepTmp = true;
-                        }
-                    }
-                } else {
-                    outStream->Release();
-                }
-                if (!keepTmp) DeleteFileW(tmpTar);
-            } // if likelyTar
-        }
+    // Transparent unwrap of tar-in-stream wrappers (.tar.gz / .tar.bz2 / ...).
+    UnwrapTarStream(path, password, archive, items, resolvedPath, effectivePath);
+
+    // Auto-unwrap for split archives (.001): on success the inner archive's entries
+    // replace `items` and effectivePath points at the temp file, so we are done.
+    if (UnwrapSplitVolume(path, password, isSplit, archive, items, effectivePath)) {
+        archive->Release();
+        return S_OK;
     }
 
-    // Auto-unwrap for split archives:
-    // If opening .001 yields a single concatenated file, extract it to a temp file,
-    // detect inner format from magic bytes, rename to correct extension, re-open,
-    // and show inner entries directly. Return temp path via effectivePath for
-    // subsequent Extract/Test operations.
-    if (isSplit && items.size() == 1 && !items[0].isDir) {
-        std::wstring innerName = !items[0].name.empty() ? items[0].name : items[0].path;
-        if (innerName.empty()) innerName = L"archive";
-        // Replace characters invalid in filenames
-        for (auto& c : innerName)
-            if (c == L'\\' || c == L'/' || c == L':' || c == L'*' || c == L'?') c = L'_';
-
-        wchar_t tmpDir[MAX_PATH];
-        GetTempPathW(MAX_PATH, tmpDir);
-        wchar_t tmpInner[MAX_PATH];
-        swprintf_s(tmpInner, L"%saileex_split_%llu_%s",
-                   tmpDir, (unsigned long long)GetTickCount64(), innerName.c_str());
-
-        CTempOutStream* outStream = new CTempOutStream();
-        bool extractOk = false;
-        if (outStream->Create(tmpInner)) {
-            CTarExtractCallback* cb = new CTarExtractCallback(outStream);
-            UInt32 zeroIdx = 0;
-            HRESULT hrEx = archive->Extract(&zeroIdx, 1, 0, cb);
-            cb->Release();
-            outStream->Release();
-            extractOk = SUCCEEDED(hrEx);
-        } else {
-            outStream->Release();
-        }
-
-        if (extractOk) {
-            // Detect inner format via magic bytes and rename extension if needed.
-            // OpenArchive dispatches via extension→CLSID map, so correct extension is
-            // essential. Undetectable files are treated as unsupported (abort unwrap).
-            const wchar_t* detectedExt = nullptr;
-            BYTE magic[512] = {};
-            DWORD readBytes = 0;
-            HANDLE hMagic = CreateFileW(tmpInner, GENERIC_READ, FILE_SHARE_READ,
-                                         nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-            if (hMagic != INVALID_HANDLE_VALUE) {
-                ReadFile(hMagic, magic, sizeof(magic), &readBytes, nullptr);
-                CloseHandle(hMagic);
-            }
-            if (readBytes >= 6 && memcmp(magic, "7z\xBC\xAF\x27\x1C", 6) == 0)
-                detectedExt = L"7z";
-            else if (readBytes >= 4 && memcmp(magic, "PK\x03\x04", 4) == 0)
-                detectedExt = L"zip";
-            else if (readBytes >= 4 && memcmp(magic, "Rar!", 4) == 0)
-                detectedExt = L"rar";
-            else if (readBytes >= 6 && memcmp(magic, "\xFD" "7zXZ\x00", 6) == 0)
-                detectedExt = L"xz";
-            else if (readBytes >= 3 && memcmp(magic, "BZh", 3) == 0)
-                detectedExt = L"bz2";
-            else if (readBytes >= 2 && memcmp(magic, "\x1F\x8B", 2) == 0)
-                detectedExt = L"gz";
-            else if (readBytes >= 4 && memcmp(magic, "MSCF", 4) == 0)
-                detectedExt = L"cab";
-            else if (readBytes >= 262 && memcmp(magic + 257, "ustar", 5) == 0)
-                detectedExt = L"tar";
-
-            std::wstring tmpFinal = tmpInner;
-            if (detectedExt) {
-                std::wstring curExt = ExtOfPath(tmpFinal.c_str());
-                if (_wcsicmp(curExt.c_str(), detectedExt) != 0) {
-                    std::wstring withExt = tmpFinal + L".";
-                    withExt += detectedExt;
-                    if (MoveFileW(tmpFinal.c_str(), withExt.c_str()))
-                        tmpFinal = std::move(withExt);
-                }
-
-                std::vector<ArchiveItem> innerItems;
-                HRESULT hrInner = OpenArchive(tmpFinal.c_str(), innerItems, password);
-                if (SUCCEEDED(hrInner)) {
-                    items = std::move(innerItems);
-                    if (effectivePath) *effectivePath = tmpFinal;
-                    archive->Release();
-                    return S_OK;
-                }
-            }
-            // Unwrap failed (magic undetected or inner OpenArchive failed) — clean up temp file
-            DeleteFileW(tmpFinal.c_str());
-        }
-    }
-
-    // Cache the enumerated items (after all potential tar/split unwrapping)
+    // Cache the enumerated items (only when path was not auto-unwrapped to a temp;
+    // re-resolve the format in case fallback updated it during this open).
     if (_wcsicmp(resolvedPath.c_str(), path) == 0) {
-        // Re-verify cache key in case tar/split operations changed things
-        std::wstring cacheKey;
         GUID actualFormat = primaryGuid;
-        {
-            auto it = m_pathFormatCache.find(path);
-            if (it != m_pathFormatCache.end()) {
-                actualFormat = it->second;
-            }
-            cacheKey = BuildCacheKey(path, password, actualFormat);
-        }
-        
-        // Add to cache with eviction if needed
-        if (m_itemsCache.size() >= MAX_CACHE_ENTRIES) {
-            // Find and erase oldest entry
-            int minOrder = INT_MAX;
-            auto oldestIt = m_itemsCache.end();
-            for (auto it = m_itemsCache.begin(); it != m_itemsCache.end(); ++it) {
-                if (it->second.order < minOrder) {
-                    minOrder = it->second.order;
-                    oldestIt = it;
-                }
-            }
-            if (oldestIt != m_itemsCache.end()) {
-                m_itemsCache.erase(oldestIt);
-            }
-        }
-        
-        m_itemsCache[cacheKey] = { items, ++m_cacheOrder };
+        m_cache.TryGetFormat(path, actualFormat);
+        m_cache.PutItems(path, password, actualFormat, items);
     }
 
     archive->Release();

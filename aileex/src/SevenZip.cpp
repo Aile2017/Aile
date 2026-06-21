@@ -106,45 +106,7 @@ void SevenZip::Unload() {
     m_loadedPath.clear();
     m_pfnCreateObject    = nullptr;
     m_registry.Clear();
-    m_pathFormatCache.clear();
-    m_itemsCache.clear();
-}
-
-// ============================================================
-// Archive item caching helpers
-// ============================================================
-
-UINT32 SevenZip::HashPassword(const wchar_t* password) {
-    if (!password || !*password) return 0;
-    UINT32 hash = 5381;
-    for (const wchar_t* p = password; *p; p++) {
-        hash = ((hash << 5) + hash) ^ (UINT32)*p;
-    }
-    return hash;
-}
-
-std::wstring SevenZip::BuildCacheKey(const wchar_t* path, const wchar_t* password, const GUID& fmt) {
-    UINT32 pwdHash = HashPassword(password);
-    // Format GUID hex: {XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}
-    wchar_t guidHex[40];
-    swprintf_s(guidHex, L"%08X%04X%04X%02X%02X%02X%02X%02X%02X%02X%02X",
-               fmt.Data1, fmt.Data2, fmt.Data3,
-               fmt.Data4[0], fmt.Data4[1], fmt.Data4[2], fmt.Data4[3],
-               fmt.Data4[4], fmt.Data4[5], fmt.Data4[6], fmt.Data4[7]);
-    
-    wchar_t key[2048];
-    swprintf_s(key, L"%s|%u|%s", path, pwdHash, guidHex);
-    return key;
-}
-
-void SevenZip::InvalidateCacheForPath(const wchar_t* path) {
-    std::wstring prefix = std::wstring(path) + L"|";
-    for (auto it = m_itemsCache.begin(); it != m_itemsCache.end(); ) {
-        if (it->first.compare(0, prefix.size(), prefix) == 0)
-            it = m_itemsCache.erase(it);
-        else
-            ++it;
-    }
+    m_cache.Clear();
 }
 
 // Format/codec registry queries delegate to m_registry (FormatRegistry); the table
@@ -198,9 +160,9 @@ HRESULT SevenZip::OpenArchiveWithFallback(const wchar_t* path, const GUID& prima
                                           IArchiveOpenCallback* openCb, IInArchive*& archive) {
     archive = nullptr;
 
-    // Check cache: if this path was already opened before, use cached format
-    auto cacheIt = m_pathFormatCache.find(path);
-    GUID formatGuid = (cacheIt != m_pathFormatCache.end()) ? cacheIt->second : primaryGuid;
+    // Check cache: if this path was already opened before, use the remembered format.
+    GUID formatGuid = primaryGuid;
+    bool hadCachedFormat = m_cache.TryGetFormat(path, formatGuid);
 
     // Try primary (or cached) format
     HRESULT hr = CreateInArchive(formatGuid, &archive);
@@ -220,14 +182,14 @@ HRESULT SevenZip::OpenArchiveWithFallback(const wchar_t* path, const GUID& prima
 
             // Cache the detected format for future calls
             if (SUCCEEDED(hr) && archive) {
-                m_pathFormatCache[path] = CLSID_Format_Rar;  // RAR4 successful
+                m_cache.PutFormat(path, CLSID_Format_Rar);  // RAR4 successful
             }
         }
     }
 
     // If cache was used but format matched, no need to update
-    if (cacheIt == m_pathFormatCache.end() && SUCCEEDED(hr) && archive) {
-        m_pathFormatCache[path] = formatGuid;  // Cache the successful format
+    if (!hadCachedFormat && SUCCEEDED(hr) && archive) {
+        m_cache.PutFormat(path, formatGuid);  // Cache the successful format
     }
 
     return (FAILED(hr) || hr == S_FALSE) ? (FAILED(hr) ? hr : E_FAIL) : S_OK;

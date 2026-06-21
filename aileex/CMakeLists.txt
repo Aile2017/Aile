@@ -39,6 +39,7 @@ add_executable(AileEx WIN32
     src/SevenZipWrite.cpp
     src/SevenZipStreams.cpp
     src/SevenZipCallbacks.cpp
+    src/SevenZipCache.cpp
     src/FormatRegistry.cpp
     src/SevenZipBackend.cpp
     src/UnrarDll.cpp
