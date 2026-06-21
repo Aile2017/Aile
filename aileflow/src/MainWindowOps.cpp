@@ -1,13 +1,14 @@
-// Archive operations: open/extract/test/compress/add/delete.
-// Split out of MainWindow.cpp. AileFlow-only.
+// Archive command handlers (thin) + IArchiveUI implementation + integrity test.
+// Operation orchestration lives in ArchiveController; this file gathers UI input
+// (selection, dialogs), forwards to the controller, and provides the UI services
+// the controller calls back into. The integrity test stays here because it is
+// synchronous and dialog-only under B2E. AileFlow-only.
 #include "MainWindow.h"
 #include "App.h"
 #include "CompressDlg.h"
 #include "DialogUtils.h"
 #include "I18n.h"
 #include "ProgressDlg.h"
-#include "B2eBridge.h"
-#include "SevenZipBackend.h"
 #include "SettingsDlg.h"
 #include "resource.h"
 #include <shellapi.h>
@@ -15,9 +16,6 @@
 #include <ole2.h>
 #include <shobjidl_core.h>
 #include <shlwapi.h>
-#include <commdlg.h>
-#include <windowsx.h>
-#include <map>
 #include <commctrl.h>
 #include <algorithm>
 #include <objbase.h>
@@ -27,60 +25,76 @@
 #pragma comment(lib, "version.lib")
 #include "MainWindowInternal.h"
 
-bool MainWindow::OpenArchive(const wchar_t* path) {
+// ---- IArchiveUI implementation (UI services for ArchiveController) ----
+
+OpResult MainWindow::RunOperation(const wchar_t* title,
+                                  std::function<HRESULT(IExtractProgressSink*)> work) {
+    ProgressDlg progDlg;
+    progDlg.Show(m_hwnd, title);
+
+    auto* sink = new ProgressPostSink(m_hwnd, WM_APP_PROGRESS, WM_APP_DONE);
+    m_pSink = sink;
+    progDlg.SetSink(sink);
+
+    m_worker.Start([work, sink]() -> HRESULT { return work(sink); }, m_hwnd, WM_APP_DONE);
+    HRESULT hr = progDlg.RunMessageLoop();
+    m_worker.Wait();
+
+    bool cancelled = sink->IsCancelled();
+    delete sink;
+    m_pSink = nullptr;
+    return { hr, cancelled, false };
+}
+
+OpResult MainWindow::RunBackgroundOp(std::function<HRESULT(HWND)> work) {
+    // The B2E tool shows its own progress dialog; disable the main window and pump
+    // messages so it stays responsive (no ProgressDlg/sink here).
+    HWND uiHwnd = m_hwnd;
+    EnableWindow(m_hwnd, FALSE);
+    m_worker.Start([work, uiHwnd]() -> HRESULT { return work(uiHwnd); }, m_hwnd, WM_APP_DONE);
+
+    HRESULT hrDone = S_OK;
+    MSG msg = {};
+    BOOL gmRet;
+    while ((gmRet = GetMessageW(&msg, nullptr, 0, 0)) != 0) {
+        if (gmRet < 0) { hrDone = E_FAIL; break; }
+        if (msg.message == WM_APP_DONE) { hrDone = (HRESULT)msg.wParam; break; }
+        if (!IsDialogMessageW(m_hwnd, &msg)) {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+    }
+    m_worker.Wait();
+    EnableWindow(m_hwnd, TRUE);
+
+    if (msg.message == WM_QUIT) {
+        PostQuitMessage((int)msg.wParam);
+        return { hrDone, false, /*quit=*/true };
+    }
+    return { hrDone, false, false };
+}
+
+bool MainWindow::BrowseDestFolder(std::wstring& dir) {
+    return BrowseFolderDialog(m_hwnd, IDS_TITLE_SELECT_DEST_FOLDER, &dir);
+}
+
+void MainWindow::OnArchiveOpened() {
     App& app = App::Instance();
+    RebuildMruMenu();
 
-    // B2E backend: always use SevenZip (B2E engine). Fill a local listing so the
-    // session is left untouched (previous archive preserved) unless the open succeeds.
-    std::vector<ArchiveItem> items;
-    std::wstring effectivePath = path;
-    HRESULT hr = app.Get7z().IsLoaded()
-        ? app.Get7z().OpenArchive(path, items, nullptr, &effectivePath)
-        : E_FAIL;
-
-    if (FAILED(hr)) {
-        ShowError(I18n::Tr(IDS_ERR_OPEN_ARCHIVE).c_str(), hr);
-        return false;
-    }
-
-    // Read-only unless the format's .b2e exposes an encode: section. (A split
-    // auto-unwrap also yields no encode handler, so CanAddToCurrent() covers it.)
-    bool isReadOnly = !app.Get7z().CanAddToCurrent();
-
-    // Bind the polymorphic backend to the freshly opened archive. Transition
-    // scaffolding for the IArchiveBackend migration (Step 3): the open above is
-    // left intact and will be folded into backend->Open() later.
-    auto backend = std::make_unique<SevenZipBackend>(app.Get7z());
-    backend->Bind(effectivePath);
-
-    // Commit the new archive state; Adopt also disposes any previous split-unwrap temp.
-    m_session.Adopt(path, effectivePath, L"", std::move(items),
-                    std::move(backend), isReadOnly);
-
-    // Update MRU — normalize relative paths and mixed cases ("../" etc.) via GetFullPathNameW.
-    {
-        std::wstring full = GetFullPathString(path);
-        if (full.empty()) full = path;
-        auto& s = app.GetSettings();
-        s.AddMru(full);
-        s.Save();
-        RebuildMruMenu();
-    }
-
-    // Update title
-    const wchar_t* leaf = wcsrchr(path, L'\\');
-    std::wstring title = std::wstring(L"AileFlow - ") + (leaf ? leaf + 1 : path);
+    // Title
+    const std::wstring& path = m_session.ArchivePath();
+    const wchar_t* leaf = wcsrchr(path.c_str(), L'\\');
+    std::wstring title = std::wstring(L"AileFlow - ") + (leaf ? leaf + 1 : path.c_str());
     SetWindowTextW(m_hwnd, title.c_str());
 
-    // Update status
-    {
-        const auto& items = m_session.Items();
-        size_t fileCount = std::count_if(items.begin(), items.end(),
-                                         [](const ArchiveItem& it){ return !it.isDir; });
-        std::wstring status = I18n::TrFmt(IDS_FMT_STATUS_ENTRIES,
-                                          fileCount, app.Get7z().GetLoadedName().c_str());
-        SetWindowTextW(m_hStatus, status.c_str());
-    }
+    // Status
+    const auto& items = m_session.Items();
+    size_t fileCount = std::count_if(items.begin(), items.end(),
+                                     [](const ArchiveItem& it){ return !it.isDir; });
+    std::wstring status = I18n::TrFmt(IDS_FMT_STATUS_ENTRIES,
+                                      fileCount, app.Get7z().GetLoadedName().c_str());
+    SetWindowTextW(m_hStatus, status.c_str());
 
     // B2E mode: configure the listing columns for raw output display.
     if (app.Get7z().GetLoadedPath().empty()) {
@@ -116,17 +130,26 @@ bool MainWindow::OpenArchive(const wchar_t* path) {
     PopulateTree();
     PopulateList(L"");
     UpdateExtractDestEdit();
-    return true;
+}
+
+void MainWindow::SelectFolder(const std::wstring& folder) {
+    if (!folder.empty()) SelectTreeFolder(folder);
+}
+
+// ---- Command handlers (gather UI input, forward to the controller) ----
+
+bool MainWindow::OpenArchive(const wchar_t* path) {
+    return m_controller.Open(path);
 }
 
 void MainWindow::OnExtract(const std::wstring& presetDest) {
     if (!m_session.IsOpen()) return;
-    RunExtraction({}, presetDest);
+    m_controller.Extract({}, presetDest);
 }
 
 bool MainWindow::TriggerExtract(const std::wstring& presetDest) {
     if (m_session.Items().empty()) return true;  // nothing to extract; let a batch continue
-    return RunExtraction({}, presetDest);
+    return m_controller.Extract({}, presetDest);
 }
 
 void MainWindow::OnExtractSmart() {
@@ -181,113 +204,7 @@ void MainWindow::OnExtractSelected(const std::wstring& presetDest) {
     }
 
     std::vector<UINT32> indices(indexSet.begin(), indexSet.end());
-    RunExtraction(std::move(indices), presetDest);
-}
-
-bool MainWindow::RunExtraction(std::vector<UINT32> indices, std::wstring presetDest) {
-    App& app = App::Instance();
-
-    if (!Ensure7zLoaded()) return false;
-
-    // If password not yet known, check whether target items are encrypted and prompt.
-    // Note: in B2E mode B2e_List() never sets ArchiveItem::encrypted, so needPw is always
-    // false and PromptPassword() is never called here. Password prompting is handled
-    // internally by the B2E engine's input() callback when the .b2e script requests it.
-    if (m_session.Password().empty() && m_session.SelectionNeedsPassword(indices)) {
-        std::wstring pw = PromptPassword();
-        // Password cancelled: skip this archive but let a batch continue to the next.
-        if (pw.empty()) return true;
-        m_session.SetPassword(std::move(pw));
-    }
-
-    std::wstring destDir;
-    if (!presetDest.empty()) {
-        destDir = presetDest;
-    } else {
-        if (!m_extractDestOverride.empty()) {
-            destDir = m_extractDestOverride;
-        } else {
-            const Settings& st = app.GetSettings();
-            if (st.GetOutputDirModeFixed()) {
-                const auto& d = st.GetDefaultOutputDir();
-                if (!d.empty()) destDir = d;
-            } else {
-                wchar_t full[MAX_PATH] = {};
-                std::wstring abs;
-                if (GetFullPathNameW(m_session.ArchivePath().c_str(), MAX_PATH, full, nullptr) != 0)
-                    abs = full;
-                else
-                    abs = m_session.ArchivePath();
-                auto sl = abs.find_last_of(L"\\/");
-                destDir = (sl != std::wstring::npos) ? abs.substr(0, sl) : abs;
-            }
-        }
-        if (!BrowseFolderDialog(m_hwnd, IDS_TITLE_SELECT_DEST_FOLDER, &destDir))
-            return false;  // destination cancelled → abort the batch
-        // Keep edit box and override in sync with the user's folder picker choice.
-        // The chosen folder is reused for subsequent archives in a multi-archive batch.
-        m_extractDestOverride = destDir;
-        UpdateExtractDestEdit();
-    }
-
-    // Evaluate MkDir policy. Skip for selective extraction: the user chose specific
-    // entries, so no wrapping folder is created; archive-internal paths are preserved.
-    std::wstring finalDest = destDir;
-    if (indices.empty()) {
-        auto& s   = app.GetSettings();
-        int mkDir = s.GetMkDir();
-        if (ShouldCreateSubfolder(mkDir, m_session.Items()))
-            finalDest = destDir + L"\\" +
-                        ArchiveBaseName(m_session.ArchivePath(), s.GetExtStripMode(), s.GetStripTrailingNumber());
-    }
-
-    std::wstring password = m_session.Password();
-
-    // The window is disabled for the duration, so the backend cannot be replaced by a
-    // re-open while the worker runs; capturing the raw pointer is safe.
-    IArchiveBackend* backend = m_session.Backend();
-    HWND uiHwnd = m_hwnd;
-    EnableWindow(m_hwnd, FALSE);
-    m_worker.Start([backend, indices, destDir = finalDest, password, uiHwnd]() -> HRESULT {
-        // B2e_Extract relies on SetCurrentDirectory(destDir) to set the extraction target.
-        // SetCurrentDirectory fails if the directory does not yet exist, leaving the CWD
-        // unchanged and causing extraction to land in the wrong place.  Create it first.
-        int r = SHCreateDirectoryExW(nullptr, destDir.c_str(), nullptr);
-        if (r != ERROR_SUCCESS && r != ERROR_ALREADY_EXISTS)
-            return HRESULT_FROM_WIN32(r);
-        B2e_SetDialogParent(uiHwnd);
-        const wchar_t* pw = password.empty() ? nullptr : password.c_str();
-        HRESULT hr = backend->Extract(indices, destDir.c_str(), pw, nullptr);
-        B2e_SetDialogParent(NULL);
-        return hr;
-    }, m_hwnd, WM_APP_DONE);
-
-    HRESULT hrDone = S_OK;
-    MSG msg = {};
-    BOOL gmRet;
-    while ((gmRet = GetMessageW(&msg, nullptr, 0, 0)) != 0) {
-        if (gmRet < 0) { hrDone = E_FAIL; break; }
-        if (msg.message == WM_APP_DONE) { hrDone = (HRESULT)msg.wParam; break; }
-        if (!IsDialogMessageW(m_hwnd, &msg)) {
-            TranslateMessage(&msg);
-            DispatchMessageW(&msg);
-        }
-    }
-    m_worker.Wait();
-    EnableWindow(m_hwnd, TRUE);
-
-    if (msg.message == WM_QUIT) { PostQuitMessage((int)msg.wParam); return true; }
-
-    if (SUCCEEDED(hrDone)) {
-        auto& s = App::Instance().GetSettings();
-        if (s.GetBreakDDir())
-            CollapseIfSingleSubfolder(finalDest);
-        if (s.GetOpenFolderAfterExtract())
-            OpenExtractedFolder(finalDest);
-    } else if (hrDone != E_ABORT) {
-        ShowError(I18n::Tr(IDS_ERR_EXTRACT_FAILED).c_str(), hrDone);
-    }
-    return true;
+    m_controller.Extract(std::move(indices), presetDest);
 }
 
 struct TestResultDlgData {
@@ -316,7 +233,8 @@ HRESULT MainWindow::OnTest() {
 
     // Test is issued directly on SevenZip (not via the backend's Test) because the B2E
     // engine returns the tool's textual output for the result dialog, which the
-    // format-agnostic IArchiveBackend::Test does not surface.
+    // format-agnostic IArchiveBackend::Test does not surface. It is synchronous and
+    // dialog-only, so it stays in the window layer rather than the controller.
     std::wstring output;
     HRESULT hr = App::Instance().Get7z().Test(
         m_session.EffectivePath().c_str(), nullptr, nullptr, &output);
@@ -439,41 +357,7 @@ void MainWindow::OnAddFilesToCurrentArchive() {
 }
 
 void MainWindow::AddFilesToCurrentArchive(std::vector<std::wstring> srcPaths) {
-    if (!m_session.IsOpen() || !m_session.CanAdd() || srcPaths.empty()) return;
-
-    App& app = App::Instance();
-    const std::wstring archivePath = m_session.ArchivePath();
-    const std::wstring archiveFolder = SelectedFolderPath();
-
-    ProgressDlg progDlg;
-    progDlg.Show(m_hwnd, I18n::Tr(IDS_PROGRESS_ADDING).c_str());
-
-    auto* sink = new ProgressPostSink(m_hwnd, WM_APP_PROGRESS, WM_APP_DONE);
-    m_pSink = sink;
-    progDlg.SetSink(sink);
-
-    int level = app.GetSettings().GetCompressionLevel();
-    IArchiveBackend* backend = m_session.Backend();
-    m_worker.Start([backend, srcPaths, archiveFolder, level, sink]() -> HRESULT {
-        return backend->Add(srcPaths,
-                            archiveFolder.empty() ? nullptr : archiveFolder.c_str(),
-                            nullptr, level, L"", sink);
-    }, m_hwnd, WM_APP_DONE);
-    HRESULT hrDone = progDlg.RunMessageLoop();
-    m_worker.Wait();
-
-    delete sink;
-    m_pSink = nullptr;
-
-    if (FAILED(hrDone) && hrDone != E_ABORT) {
-        ShowError(I18n::Tr(IDS_ERR_ADD_FAILED).c_str(), hrDone);
-        return;
-    }
-    if (hrDone == E_ABORT) return;
-
-    // Success → reload the archive and reselect the target folder
-    OpenArchive(archivePath.c_str());
-    if (!archiveFolder.empty()) SelectTreeFolder(archiveFolder);
+    m_controller.Add(std::move(srcPaths));
 }
 
 void MainWindow::OnDelete() {
@@ -523,79 +407,10 @@ void MainWindow::OnDelete() {
                     MB_YESNO | MB_ICONWARNING) != IDYES)
         return;
 
-    ProgressDlg progDlg;
-    progDlg.Show(m_hwnd, I18n::Tr(IDS_PROGRESS_DELETING).c_str());
-
-    auto* sink = new ProgressPostSink(m_hwnd, WM_APP_PROGRESS, WM_APP_DONE);
-    m_pSink = sink;
-    progDlg.SetSink(sink);
-
-    const std::wstring reopenPath = m_session.ArchivePath();  // copy; OpenArchive reassigns the session
     std::vector<UINT32> deleteIndices(indexSet.begin(), indexSet.end());
-    IArchiveBackend* backend = m_session.Backend();
-    auto allItems = m_session.Items();
-    m_worker.Start([backend, deleteIndices, allItems, sink]() -> HRESULT {
-        return backend->Delete(deleteIndices, allItems, nullptr, sink);
-    }, m_hwnd, WM_APP_DONE);
-    HRESULT hrDone = progDlg.RunMessageLoop();
-    m_worker.Wait();
-
-    delete sink;
-    m_pSink = nullptr;
-
-    if (FAILED(hrDone) && hrDone != E_ABORT) {
-        ShowError(I18n::Tr(IDS_ERR_DELETE_FAILED).c_str(), hrDone);
-        return;
-    }
-    if (hrDone == E_ABORT) return;
-
-    // Success → reload the archive
-    OpenArchive(reopenPath.c_str());
+    m_controller.Delete(std::move(deleteIndices));
 }
 
 void MainWindow::OnCompress(CompressDlg::Params& params, bool openAfterCompress) {
-    if (params.inputFiles.empty() || params.outputPath.empty()) return;
-
-    auto  inputs  = params.inputFiles;
-    auto  outPath = params.outputPath;
-    auto  format  = params.format;
-    int   level   = params.level;
-    auto  method  = params.method;
-    bool  sfx     = params.sfx;
-
-    auto& sz = App::Instance().Get7z();
-    HWND uiHwnd = m_hwnd;
-    EnableWindow(m_hwnd, FALSE);
-    m_worker.Start([&sz, inputs, outPath, format, level, method, sfx, uiHwnd]() -> HRESULT {
-        CompressAdvanced adv;
-        adv.sfx = sfx;
-        B2e_SetDialogParent(uiHwnd);
-        HRESULT hr = sz.Compress(inputs, outPath.c_str(), format.c_str(),
-                                  level, method.c_str(), nullptr, nullptr, &adv);
-        B2e_SetDialogParent(NULL);
-        return hr;
-    }, m_hwnd, WM_APP_DONE);
-
-    HRESULT hrDone = S_OK;
-    MSG msg = {};
-    BOOL gmRet;
-    while ((gmRet = GetMessageW(&msg, nullptr, 0, 0)) != 0) {
-        if (gmRet < 0) { hrDone = E_FAIL; break; }
-        if (msg.message == WM_APP_DONE) { hrDone = (HRESULT)msg.wParam; break; }
-        if (!IsDialogMessageW(m_hwnd, &msg)) {
-            TranslateMessage(&msg);
-            DispatchMessageW(&msg);
-        }
-    }
-    m_worker.Wait();
-    EnableWindow(m_hwnd, TRUE);
-
-    if (msg.message == WM_QUIT) { PostQuitMessage((int)msg.wParam); return; }
-
-    if (FAILED(hrDone) && hrDone != E_ABORT) {
-        ShowError(I18n::Tr(IDS_ERR_COMPRESS_FAILED).c_str(), hrDone);
-    } else if (SUCCEEDED(hrDone) && openAfterCompress && !sfx) {
-        // SFX output is .exe which has no B2E list handler; skip opening.
-        OpenArchive(params.outputPath.c_str());
-    }
+    m_controller.Compress(params, openAfterCompress);
 }
