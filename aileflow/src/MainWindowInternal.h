@@ -20,6 +20,10 @@
 #include "Settings.h"
 #include "DialogUtils.h"   // StemFromPath
 
+// Dynamic archive-extension test from B2eBridge (true when `ext`, no dot, is handled
+// by a loaded .b2e script). Forward-declared to avoid pulling in B2eBridge.h here.
+bool B2e_IsArchiveExt(const wchar_t* ext);
+
 template <class T>
 struct ComReleaser {
     void operator()(T* p) const noexcept {
@@ -109,11 +113,6 @@ inline int CountTopLevelEntries(const std::vector<ArchiveItem>& items) {
 // extStripMode: 0=strip all known compound exts (default), 1=strip one ext, 2=keep all.
 // stripTrailingNum: if true, strip trailing digits/-/_/. from stem (Noah StripTrailingNumber).
 inline std::wstring ArchiveBaseName(const std::wstring& archivePath, int extStripMode = 0, bool stripTrailingNum = false) {
-    static const wchar_t* kExts[] = {
-        L".7z", L".zip", L".rar", L".tar", L".gz", L".bz2", L".xz",
-        L".cab", L".iso", L".jar", L".wim", L".lzh", L".lzma", L".arj",
-        L".zst", L".lz4", L".lz5", L".br", L".liz", nullptr
-    };
     std::wstring name = PathFindFileNameW(archivePath.c_str());
 
     if (extStripMode == 2) {
@@ -124,32 +123,34 @@ inline std::wstring ArchiveBaseName(const std::wstring& archivePath, int extStri
         if (dot != std::wstring::npos)
             name = name.substr(0, dot);
     } else {
-        // strip all known compound extensions + numeric volume extensions (.001 etc.)
-        bool stripped = true;
-        while (stripped) {
-            stripped = false;
+        // Strip recognized archive extensions (compound, e.g. .tar.gz). What counts
+        // as an archive extension is driven by the loaded .b2e scripts
+        // (B2e_IsArchiveExt), not a hardcoded list, so a user-added format such as
+        // zpaq yields the right subfolder name too.
+        //
+        // Numeric volume suffixes (.001 etc.) are stripped only while they are the
+        // OUTERMOST segment — i.e. before any archive extension has been removed —
+        // because a volume number follows the archive extension ("name.7z.001").
+        // Once the archive extension is gone, trailing digits are part of the base
+        // name and must be kept (e.g. "111.222.333.444.zpaq" → "111.222.333.444",
+        // not "111").
+        bool archiveExtStripped = false;
+        while (true) {
             auto dot = name.rfind(L'.');
-            if (dot != std::wstring::npos && dot + 1 < name.size()) {
-                bool allDigits = true;
-                for (size_t i = dot + 1; i < name.size(); ++i)
-                    if (!iswdigit(name[i])) { allDigits = false; break; }
-                if (allDigits) {
-                    name = name.substr(0, dot);
-                    stripped = true;
-                    continue;
-                }
+            if (dot == std::wstring::npos || dot + 1 >= name.size()) break;
+            std::wstring ext = name.substr(dot + 1);
+            if (B2e_IsArchiveExt(ext.c_str())) {
+                name = name.substr(0, dot);
+                archiveExtStripped = true;
+                continue;
             }
-            for (int i = 0; kExts[i]; ++i) {
-                size_t elen = wcslen(kExts[i]);
-                if (name.size() <= elen) continue;
-                std::wstring tail = name.substr(name.size() - elen);
-                for (auto& c : tail) c = (wchar_t)towlower(c);
-                if (tail == kExts[i]) {
-                    name = name.substr(0, name.size() - elen);
-                    stripped = true;
-                    break;
-                }
+            bool allDigits = true;
+            for (wchar_t c : ext) if (!iswdigit(c)) { allDigits = false; break; }
+            if (!archiveExtStripped && allDigits) {
+                name = name.substr(0, dot);  // outermost volume number
+                continue;
             }
+            break;
         }
     }
 
