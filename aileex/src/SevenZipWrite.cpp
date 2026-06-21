@@ -319,7 +319,7 @@ HRESULT SevenZip::DeleteItems(const wchar_t* archivePath,
                          MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
             hr = HRESULT_FROM_WIN32(GetLastError());
         else
-            InvalidateCacheForPath(archivePath);
+            m_cache.InvalidateForPath(archivePath);
     } else {
         DeleteFileW(tempPath.c_str());
     }
@@ -485,7 +485,7 @@ HRESULT SevenZip::AddToArchive(const wchar_t* archivePath,
                          MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
             hr = HRESULT_FROM_WIN32(GetLastError());
         else
-            InvalidateCacheForPath(archivePath);
+            m_cache.InvalidateForPath(archivePath);
     } else {
         DeleteFileW(tempPath.c_str());
     }
