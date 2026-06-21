@@ -28,46 +28,34 @@
 #include "MainWindowInternal.h"
 
 bool MainWindow::OpenArchive(const wchar_t* path) {
-    // Delete previously unwrapped split temp file (prevent leak on replace)
-    if (!m_effectiveArchivePath.empty() &&
-        _wcsicmp(m_effectiveArchivePath.c_str(), m_archivePath.c_str()) != 0) {
-        DeleteFileW(m_effectiveArchivePath.c_str());
-    }
-    m_archivePath = path;
-    m_effectiveArchivePath = path;
-    m_isReadOnly = false;
-    m_password.clear();
-    m_items.clear();
-
     App& app = App::Instance();
 
-    // B2E backend: always use SevenZip (B2E engine).
+    // B2E backend: always use SevenZip (B2E engine). Fill a local listing so the
+    // session is left untouched (previous archive preserved) unless the open succeeds.
+    std::vector<ArchiveItem> items;
+    std::wstring effectivePath = path;
     HRESULT hr = app.Get7z().IsLoaded()
-        ? app.Get7z().OpenArchive(path, m_items, nullptr, &m_effectiveArchivePath)
+        ? app.Get7z().OpenArchive(path, items, nullptr, &effectivePath)
         : E_FAIL;
-
-    // Detect split auto-unwrap → treat as read-only
-    if (SUCCEEDED(hr) &&
-        _wcsicmp(m_effectiveArchivePath.c_str(), m_archivePath.c_str()) != 0) {
-        m_isReadOnly = true;
-    }
-    // B2E backend: read-only unless the format's .b2e has an encode: section.
-    if (SUCCEEDED(hr))
-        m_isReadOnly = !app.Get7z().CanAddToCurrent();
 
     if (FAILED(hr)) {
         ShowError(I18n::Tr(IDS_ERR_OPEN_ARCHIVE).c_str(), hr);
         return false;
     }
 
+    // Read-only unless the format's .b2e exposes an encode: section. (A split
+    // auto-unwrap also yields no encode handler, so CanAddToCurrent() covers it.)
+    bool isReadOnly = !app.Get7z().CanAddToCurrent();
+
     // Bind the polymorphic backend to the freshly opened archive. Transition
     // scaffolding for the IArchiveBackend migration (Step 3): the open above is
     // left intact and will be folded into backend->Open() later.
-    {
-        auto b = std::make_unique<SevenZipBackend>(app.Get7z());
-        b->Bind(m_effectiveArchivePath);
-        m_backend = std::move(b);
-    }
+    auto backend = std::make_unique<SevenZipBackend>(app.Get7z());
+    backend->Bind(effectivePath);
+
+    // Commit the new archive state; Adopt also disposes any previous split-unwrap temp.
+    m_session.Adopt(path, effectivePath, L"", std::move(items),
+                    std::move(backend), isReadOnly);
 
     // Update MRU — normalize relative paths and mixed cases ("../" etc.) via GetFullPathNameW.
     {
@@ -86,7 +74,8 @@ bool MainWindow::OpenArchive(const wchar_t* path) {
 
     // Update status
     {
-        size_t fileCount = std::count_if(m_items.begin(), m_items.end(),
+        const auto& items = m_session.Items();
+        size_t fileCount = std::count_if(items.begin(), items.end(),
                                          [](const ArchiveItem& it){ return !it.isDir; });
         std::wstring status = I18n::TrFmt(IDS_FMT_STATUS_ENTRIES,
                                           fileCount, app.Get7z().GetLoadedName().c_str());
@@ -131,17 +120,17 @@ bool MainWindow::OpenArchive(const wchar_t* path) {
 }
 
 void MainWindow::OnExtract(const std::wstring& presetDest) {
-    if (m_archivePath.empty()) return;
+    if (!m_session.IsOpen()) return;
     RunExtraction({}, presetDest);
 }
 
 bool MainWindow::TriggerExtract(const std::wstring& presetDest) {
-    if (m_items.empty()) return true;  // nothing to extract; let a batch continue
+    if (m_session.Items().empty()) return true;  // nothing to extract; let a batch continue
     return RunExtraction({}, presetDest);
 }
 
 void MainWindow::OnExtractSmart() {
-    if (m_archivePath.empty()) return;
+    if (!m_session.IsOpen()) return;
     std::wstring dest;
     if (m_hExtractEdit) dest = GetWindowTextString(m_hExtractEdit);
     if (ListView_GetSelectedCount(m_hListView) > 0)
@@ -151,11 +140,13 @@ void MainWindow::OnExtractSmart() {
 }
 
 void MainWindow::OnExtractSelected(const std::wstring& presetDest) {
-    if (m_archivePath.empty()) return;
+    if (!m_session.IsOpen()) return;
+    const auto& items       = m_session.Items();
+    const auto& folderPaths = m_session.FolderPaths();
 
     // Resolve lParam to real archive index.
-    // - lParam < m_items.size()  : real entry (directory → extract contents too)
-    // - lParam >= m_items.size() : virtual folder (extract m_folderPaths contents)
+    // - lParam < items.size()  : real entry (directory → extract contents too)
+    // - lParam >= items.size() : virtual folder (extract folderPaths contents)
     std::set<UINT32> indexSet;
     int item = -1;
     while ((item = ListView_GetNextItem(m_hListView, item, LVNI_SELECTED)) != -1) {
@@ -166,19 +157,19 @@ void MainWindow::OnExtractSelected(const std::wstring& presetDest) {
         UINT32 lp = (UINT32)lvi.lParam;
 
         std::wstring folder;
-        if (lp < (UINT32)m_items.size()) {
+        if (lp < (UINT32)items.size()) {
             indexSet.insert(lp);
-            if (m_items[lp].isDir) folder = m_items[lp].path;
+            if (items[lp].isDir) folder = items[lp].path;
         } else {
-            int fpIdx = (int)(lp - (UINT32)m_items.size());
-            if (fpIdx >= 0 && fpIdx < (int)m_folderPaths.size())
-                folder = m_folderPaths[fpIdx];
+            int fpIdx = (int)(lp - (UINT32)items.size());
+            if (fpIdx >= 0 && fpIdx < (int)folderPaths.size())
+                folder = folderPaths[fpIdx];
         }
         if (!folder.empty()) {
             std::wstring prefix = folder + L"\\";
-            for (UINT32 j = 0; j < (UINT32)m_items.size(); ++j) {
-                if (m_items[j].path.size() >= prefix.size() &&
-                    m_items[j].path.compare(0, prefix.size(), prefix) == 0)
+            for (UINT32 j = 0; j < (UINT32)items.size(); ++j) {
+                if (items[j].path.size() >= prefix.size() &&
+                    items[j].path.compare(0, prefix.size(), prefix) == 0)
                     indexSet.insert(j);
             }
         }
@@ -202,20 +193,11 @@ bool MainWindow::RunExtraction(std::vector<UINT32> indices, std::wstring presetD
     // Note: in B2E mode B2e_List() never sets ArchiveItem::encrypted, so needPw is always
     // false and PromptPassword() is never called here. Password prompting is handled
     // internally by the B2E engine's input() callback when the .b2e script requests it.
-    if (m_password.empty()) {
-        bool needPw = false;
-        if (indices.empty()) {
-            for (const auto& it : m_items)
-                if (it.encrypted) { needPw = true; break; }
-        } else {
-            for (UINT32 idx : indices)
-                if (idx < m_items.size() && m_items[idx].encrypted) { needPw = true; break; }
-        }
-        if (needPw) {
-            m_password = PromptPassword();
-            // Password cancelled: skip this archive but let a batch continue to the next.
-            if (m_password.empty()) return true;
-        }
+    if (m_session.Password().empty() && m_session.SelectionNeedsPassword(indices)) {
+        std::wstring pw = PromptPassword();
+        // Password cancelled: skip this archive but let a batch continue to the next.
+        if (pw.empty()) return true;
+        m_session.SetPassword(std::move(pw));
     }
 
     std::wstring destDir;
@@ -232,10 +214,10 @@ bool MainWindow::RunExtraction(std::vector<UINT32> indices, std::wstring presetD
             } else {
                 wchar_t full[MAX_PATH] = {};
                 std::wstring abs;
-                if (GetFullPathNameW(m_archivePath.c_str(), MAX_PATH, full, nullptr) != 0)
+                if (GetFullPathNameW(m_session.ArchivePath().c_str(), MAX_PATH, full, nullptr) != 0)
                     abs = full;
                 else
-                    abs = m_archivePath;
+                    abs = m_session.ArchivePath();
                 auto sl = abs.find_last_of(L"\\/");
                 destDir = (sl != std::wstring::npos) ? abs.substr(0, sl) : abs;
             }
@@ -254,16 +236,16 @@ bool MainWindow::RunExtraction(std::vector<UINT32> indices, std::wstring presetD
     if (indices.empty()) {
         auto& s   = app.GetSettings();
         int mkDir = s.GetMkDir();
-        if (ShouldCreateSubfolder(mkDir, m_items))
+        if (ShouldCreateSubfolder(mkDir, m_session.Items()))
             finalDest = destDir + L"\\" +
-                        ArchiveBaseName(m_archivePath, s.GetExtStripMode(), s.GetStripTrailingNumber());
+                        ArchiveBaseName(m_session.ArchivePath(), s.GetExtStripMode(), s.GetStripTrailingNumber());
     }
 
-    std::wstring password = m_password;
+    std::wstring password = m_session.Password();
 
-    // The window is disabled for the duration, so m_backend cannot be replaced by a
+    // The window is disabled for the duration, so the backend cannot be replaced by a
     // re-open while the worker runs; capturing the raw pointer is safe.
-    IArchiveBackend* backend = m_backend.get();
+    IArchiveBackend* backend = m_session.Backend();
     HWND uiHwnd = m_hwnd;
     EnableWindow(m_hwnd, FALSE);
     m_worker.Start([backend, indices, destDir = finalDest, password, uiHwnd]() -> HRESULT {
@@ -330,14 +312,14 @@ static INT_PTR CALLBACK TestResultDlgProc(HWND h, UINT msg, WPARAM wp, LPARAM lp
 }
 
 HRESULT MainWindow::OnTest() {
-    if (m_archivePath.empty() || !m_backend || !m_backend->CanTest()) return E_FAIL;
+    if (!m_session.IsOpen() || !m_session.Backend() || !m_session.Backend()->CanTest()) return E_FAIL;
 
-    // Test is issued directly on SevenZip (not via m_backend->Test) because the B2E
+    // Test is issued directly on SevenZip (not via the backend's Test) because the B2E
     // engine returns the tool's textual output for the result dialog, which the
     // format-agnostic IArchiveBackend::Test does not surface.
     std::wstring output;
     HRESULT hr = App::Instance().Get7z().Test(
-        m_effectiveArchivePath.c_str(), nullptr, nullptr, &output);
+        m_session.EffectivePath().c_str(), nullptr, nullptr, &output);
 
     // Normalize line endings for the edit control
     std::wstring normalized;
@@ -362,12 +344,12 @@ HRESULT MainWindow::OnTest() {
 HRESULT MainWindow::TriggerTest() {
     // Distinguish "archive could not be opened" from "format has no test support",
     // so the CLI `t` action can report the right error and exit code.
-    if (m_archivePath.empty()) {
+    if (!m_session.IsOpen()) {
         MessageBoxW(m_hwnd, I18n::Tr(IDS_ERR_OPEN_ARCHIVE).c_str(),
                     I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
         return E_FAIL;
     }
-    if (!m_backend || !m_backend->CanTest()) {
+    if (!m_session.Backend() || !m_session.Backend()->CanTest()) {
         MessageBoxW(m_hwnd, I18n::Tr(IDS_ERR_TEST_NOT_SUPPORTED).c_str(),
                     I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
         return E_FAIL;
@@ -415,18 +397,8 @@ void MainWindow::OnFileOpen() {
 }
 
 void MainWindow::CloseArchive() {
-    if (m_archivePath.empty()) return;
-    // Clean up any temporary file created by split auto-unwrap
-    if (!m_effectiveArchivePath.empty() &&
-        _wcsicmp(m_effectiveArchivePath.c_str(), m_archivePath.c_str()) != 0) {
-        DeleteFileW(m_effectiveArchivePath.c_str());
-    }
-    m_archivePath.clear();
-    m_effectiveArchivePath.clear();
-    m_items.clear();
-    m_folderPaths.clear();
-    m_isReadOnly = false;
-    m_backend.reset();
+    if (!m_session.IsOpen()) return;
+    m_session.Close();  // deletes any split-unwrap temp file and clears all state
 
     if (m_hTreeView) TreeView_DeleteAllItems(m_hTreeView);
     if (m_hListView) ListView_DeleteAllItems(m_hListView);
@@ -458,7 +430,7 @@ void MainWindow::OnAddFiles() {
 
 // Open a file picker and add the selected files to the current archive.
 void MainWindow::OnAddFilesToCurrentArchive() {
-    if (m_archivePath.empty() || !m_backend || !m_backend->CanAdd()) return;
+    if (!m_session.IsOpen() || !m_session.CanAdd()) return;
 
     auto files = BrowseMultipleFiles(m_hwnd, IDS_TITLE_SELECT_ADD);
     if (files.empty()) return;
@@ -467,10 +439,10 @@ void MainWindow::OnAddFilesToCurrentArchive() {
 }
 
 void MainWindow::AddFilesToCurrentArchive(std::vector<std::wstring> srcPaths) {
-    if (m_archivePath.empty() || !m_backend || !m_backend->CanAdd() || srcPaths.empty()) return;
+    if (!m_session.IsOpen() || !m_session.CanAdd() || srcPaths.empty()) return;
 
     App& app = App::Instance();
-    const std::wstring archivePath = m_archivePath;
+    const std::wstring archivePath = m_session.ArchivePath();
     const std::wstring archiveFolder = SelectedFolderPath();
 
     ProgressDlg progDlg;
@@ -481,7 +453,7 @@ void MainWindow::AddFilesToCurrentArchive(std::vector<std::wstring> srcPaths) {
     progDlg.SetSink(sink);
 
     int level = app.GetSettings().GetCompressionLevel();
-    IArchiveBackend* backend = m_backend.get();
+    IArchiveBackend* backend = m_session.Backend();
     m_worker.Start([backend, srcPaths, archiveFolder, level, sink]() -> HRESULT {
         return backend->Add(srcPaths,
                             archiveFolder.empty() ? nullptr : archiveFolder.c_str(),
@@ -505,7 +477,9 @@ void MainWindow::AddFilesToCurrentArchive(std::vector<std::wstring> srcPaths) {
 }
 
 void MainWindow::OnDelete() {
-    if (m_archivePath.empty() || !m_backend || !m_backend->CanDelete()) return;
+    if (!m_session.IsOpen() || !m_session.CanDelete()) return;
+    const auto& items          = m_session.Items();
+    const auto& sessionFolders = m_session.FolderPaths();
 
     std::set<UINT32> indexSet;
     std::set<std::wstring> folderPaths;
@@ -518,23 +492,23 @@ void MainWindow::OnDelete() {
         UINT32 lp = (UINT32)lvi.lParam;
 
         std::wstring folder;
-        if (lp < (UINT32)m_items.size()) {
+        if (lp < (UINT32)items.size()) {
             indexSet.insert(lp);
-            const auto& it = m_items[lp];
+            const auto& it = items[lp];
             if (it.isDir) folder = it.path;
             else          folderPaths.insert(it.path);
         } else {
-            int fpIdx = (int)(lp - (UINT32)m_items.size());
-            if (fpIdx >= 0 && fpIdx < (int)m_folderPaths.size())
-                folder = m_folderPaths[fpIdx];
+            int fpIdx = (int)(lp - (UINT32)items.size());
+            if (fpIdx >= 0 && fpIdx < (int)sessionFolders.size())
+                folder = sessionFolders[fpIdx];
         }
 
         if (!folder.empty()) {
             folderPaths.insert(folder);
             std::wstring prefix = folder + L"\\";
-            for (UINT32 j = 0; j < (UINT32)m_items.size(); ++j) {
-                if (m_items[j].path.size() > prefix.size() &&
-                    m_items[j].path.compare(0, prefix.size(), prefix) == 0) {
+            for (UINT32 j = 0; j < (UINT32)items.size(); ++j) {
+                if (items[j].path.size() > prefix.size() &&
+                    items[j].path.compare(0, prefix.size(), prefix) == 0) {
                     indexSet.insert(j);
                 }
             }
@@ -556,10 +530,10 @@ void MainWindow::OnDelete() {
     m_pSink = sink;
     progDlg.SetSink(sink);
 
-    const std::wstring reopenPath = m_archivePath;  // copy; OpenArchive reassigns the member
+    const std::wstring reopenPath = m_session.ArchivePath();  // copy; OpenArchive reassigns the session
     std::vector<UINT32> deleteIndices(indexSet.begin(), indexSet.end());
-    IArchiveBackend* backend = m_backend.get();
-    auto allItems = m_items;
+    IArchiveBackend* backend = m_session.Backend();
+    auto allItems = m_session.Items();
     m_worker.Start([backend, deleteIndices, allItems, sink]() -> HRESULT {
         return backend->Delete(deleteIndices, allItems, nullptr, sink);
     }, m_hwnd, WM_APP_DONE);
