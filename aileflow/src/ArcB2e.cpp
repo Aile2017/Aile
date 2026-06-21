@@ -659,20 +659,24 @@ void CArcB2e::CB2eCore::arc( const wchar_t* opt, const CharArray& a, const BoolA
 				if( opt[1]!=L'\0' )
 					add = opt;
 
-				// Strip only a *recognized* archive extension, plus a preceding
-				// ".tar" for compound stream extensions (.tar.gz etc.). The old
-				// extnum-based cut removed everything after the first/last dot
-				// regardless of content, collapsing dotted base names like
-				// "111.222.333.444" down to "111". anm is the output name the UI
-				// or CLI already built, so its trailing component is always one of
-				// our formats' own extensions; everything before it is the base
-				// name and must be preserved (matches AileEx).
+				// Strip the existing extension before re-applying .XXX, but only when
+				// it is a real archive extension — never a dotted part of the base
+				// name (so "111.222.333.444" + .7z stays intact, not collapsed to
+				// "111"). "Real archive extension" is decided purely from the .b2e
+				// scripts, with no hardcoded list in the engine:
+				//   1. it equals the extension this very (arc.XXX) is applying — i.e.
+				//      the name already ends in .XXX (re-deriving the same output;
+				//      covers any format the active script emits, incl. .exe for SFX);
+				//   2. or it is handled by some loaded .b2e (isArcExt → B2eBridge),
+				//      which also covers cross-format compounds such as .tar.gz.
+				// A preceding ".tar" is stripped too for compound stream extensions.
 				ext = anm + ki_strlen(anm);   // default: nothing to strip
 				const wchar_t* nm = kiPath::name(anm);
 				const wchar_t* lastdot = NULL;
 				for( const wchar_t* p=nm; *p; ++p )
 					if( *p==L'.' ) lastdot = p;
-				if( lastdot && lastdot>nm && mycnf().isArcExt(lastdot+1) )
+				if( lastdot && lastdot>nm &&
+				    ( 0==ki_strcmpi(lastdot+1, opt+1) || mycnf().isArcExt(lastdot+1) ) )
 				{
 					ext = lastdot+1;
 					const wchar_t* prevdot = NULL;
