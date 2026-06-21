@@ -166,8 +166,6 @@ void MainWindow::OnListDblClick() {
 
 void MainWindow::OnOpenAssoc() {
     if (!m_session.IsOpen()) return;
-
-    App& app = App::Instance();
     if (!Ensure7zLoaded()) return;
     int sel = ListView_GetNextItem(m_hListView, -1, LVNI_SELECTED);
     if (sel < 0) {

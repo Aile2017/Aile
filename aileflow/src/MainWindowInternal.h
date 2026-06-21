@@ -19,7 +19,6 @@
 #include "ArchiveItem.h"
 #include "Settings.h"
 #include "DialogUtils.h"   // StemFromPath
-#include "App.h"           // App::Instance (OpenExtractedFolder)
 
 template <class T>
 struct ComReleaser {
@@ -211,8 +210,8 @@ inline void CollapseIfSingleSubfolder(const std::wstring& destDir) {
 }
 
 // Open the extracted output folder using OpenFolderCommand (if set) or Explorer.
-inline void OpenExtractedFolder(const std::wstring& dir) {
-    const std::wstring& cmd = App::Instance().GetSettings().GetOpenFolderCommand();
+inline void OpenExtractedFolder(const Settings& settings, const std::wstring& dir) {
+    const std::wstring& cmd = settings.GetOpenFolderCommand();
     if (cmd.empty()) {
         ShellExecuteW(nullptr, L"open", dir.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
     } else {

@@ -2,10 +2,10 @@
 // Domain decisions + sequencing live here; UI (progress/worker, prompts, dialogs,
 // view refresh) is delegated to IArchiveUI. AileFlow-only (B2E backend).
 #include "ArchiveController.h"
-#include "App.h"
 #include "I18n.h"
 #include "SevenZipBackend.h"
 #include "B2eBridge.h"
+#include "Settings.h"
 #include "resource.h"
 #include <shlobj.h>
 #include <algorithm>
@@ -13,14 +13,12 @@
                                  // CollapseIfSingleSubfolder / OpenExtractedFolder / GetFullPathString
 
 bool ArchiveController::Open(const wchar_t* path) {
-    App& app = App::Instance();
-
     // B2E backend: always use SevenZip (B2E engine). Fill a local listing so the
     // session is left untouched (previous archive preserved) unless the open succeeds.
     std::vector<ArchiveItem> items;
     std::wstring effectivePath = path;
-    HRESULT hr = app.Get7z().IsLoaded()
-        ? app.Get7z().OpenArchive(path, items, nullptr, &effectivePath)
+    HRESULT hr = m_svc.sevenZip.IsLoaded()
+        ? m_svc.sevenZip.OpenArchive(path, items, nullptr, &effectivePath)
         : E_FAIL;
 
     if (FAILED(hr)) {
@@ -30,9 +28,9 @@ bool ArchiveController::Open(const wchar_t* path) {
 
     // Read-only unless the format's .b2e exposes an encode: section. (A split
     // auto-unwrap also yields no encode handler, so CanAddToCurrent() covers it.)
-    bool isReadOnly = !app.Get7z().CanAddToCurrent();
+    bool isReadOnly = !m_svc.sevenZip.CanAddToCurrent();
 
-    auto backend = std::make_unique<SevenZipBackend>(app.Get7z());
+    auto backend = std::make_unique<SevenZipBackend>(m_svc.sevenZip);
     backend->Bind(effectivePath);
 
     // Commit the new archive state; Adopt also disposes any previous split-unwrap temp.
@@ -43,9 +41,8 @@ bool ArchiveController::Open(const wchar_t* path) {
     {
         std::wstring full = GetFullPathString(path);
         if (full.empty()) full = path;
-        auto& s = app.GetSettings();
-        s.AddMru(full);
-        s.Save();
+        m_svc.settings.AddMru(full);
+        m_svc.settings.Save();
     }
 
     m_ui.OnArchiveOpened();
@@ -53,8 +50,6 @@ bool ArchiveController::Open(const wchar_t* path) {
 }
 
 bool ArchiveController::Extract(std::vector<UINT32> indices, std::wstring presetDest) {
-    App& app = App::Instance();
-
     if (!m_ui.Ensure7zLoaded()) return false;
 
     // If password not yet known, check whether target items are encrypted and prompt.
@@ -74,7 +69,7 @@ bool ArchiveController::Extract(std::vector<UINT32> indices, std::wstring preset
         if (!savedDest.empty()) {
             destDir = savedDest;
         } else {
-            const Settings& st = app.GetSettings();
+            const Settings& st = m_svc.settings;
             if (st.GetOutputDirModeFixed()) {
                 const auto& d = st.GetDefaultOutputDir();
                 if (!d.empty()) destDir = d;
@@ -98,7 +93,7 @@ bool ArchiveController::Extract(std::vector<UINT32> indices, std::wstring preset
     // entries, so no wrapping folder is created; archive-internal paths are preserved.
     std::wstring finalDest = destDir;
     if (indices.empty()) {
-        auto& s   = app.GetSettings();
+        Settings& s = m_svc.settings;
         int mkDir = s.GetMkDir();
         if (ShouldCreateSubfolder(mkDir, m_session.Items()))
             finalDest = destDir + L"\\" +
@@ -123,11 +118,11 @@ bool ArchiveController::Extract(std::vector<UINT32> indices, std::wstring preset
     if (res.quit) return true;
 
     if (SUCCEEDED(res.hr)) {
-        auto& s = app.GetSettings();
+        Settings& s = m_svc.settings;
         if (s.GetBreakDDir())
             CollapseIfSingleSubfolder(finalDest);
         if (s.GetOpenFolderAfterExtract())
-            OpenExtractedFolder(finalDest);
+            OpenExtractedFolder(s, finalDest);
     } else if (res.hr != E_ABORT) {
         m_ui.ShowError(I18n::Tr(IDS_ERR_EXTRACT_FAILED).c_str(), res.hr);
     }
@@ -137,11 +132,10 @@ bool ArchiveController::Extract(std::vector<UINT32> indices, std::wstring preset
 void ArchiveController::Add(std::vector<std::wstring> srcPaths) {
     if (!m_session.IsOpen() || !m_session.CanAdd() || srcPaths.empty()) return;
 
-    App& app = App::Instance();
     const std::wstring archivePath   = m_session.ArchivePath();
     const std::wstring archiveFolder = m_ui.SelectedFolder();
 
-    int level = app.GetSettings().GetCompressionLevel();
+    int level = m_svc.settings.GetCompressionLevel();
     IArchiveBackend* backend = m_session.Backend();
     std::wstring folder = archiveFolder;
     OpResult res = m_ui.RunOperation(I18n::Tr(IDS_PROGRESS_ADDING).c_str(),
@@ -193,7 +187,7 @@ void ArchiveController::Compress(CompressDlg::Params params, bool openAfterCompr
     auto method  = params.method;
     bool sfx     = params.sfx;
 
-    auto& sz = App::Instance().Get7z();
+    auto& sz = m_svc.sevenZip;
     OpResult res = m_ui.RunBackgroundOp(
         [&sz, inputs, outPath, format, level, method, sfx](HWND uiHwnd) -> HRESULT {
             CompressAdvanced adv;

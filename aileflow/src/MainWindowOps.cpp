@@ -79,7 +79,6 @@ bool MainWindow::BrowseDestFolder(std::wstring& dir) {
 }
 
 void MainWindow::OnArchiveOpened() {
-    App& app = App::Instance();
     RebuildMruMenu();
 
     // Title
@@ -93,14 +92,14 @@ void MainWindow::OnArchiveOpened() {
     size_t fileCount = std::count_if(items.begin(), items.end(),
                                      [](const ArchiveItem& it){ return !it.isDir; });
     std::wstring status = I18n::TrFmt(IDS_FMT_STATUS_ENTRIES,
-                                      fileCount, app.Get7z().GetLoadedName().c_str());
+                                      fileCount, m_svc.sevenZip.GetLoadedName().c_str());
     SetWindowTextW(m_hStatus, status.c_str());
 
     // B2E mode: configure the listing columns for raw output display.
-    if (app.Get7z().GetLoadedPath().empty()) {
+    if (m_svc.sevenZip.GetLoadedPath().empty()) {
         // Column 1: left-aligned, header = raw listing header from 7z.exe l
         {
-            const std::wstring& lbl = app.Get7z().GetListColumnLabel();
+            const std::wstring& lbl = m_svc.sevenZip.GetListColumnLabel();
             LVCOLUMNW lvc = {};
             lvc.mask    = LVCF_TEXT | LVCF_FMT;
             lvc.fmt     = LVCFMT_LEFT;
@@ -236,7 +235,7 @@ HRESULT MainWindow::OnTest() {
     // format-agnostic IArchiveBackend::Test does not surface. It is synchronous and
     // dialog-only, so it stays in the window layer rather than the controller.
     std::wstring output;
-    HRESULT hr = App::Instance().Get7z().Test(
+    HRESULT hr = m_svc.sevenZip.Test(
         m_session.EffectivePath().c_str(), nullptr, nullptr, &output);
 
     // Normalize line endings for the edit control
@@ -334,12 +333,12 @@ void MainWindow::OnAddFiles() {
 
     CompressDlg::Params params;
     params.inputFiles  = std::move(files);
-    params.LoadFromSettings(App::Instance().GetSettings());
-    params.outputPath  = DefaultOutputPath(App::Instance().GetSettings(), params.inputFiles);
+    params.LoadFromSettings(m_svc.settings);
+    params.outputPath  = DefaultOutputPath(m_svc.settings, params.inputFiles);
 
     CompressDlg dlg;
     if (dlg.Show(m_hwnd, params)) {
-        auto& s = App::Instance().GetSettings();
+        auto& s = m_svc.settings;
         params.SaveToSettings(s);
         s.Save();
         OnCompress(params, /*openAfterCompress=*/true);
