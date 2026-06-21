@@ -1,5 +1,7 @@
-// Archive operations: open/extract/test/compress/add/delete/properties/comment.
-// Split out of MainWindow.cpp. AileEx-only.
+// Archive command handlers (thin) + IArchiveUI implementation.
+// The operation orchestration itself lives in ArchiveController; this file gathers
+// UI input (selection, dialogs), forwards to the controller, and provides the UI
+// services the controller calls back into. AileEx-only.
 #include "MainWindow.h"
 #include "App.h"
 #include "CompressDlg.h"
@@ -7,110 +9,101 @@
 #include "CommentDlg.h"
 #include "DialogUtils.h"
 #include "I18n.h"
-#include "InfoDlg.h"
 #include "PropertiesDlg.h"
 #include "ProgressDlg.h"
-#include "RarProcess.h"
-#include "RarBackend.h"
-#include "SevenZipBackend.h"
-#include "ArchiveOpener.h"
-#include "SettingsDlg.h"
 #include "resource.h"
 #include <shellapi.h>
 #include <shlobj.h>
 #include <shobjidl_core.h>
 #include <shlwapi.h>
-#include <commdlg.h>
-#include <windowsx.h>
-#include <map>
 #include <commctrl.h>
 #include <algorithm>
 #include <set>
 
-#pragma comment(lib, "version.lib")
 #include "MainWindowInternal.h"
 
-bool MainWindow::OpenArchive(const wchar_t* path) {
-    // Member state is left untouched until the open succeeds, so a failed open
-    // needs no rollback; reuse the current password as the first retry guess.
-    const std::wstring prevPassword = m_session.Password();
+// ---- IArchiveUI implementation (UI services for ArchiveController) ----
 
-    App& app = App::Instance();
+OpResult MainWindow::RunOperation(const wchar_t* title,
+                                  std::function<HRESULT(IExtractProgressSink*)> work) {
+    ProgressDlg progDlg;
+    progDlg.Show(m_hwnd, title);
 
-    // Resolve the rar.exe writer path once (used by RarBackend for write ops).
-    std::wstring rarExe = app.GetSettings().GetRarExePath();
-    if (rarExe.empty()) rarExe = RarProcess::FindRarExe();
+    SinkGuard sg(m_hwnd, m_pSink);
+    ProgressPostSink* sink = sg.sink;
+    progDlg.SetSink(sink);
 
-    // Delegate backend selection, fallback and password retry to ArchiveOpener.
-    // A successful result hands back a fully-bound backend plus its listing.
-    ArchiveOpener opener(app.Get7z(), app.GetUnrar(), rarExe);
-    ArchiveOpener::Result opened =
-        opener.Open(path, prevPassword, [this]{ return PromptPassword(); });
+    m_worker.Start([work, sink]() -> HRESULT { return work(sink); }, m_hwnd, WM_APP_DONE);
+    HRESULT hr = progDlg.RunMessageLoop();
+    m_worker.Wait();
+    return { hr, sink->IsCancelled() };
+}
 
-    if (!opened.backend) {
-        // Open failed; the session still holds the previous archive (if any).
-        std::wstring msg = I18n::Tr(IDS_ERR_OPEN_ARCHIVE);
-        if (!app.Get7z().IsLoaded() && !app.GetUnrar().IsLoaded()) {
-            msg += I18n::Tr(IDS_ERR_OPEN_ARCHIVE_7Z_UNRAR);
-            if (app.Get7z().IsWrongBitness())
-                msg += I18n::Tr(IDS_ERR_7Z_WRONG_BITNESS);
-        } else if (!app.Get7z().IsLoaded()) {
-            msg += I18n::Tr(IDS_ERR_OPEN_ARCHIVE_7Z);
-            if (app.Get7z().IsWrongBitness())
-                msg += I18n::Tr(IDS_ERR_7Z_WRONG_BITNESS);
-        }
-        ShowError(msg.c_str(), E_FAIL);
-        return false;
-    }
+HRESULT MainWindow::RunRarCompress(const CompressDlg::Params& params) {
+    ProgressDlg progDlg;
+    progDlg.Show(m_hwnd, I18n::Tr(IDS_PROGRESS_COMPRESSING).c_str());
 
-    // Commit the new archive state from the opener's result. Split auto-unwrap
-    // (effective path differs from display path) is read-only; Adopt also disposes
-    // any previous split-unwrap temp file.
-    bool readOnly = _wcsicmp(opened.effectivePath.c_str(), path) != 0;
-    m_session.Adopt(path, opened.effectivePath, std::move(opened.password),
-                    std::move(opened.items), std::move(opened.backend), readOnly);
+    SinkGuard sg(m_hwnd, m_pSink);
+    ProgressPostSink* sink = sg.sink;
+    progDlg.SetSink(sink);
 
-    // Update MRU — normalize relative paths and mixed cases ("../" etc.) via GetFullPathNameW.
-    {
-        wchar_t full[MAX_PATH] = {};
-        if (GetFullPathNameW(path, MAX_PATH, full, nullptr) == 0)
-            wcsncpy_s(full, path, MAX_PATH - 1);
-        auto& s = app.GetSettings();
-        s.AddMru(full);
-        s.Save();
-        RebuildMruMenu();
-    }
+    return RunRarCompressSync(m_hwnd, params,
+                              App::Instance().GetSettings().GetRarExePath().c_str(),
+                              progDlg, sink);
+}
 
-    // Update title
-    const wchar_t* leaf = wcsrchr(path, L'\\');
-    std::wstring title = std::wstring(L"AileEx - ") + (leaf ? leaf + 1 : path);
+bool MainWindow::BrowseDestFolder(std::wstring& dir) {
+    return BrowseFolderDialog(m_hwnd, IDS_TITLE_SELECT_DEST_FOLDER, &dir);
+}
+
+void MainWindow::ShowMessage(const std::wstring& text, UINT iconFlags) {
+    MessageBoxW(m_hwnd, text.c_str(), I18n::Tr(IDS_APP_TITLE).c_str(), iconFlags);
+}
+
+int MainWindow::Confirm(const std::wstring& text, const std::wstring& title) {
+    return MessageBoxW(m_hwnd, text.c_str(), title.c_str(), MB_YESNO | MB_ICONWARNING);
+}
+
+void MainWindow::OnArchiveOpened() {
+    RebuildMruMenu();
+
+    // Title
+    const std::wstring& path = m_session.ArchivePath();
+    const wchar_t* leaf = wcsrchr(path.c_str(), L'\\');
+    std::wstring title = std::wstring(L"AileEx - ") + (leaf ? leaf + 1 : path.c_str());
     SetWindowTextW(m_hwnd, title.c_str());
 
-    // Update status
-    {
-        const std::wstring& dllName = m_session.Backend()->BackendName();
-        const auto& items = m_session.Items();
-        size_t fileCount = std::count_if(items.begin(), items.end(),
-                                         [](const ArchiveItem& it){ return !it.isDir; });
-        std::wstring status = I18n::TrFmt(IDS_FMT_STATUS_ENTRIES,
-                                          fileCount, dllName.c_str());
-        SetWindowTextW(m_hStatus, status.c_str());
-    }
+    // Status
+    const std::wstring& dllName = m_session.Backend()->BackendName();
+    const auto& items = m_session.Items();
+    size_t fileCount = std::count_if(items.begin(), items.end(),
+                                     [](const ArchiveItem& it){ return !it.isDir; });
+    std::wstring status = I18n::TrFmt(IDS_FMT_STATUS_ENTRIES, fileCount, dllName.c_str());
+    SetWindowTextW(m_hStatus, status.c_str());
 
     PopulateTree();
     PopulateList(L"");
     UpdateExtractDestEdit();
-    return true;
+}
+
+void MainWindow::SelectFolder(const std::wstring& folder) {
+    if (!folder.empty()) SelectTreeFolder(folder);
+}
+
+// ---- Command handlers (gather UI input, forward to the controller) ----
+
+bool MainWindow::OpenArchive(const wchar_t* path) {
+    return m_controller.Open(path);
 }
 
 void MainWindow::OnExtract(const std::wstring& presetDest) {
     if (!m_session.IsOpen()) return;
-    RunExtraction({}, presetDest);
+    m_controller.Extract({}, presetDest);
 }
 
 bool MainWindow::TriggerExtract(const std::wstring& presetDest) {
     if (m_session.Items().empty()) return true;  // nothing to extract; let a batch continue
-    return RunExtraction({}, presetDest);
+    return m_controller.Extract({}, presetDest);
 }
 
 void MainWindow::OnExtractSmart() {
@@ -166,167 +159,11 @@ void MainWindow::OnExtractSelected(const std::wstring& presetDest) {
     }
 
     std::vector<UINT32> indices(indexSet.begin(), indexSet.end());
-    RunExtraction(std::move(indices), presetDest);
-}
-
-static void OpenExtractedFolder(const std::wstring& dir) {
-    const std::wstring& cmd = App::Instance().GetSettings().GetOpenFolderCommand();
-    if (cmd.empty()) {
-        ShellExecuteW(nullptr, L"open", dir.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
-    } else {
-        std::wstring expanded = cmd;
-        auto pos = expanded.find(L"%1");
-        std::wstring quoted = L"\"" + dir + L"\"";
-        if (pos != std::wstring::npos)
-            expanded.replace(pos, 2, quoted);
-        else
-            expanded += L" " + quoted;
-        SHELLEXECUTEINFOW sei = {};
-        sei.cbSize = sizeof(sei);
-        sei.fMask  = SEE_MASK_FLAG_NO_UI;
-        sei.lpFile = expanded.c_str();
-        sei.nShow  = SW_SHOWNORMAL;
-        ShellExecuteExW(&sei);
-    }
-}
-
-bool MainWindow::RunExtraction(std::vector<UINT32> indices, std::wstring presetDest) {
-    App& app = App::Instance();
-    // The bound backend's engine is already loaded (it opened the archive); a
-    // failure is surfaced by the extract call itself.
-
-    // If password not yet known, check whether target items are encrypted and prompt.
-    if (m_session.Password().empty() && m_session.SelectionNeedsPassword(indices)) {
-        std::wstring pw = PromptPassword();
-        // Password cancelled: skip this archive but let a batch continue to the next.
-        if (pw.empty()) return true;
-        m_session.SetPassword(std::move(pw));
-    }
-
-    std::wstring destDir;
-    if (!presetDest.empty()) {
-        destDir = presetDest;
-    } else {
-        if (!m_extractDestOverride.empty()) {
-            destDir = m_extractDestOverride;
-        } else {
-            const Settings& st = app.GetSettings();
-            if (st.GetOutputDirModeFixed()) {
-                destDir = st.GetDefaultOutputDir();
-            } else {
-                wchar_t full[MAX_PATH] = {};
-                std::wstring abs;
-                if (GetFullPathNameW(m_session.ArchivePath().c_str(), MAX_PATH, full, nullptr) != 0)
-                    abs = full;
-                else
-                    abs = m_session.ArchivePath();
-                auto sl = abs.find_last_of(L"\\/");
-                destDir = (sl != std::wstring::npos) ? abs.substr(0, sl) : abs;
-            }
-        }
-        if (!BrowseFolderDialog(m_hwnd, IDS_TITLE_SELECT_DEST_FOLDER, &destDir))
-            return false;  // destination cancelled → abort the batch
-        // Keep edit box and override in sync with the user's folder picker choice.
-        // The chosen folder is reused for subsequent archives in a multi-archive batch.
-        m_extractDestOverride = destDir;
-        UpdateExtractDestEdit();
-    }
-
-    // Evaluate MkDir policy: use selected items when extracting a subset, full list otherwise.
-    std::wstring finalDest = destDir;
-    {
-        auto& s    = app.GetSettings();
-        int   mkDir = s.GetMkDir();
-        bool makeSubfolder = false;
-        if (!indices.empty()) {
-            const auto& items = m_session.Items();
-            std::vector<ArchiveItem> sel;
-            sel.reserve(indices.size());
-            for (UINT32 i : indices) sel.push_back(items[i]);
-            makeSubfolder = ShouldCreateSubfolder(mkDir, sel);
-        } else {
-            makeSubfolder = ShouldCreateSubfolder(mkDir, m_session.Items());
-        }
-        if (makeSubfolder)
-            finalDest = std::wstring(destDir) + L"\\" +
-                        ArchiveBaseName(m_session.ArchivePath(), app.Get7z(),
-                                        s.GetExtStripMode(), s.GetStripTrailingNumber());
-    }
-
-    ProgressDlg progDlg;
-    progDlg.Show(m_hwnd, I18n::Tr(IDS_PROGRESS_EXTRACTING).c_str());
-
-    SinkGuard sg(m_hwnd, m_pSink);
-    ProgressPostSink* sink = sg.sink;
-    progDlg.SetSink(sink);
-
-    // Migrated to IArchiveBackend: the backend maps selected indices to entries
-    // internally (RarBackend translates them to paths; SevenZipBackend uses them
-    // directly) and creates the destination tree as its engine requires.
-    IArchiveBackend* backend = m_session.Backend();
-    std::wstring password = m_session.Password();
-    m_worker.Start([backend, indices, destDir = finalDest, password, sink]() -> HRESULT {
-        const wchar_t* pw = password.empty() ? nullptr : password.c_str();
-        return backend->Extract(indices, destDir.c_str(), pw, sink);
-    }, m_hwnd, WM_APP_DONE);
-
-    HRESULT hrDone = progDlg.RunMessageLoop();
-    m_worker.Wait();
-
-    if (FAILED(hrDone) && hrDone != E_ABORT) {
-        ShowError(I18n::Tr(IDS_ERR_EXTRACT_FAILED).c_str(), hrDone);
-    } else if (SUCCEEDED(hrDone)) {
-        if (app.GetSettings().GetBreakDDir())
-            CollapseIfSingleSubfolder(finalDest);
-        if (app.GetSettings().GetOpenFolderAfterExtract())
-            OpenExtractedFolder(finalDest);
-    }
-    return true;
+    m_controller.Extract(std::move(indices), presetDest);
 }
 
 HRESULT MainWindow::OnTest() {
-    if (!m_session.IsOpen()) {
-        MessageBoxW(m_hwnd, I18n::Tr(IDS_INFO_NO_ARCHIVE_TO_TEST).c_str(),
-                    I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONINFORMATION);
-        return E_FAIL;
-    }
-
-    if (!m_session.Backend()) return E_FAIL;
-    // The bound backend's engine is already loaded; a failure is surfaced by Test().
-
-    ProgressDlg progDlg;
-    progDlg.Show(m_hwnd, I18n::Tr(IDS_PROGRESS_TESTING).c_str());
-
-    SinkGuard sg(m_hwnd, m_pSink);
-    ProgressPostSink* sink = sg.sink;
-    progDlg.SetSink(sink);
-
-    // Migrated to IArchiveBackend: the backend (SevenZipBackend / RarBackend) was
-    // bound at open time and dispatches to the right engine internally.
-    IArchiveBackend* backend = m_session.Backend();
-    std::wstring password = m_session.Password();
-    m_worker.Start([backend, password, sink]() -> HRESULT {
-        const wchar_t* pw = password.empty() ? nullptr : password.c_str();
-        return backend->Test(pw, sink);
-    }, m_hwnd, WM_APP_DONE);
-
-    HRESULT hrDone = progDlg.RunMessageLoop();
-    m_worker.Wait();
-    // unrar.dll's TestArchive returns false (= E_FAIL) even on cancel,
-    // so check sink's cancel flag and normalize to E_ABORT equivalent.
-    bool wasCancelled = sink->IsCancelled();
-
-    if (hrDone == E_ABORT || wasCancelled) {
-        // Silent on cancel; treated as success for exit-code purposes.
-        return S_OK;
-    } else if (FAILED(hrDone)) {
-        ShowError(I18n::Tr(IDS_TEST_FAILED).c_str(), hrDone);
-        return hrDone;
-    } else {
-        MessageBoxW(m_hwnd, I18n::Tr(IDS_TEST_OK).c_str(),
-                    I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONINFORMATION);
-        return S_OK;
-    }
+    return m_controller.Test();
 }
 
 HRESULT MainWindow::TriggerTest() {
@@ -421,53 +258,8 @@ void MainWindow::OnAddFilesToCurrentArchive() {
     AddFilesToCurrentArchive(std::move(files));
 }
 
-// Worker-driven file addition to the archive, dispatched through the bound backend.
 void MainWindow::AddFilesToCurrentArchive(std::vector<std::wstring> srcPaths) {
-    if (!m_session.IsOpen() || m_session.IsReadOnly() || srcPaths.empty()) return;
-    if (!m_session.CanAdd()) return;
-
-    App& app = App::Instance();
-
-    // The operative path (after split auto-unwrap temp file) is read-only,
-    // so use the display path directly here (already guarded by IsReadOnly()).
-    const std::wstring archivePath = m_session.ArchivePath();
-    const std::wstring archiveFolder = SelectedFolderPath();  // "" means archive root
-
-    ProgressDlg progDlg;
-    progDlg.Show(m_hwnd, I18n::Tr(IDS_PROGRESS_ADDING).c_str());
-
-    SinkGuard sg(m_hwnd, m_pSink);
-    ProgressPostSink* sink = sg.sink;
-    progDlg.SetSink(sink);
-
-    // Level is the only format-specific input: RAR takes a 0..5 method index, 7z/zip
-    // a 0..9 level (method/advanced options are unified later — design note §3.6).
-    // Add is only reachable when the backend is writable, and only RarBackend writes
-    // .rar, so the archive extension determines which level scale applies.
-    // Password is not forwarded here, matching the previous add path.
-    const auto& s = app.GetSettings();
-    const wchar_t* dot = wcsrchr(archivePath.c_str(), L'.');
-    bool isRar = dot && _wcsicmp(dot + 1, L"rar") == 0;
-    int level = isRar ? s.GetRarLevel() : s.GetCompressionLevel();
-    IArchiveBackend* backend = m_session.Backend();
-    std::wstring folder = archiveFolder;
-    HRESULT hrDone = S_OK;
-    m_worker.Start([backend, srcPaths, folder, level, sink]() -> HRESULT {
-        return backend->Add(srcPaths, folder.empty() ? nullptr : folder.c_str(),
-                            nullptr, level, L"", sink);
-    }, m_hwnd, WM_APP_DONE);
-    hrDone = progDlg.RunMessageLoop();
-    m_worker.Wait();
-
-    if (FAILED(hrDone) && hrDone != E_ABORT) {
-        ShowError(I18n::Tr(IDS_ERR_ADD_FAILED).c_str(), hrDone);
-        return;
-    }
-    if (hrDone == E_ABORT) return;
-
-    // Success → reload the archive and reselect the target folder
-    OpenArchive(archivePath.c_str());
-    if (!archiveFolder.empty()) SelectTreeFolder(archiveFolder);
+    m_controller.Add(std::move(srcPaths));
 }
 
 void MainWindow::OnArchiveProperties() {
@@ -517,32 +309,7 @@ void MainWindow::OnArchiveComment() {
     CommentDlg dlg;
     if (!dlg.Show(m_hwnd, leaf, comment, readOnly, edited)) return;
 
-    // Save through the bound backend (SevenZipBackend patches ZIP directly;
-    // RarBackend drives rar.exe). Run on the worker so the rar.exe bridge pumps
-    // off the UI thread.
-    ProgressDlg progDlg;
-    progDlg.Show(m_hwnd, I18n::Tr(IDS_PROGRESS_SAVING_COMMENT).c_str());
-    SinkGuard sg(m_hwnd, m_pSink);
-    ProgressPostSink* sink = sg.sink;
-    progDlg.SetSink(sink);
-
-    IArchiveBackend* backend = m_session.Backend();
-    std::wstring newComment = edited;
-    m_worker.Start([backend, newComment]() -> HRESULT {
-        return backend->SetComment(newComment);
-    }, m_hwnd, WM_APP_DONE);
-    HRESULT hrSave = progDlg.RunMessageLoop();
-    m_worker.Wait();
-
-    if (FAILED(hrSave) && hrSave != E_ABORT) {
-        ShowError(I18n::Tr(IDS_ERR_COMMENT_SAVE_FAILED).c_str(), hrSave);
-        return;
-    }
-    if (hrSave == E_ABORT) return;
-
-    // Success → reopen the archive (OpenArchive resets tree selection to root,
-    //           but comment editing is folder-position-independent so that is fine)
-    OpenArchive(m_session.ArchivePath().c_str());
+    m_controller.SetComment(edited);
 }
 
 void MainWindow::OnDelete() {
@@ -590,126 +357,13 @@ void MainWindow::OnDelete() {
     // Confirm — show the original ListView selection count (more intuitive than the expanded count)
     int origCount = ListView_GetSelectedCount(m_hListView);
     std::wstring msg = I18n::TrFmt(IDS_FMT_DELETE_CONFIRM, origCount);
-    if (MessageBoxW(m_hwnd, msg.c_str(), I18n::Tr(IDS_TITLE_DELETE_CONFIRM).c_str(),
-                    MB_YESNO | MB_ICONWARNING) != IDYES)
+    if (Confirm(msg, I18n::Tr(IDS_TITLE_DELETE_CONFIRM)) != IDYES)
         return;
 
-    ProgressDlg progDlg;
-    progDlg.Show(m_hwnd, I18n::Tr(IDS_PROGRESS_DELETING).c_str());
-
-    SinkGuard sg(m_hwnd, m_pSink);
-    ProgressPostSink* sink = sg.sink;
-    progDlg.SetSink(sink);
-
-    const std::wstring currentFolder = m_session.CurrentFolder();
-    const std::wstring reopenPath    = m_session.ArchivePath();  // copy; OpenArchive reassigns the session
     std::vector<UINT32> deleteIndices(indexSet.begin(), indexSet.end());
-    IArchiveBackend* backend = m_session.Backend();
-    auto allItems = m_session.Items();
-    std::wstring password = m_session.Password();
-    m_worker.Start([backend, deleteIndices, allItems, password, sink]() -> HRESULT {
-        return backend->Delete(deleteIndices, allItems,
-                               password.empty() ? nullptr : password.c_str(), sink);
-    }, m_hwnd, WM_APP_DONE);
-    HRESULT hrDone = progDlg.RunMessageLoop();
-    m_worker.Wait();
-
-    if (FAILED(hrDone) && hrDone != E_ABORT) {
-        ShowError(I18n::Tr(IDS_ERR_DELETE_FAILED).c_str(), hrDone);
-        return;
-    }
-    if (hrDone == E_ABORT) return;
-
-    // Success → reload and restore folder position
-    OpenArchive(reopenPath.c_str());
-    if (!currentFolder.empty()) SelectTreeFolder(currentFolder);
+    m_controller.Delete(std::move(deleteIndices));
 }
 
 void MainWindow::OnCompress(CompressDlg::Params& params, bool openAfterCompress) {
-    if (params.inputFiles.empty() || params.outputPath.empty()) return;
-
-    auto  inputs  = params.inputFiles;
-    auto  outPath = params.outputPath;
-    auto  format  = params.format;
-    int   level   = params.level;
-    auto  method  = params.method;
-    auto  pw      = params.password;
-
-    ProgressDlg progDlg;
-    progDlg.Show(m_hwnd, I18n::Tr(IDS_PROGRESS_COMPRESSING).c_str());
-
-    SinkGuard sg(m_hwnd, m_pSink);
-    ProgressPostSink* sink = sg.sink;
-    progDlg.SetSink(sink);
-
-    HRESULT hrDone = S_OK;
-
-    if (format == L"rar") {
-        hrDone = RunRarCompressSync(m_hwnd, params,
-                                    App::Instance().GetSettings().GetRarExePath().c_str(),
-                                    progDlg, sink);
-        if (hrDone == E_FAIL) {
-            // progDlg was already dismissed internally on launch failure
-            return;
-        }
-    } else {
-        if (!App::Instance().Get7z().IsLoaded()) {
-            progDlg.Dismiss();
-            ShowError(I18n::Tr(IDS_ERR_7Z_NOT_LOADED).c_str());
-            return;
-        }
-        auto& sz = App::Instance().Get7z();
-
-        // Resolve the 7z SFX module (search in the same folder as 7z.dll if specified)
-        std::wstring sfxModulePath;
-        if (!params.sfxMode.empty()) {
-            sfxModulePath = Resolve7zSfxModulePath(
-                sz.GetLoadedPath().c_str(), params.sfxMode.c_str());
-            if (sfxModulePath.empty()) {
-                progDlg.Dismiss();
-                const wchar_t* leaf = (params.sfxMode == L"console") ? L"7zCon.sfx" : L"7z.sfx";
-                std::wstring msg = I18n::TrFmt(IDS_FMT_SFX_NOT_FOUND_7Z, leaf);
-                MessageBoxW(m_hwnd, msg.c_str(), I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
-                return;
-            }
-        }
-
-        auto advDict    = params.dictSize;
-        auto advWord    = params.wordSize;
-        auto advSolid   = params.solidBlock;
-        auto advThreads = params.threads;
-        auto advExtra   = params.extra;
-        auto advVolume  = params.volumeSize;
-        bool encHdr     = params.encryptHeaders;
-        m_worker.Start([&sz, inputs, outPath, format, level, method, pw, sink,
-                        advDict, advWord, advSolid, advThreads, advExtra, advVolume,
-                        sfxModulePath, encHdr]() -> HRESULT {
-            CompressAdvanced adv;
-            adv.dictSize      = advDict;
-            adv.wordSize      = advWord;
-            adv.solidBlock    = advSolid;
-            adv.threads       = advThreads;
-            adv.extra         = advExtra;
-            adv.volumeSize    = advVolume;
-            adv.sfxModulePath = sfxModulePath;
-            return sz.Compress(inputs, outPath.c_str(), format.c_str(),
-                               level, method.c_str(), pw.empty() ? nullptr : pw.c_str(),
-                               sink, &adv, encHdr);
-        }, m_hwnd, WM_APP_DONE);
-        hrDone = progDlg.RunMessageLoop();
-        m_worker.Wait();
-    }
-
-    if (FAILED(hrDone) && hrDone != E_ABORT) {
-        ShowError(I18n::Tr(IDS_ERR_COMPRESS_FAILED).c_str(), hrDone);
-    } else if (SUCCEEDED(hrDone) && openAfterCompress) {
-        // For split volumes (7z/zip), the first file is <outputPath>.001
-        std::wstring pathToOpen = params.outputPath;
-        if (!params.volumeSize.empty() && params.format != L"rar")
-            pathToOpen += L".001";
-        // Skip auto-open for RAR split volumes (part01.rar naming is ambiguous)
-        if (params.volumeSize.empty() || params.format != L"rar")
-            OpenArchive(pathToOpen.c_str());
-    }
+    m_controller.Compress(params, openAfterCompress);
 }
-

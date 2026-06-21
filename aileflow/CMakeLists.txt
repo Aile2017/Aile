@@ -25,6 +25,7 @@ set(AILEFLOW_UI_SOURCES
     src/MainWindow.cpp
     src/MainWindowView.cpp
     src/MainWindowOps.cpp
+    src/ArchiveController.cpp
     src/CompressDlg.cpp
     src/SettingsDlg.cpp
     src/Settings.cpp
