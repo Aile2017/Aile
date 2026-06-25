@@ -134,11 +134,8 @@ jobs:
           Copy-Item aileflow\README.md                  pkg_aileflow\README.md
           Copy-Item -Recurse aileflow\Release\b2e       pkg_aileflow\b2e
           # Vendored 7-Zip ZS (x64) backend — apps search exe\bin\ automatically.
-          # 7z.exe / 7zG.exe are thin front-ends; they load 7z.dll as the codec/format
-          # engine from their own folder, so 7z.dll must ship alongside them.
+          # We no longer package 7z.exe / 7zG.exe since native 7z is used instead.
           $vendor = "third_party\7zip-zstd"
-          Copy-Item $vendor\7z.exe      pkg_aileflow\bin\7z.exe
-          Copy-Item $vendor\7zG.exe     pkg_aileflow\bin\7zG.exe
           Copy-Item $vendor\7z.dll      pkg_aileflow\bin\7z.dll
           Copy-Item $vendor\7z.sfx      pkg_aileflow\bin\7z.sfx
           Copy-Item $vendor\License.txt pkg_aileflow\bin\License.txt
@@ -252,13 +249,11 @@ jobs:
             | `AileFlowShell.dll`         | Explorer right-click menu handler (64-bit hosts) |
             | `AileFlowShell32.dll`       | Explorer right-click menu handler (32-bit hosts; launches the 64-bit exe) |
             | `AileSetup.exe`           | GUI Setup Tool to register/unregister shell extensions |
-            | `bin\7z.exe`           | 7-Zip ZS (zstd fork) x64 CLI front-end |
-            | `bin\7zG.exe`          | 7-Zip ZS (zstd fork) x64 GUI front-end |
-            | `bin\7z.dll`           | Codec/format engine (required by 7z.exe / 7zG.exe) |
+            | `bin\7z.dll`           | Codec/format engine (native 7z) |
             | `bin\7z.sfx`           | SFX stub (Desktop) |
             | `bin\License.txt`      | 7-Zip license |
 
-            > 7-Zip ZS（zstd 対応 x64 ビルド）の `7z.exe` / `7zG.exe` を `bin\` に同梱しています。7z 系フォーマットは別途インストール不要です。
+            > 7-Zip ZS（zstd 対応 x64 ビルド）の `7z.dll` を `bin\` に同梱しています。7z 系フォーマットは別途インストール不要です。
             > Visual C++ Redistributable 2015–2022（`VCRUNTIME140.dll`, `MSVCP140.dll`）は必要です。
             > RAR 等その他フォーマットは対応外部ツール（`WinRAR.exe` 等）を別途参照します（同梱なし）。詳細は README を参照してください。
           files: dist/${{ needs.build.outputs.aileflow_tag }}.zip
