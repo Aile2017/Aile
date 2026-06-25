@@ -75,6 +75,16 @@ jobs:
       - name: Build 32-bit shell extensions
         run: cmake --build build_release_x86 --target AileExShell AileFlowShell
 
+      - name: Configure CMake AileSetup
+        run: >
+          cmake -B build_release_setup -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_C_COMPILER=cl
+          -DCMAKE_CXX_COMPILER=cl
+
+      - name: Build AileSetup
+        run: cmake --build build_release_setup --target AileSetup
+
       - name: Compute tag names
         id: names
         shell: pwsh
@@ -107,12 +117,10 @@ jobs:
           Copy-Item $vendor\License.txt pkg_aileex\bin\License.txt
           # Explorer shell-extension DLL — must sit next to AileEx.exe (resolves it as sibling).
           Copy-Item build_release\aileex\AileExShell.dll        pkg_aileex\AileExShell.dll
-          Copy-Item build_release\aileex\AileEx_register.bat    pkg_aileex\AileEx_register.bat
-          Copy-Item build_release\aileex\AileEx_unregister.bat  pkg_aileex\AileEx_unregister.bat
           # 32-bit shell handler for 32-bit Explorer hosts (still launches the 64-bit AileEx.exe).
           Copy-Item build_release_x86\aileex\AileExShell32.dll        pkg_aileex\AileExShell32.dll
-          Copy-Item build_release_x86\aileex\AileEx32_register.bat    pkg_aileex\AileEx32_register.bat
-          Copy-Item build_release_x86\aileex\AileEx32_unregister.bat  pkg_aileex\AileEx32_unregister.bat
+          # GUI Setup Tool
+          Copy-Item build_release_setup\ailesetup\AileSetup.exe pkg_aileex\AileSetup.exe
           Compress-Archive -Path pkg_aileex\* -DestinationPath "${tag}.zip"
           Write-Host "Created: ${tag}.zip ($([Math]::Round((Get-Item "${tag}.zip").Length/1KB)) KB)"
 
@@ -136,12 +144,10 @@ jobs:
           Copy-Item $vendor\License.txt pkg_aileflow\bin\License.txt
           # Explorer shell-extension DLL — must sit next to AileFlow.exe (resolves it as sibling).
           Copy-Item build_release\aileflow\AileFlowShell.dll         pkg_aileflow\AileFlowShell.dll
-          Copy-Item build_release\aileflow\AileFlow_register.bat     pkg_aileflow\AileFlow_register.bat
-          Copy-Item build_release\aileflow\AileFlow_unregister.bat   pkg_aileflow\AileFlow_unregister.bat
           # 32-bit shell handler for 32-bit Explorer hosts (still launches the 64-bit AileFlow.exe).
           Copy-Item build_release_x86\aileflow\AileFlowShell32.dll        pkg_aileflow\AileFlowShell32.dll
-          Copy-Item build_release_x86\aileflow\AileFlow32_register.bat    pkg_aileflow\AileFlow32_register.bat
-          Copy-Item build_release_x86\aileflow\AileFlow32_unregister.bat  pkg_aileflow\AileFlow32_unregister.bat
+          # GUI Setup Tool
+          Copy-Item build_release_setup\ailesetup\AileSetup.exe pkg_aileflow\AileSetup.exe
           Compress-Archive -Path pkg_aileflow\* -DestinationPath "${tag}.zip"
           Write-Host "Created: ${tag}.zip ($([Math]::Round((Get-Item "${tag}.zip").Length/1KB)) KB)"
 
@@ -194,11 +200,8 @@ jobs:
             | `AileEx.exe`           | Executable (MSVC x64 Release) |
             | `README.md`            | Overview and usage |
             | `AileExShell.dll`         | Explorer right-click menu handler (64-bit hosts) |
-            | `AileEx_register.bat`     | Enable the right-click menu, 64-bit (per-user) |
-            | `AileEx_unregister.bat`   | Disable the right-click menu, 64-bit |
             | `AileExShell32.dll`       | Explorer right-click menu handler (32-bit hosts; launches the 64-bit exe) |
-            | `AileEx32_register.bat`   | Enable the right-click menu, 32-bit (per-user) |
-            | `AileEx32_unregister.bat` | Disable the right-click menu, 32-bit |
+            | `AileSetup.exe`           | GUI Setup Tool to register/unregister shell extensions |
             | `bin\7z.dll`           | 7-Zip ZS (zstd fork) x64 backend |
             | `bin\7z.sfx`           | SFX stub (Desktop) |
             | `bin\7zCon.sfx`        | SFX stub (console) |
@@ -247,11 +250,8 @@ jobs:
             | `README.md`            | Overview and usage |
             | `b2e/`                 | B2E archive handler scripts |
             | `AileFlowShell.dll`         | Explorer right-click menu handler (64-bit hosts) |
-            | `AileFlow_register.bat`     | Enable the right-click menu, 64-bit (per-user) |
-            | `AileFlow_unregister.bat`   | Disable the right-click menu, 64-bit |
             | `AileFlowShell32.dll`       | Explorer right-click menu handler (32-bit hosts; launches the 64-bit exe) |
-            | `AileFlow32_register.bat`   | Enable the right-click menu, 32-bit (per-user) |
-            | `AileFlow32_unregister.bat` | Disable the right-click menu, 32-bit |
+            | `AileSetup.exe`           | GUI Setup Tool to register/unregister shell extensions |
             | `bin\7z.exe`           | 7-Zip ZS (zstd fork) x64 CLI front-end |
             | `bin\7zG.exe`          | 7-Zip ZS (zstd fork) x64 GUI front-end |
             | `bin\7z.dll`           | Codec/format engine (required by 7z.exe / 7zG.exe) |
