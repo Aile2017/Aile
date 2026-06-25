@@ -9,7 +9,6 @@ void Settings::BuildIniPath() const {
 
 void Settings::Load() {
     BuildIniPath();
-    m_rarExtractor     = ReadStr(L"General", L"RarExtractor",     L"7z");
     m_rarExePath       = ReadStr(L"General", L"RarExePath",       L"");
     m_defaultOutputDir = ReadStr(L"General", L"DefaultOutputDir", L"");
     {
@@ -19,7 +18,6 @@ void Settings::Load() {
     m_defaultFormat    = ReadStr(L"General", L"DefaultFormat",    L"7z");
     m_7zDllPath        = ReadStr(L"General", L"7zDllPath",        L"");
     m_unrarDllPath     = ReadStr(L"General", L"UnrarDllPath",     L"");
-    m_defaultSfxMode   = ReadStr(L"General", L"DefaultSfxMode",   L"");
     m_fontName         = ReadStr(L"General", L"FontName",         L"Segoe UI");
 
     wchar_t buf[16] = {};
@@ -37,6 +35,17 @@ void Settings::Load() {
     GetPrivateProfileStringW(L"General", L"MkDir", L"2", buf, 16, m_iniPath);
     m_mkDir = _wtoi(buf);
     if (m_mkDir < 0 || m_mkDir > 3) m_mkDir = 2;
+
+    // Extraction output-folder naming / structure
+    GetPrivateProfileStringW(L"General", L"ExtStripMode", L"0", buf, 16, m_iniPath);
+    m_extStripMode = _wtoi(buf);
+    if (m_extStripMode < 0 || m_extStripMode > 2) m_extStripMode = 0;
+
+    GetPrivateProfileStringW(L"General", L"StripTrailingNumber", L"0", buf, 16, m_iniPath);
+    m_stripTrailingNumber = _wtoi(buf) != 0;
+
+    GetPrivateProfileStringW(L"General", L"BreakDDir", L"0", buf, 16, m_iniPath);
+    m_breakDDir = _wtoi(buf) != 0;
 
     // Advanced compress options
     m_advDictSize   = ReadStr(L"AdvancedCompress", L"DictSize",   L"");
@@ -83,14 +92,12 @@ void Settings::Load() {
 void Settings::Save() const {
     // Guard against writing to an empty path if Save() is called before Load()
     if (!m_iniPath[0]) BuildIniPath();
-    WriteStr(L"General", L"RarExtractor",     m_rarExtractor.c_str());
     WriteStr(L"General", L"RarExePath",       m_rarExePath.c_str());
     WriteStr(L"General", L"DefaultOutputDir", m_defaultOutputDir.c_str());
     WriteStr(L"General", L"OutputDirMode",    m_outputDirModeFixed ? L"fixed" : L"source");
     WriteStr(L"General", L"DefaultFormat",    m_defaultFormat.c_str());
     WriteStr(L"General", L"7zDllPath",        m_7zDllPath.c_str());
     WriteStr(L"General", L"UnrarDllPath",     m_unrarDllPath.c_str());
-    WriteStr(L"General", L"DefaultSfxMode",   m_defaultSfxMode.c_str());
     WriteStr(L"General", L"FontName",         m_fontName.c_str());
     WriteStr(L"General", L"OpenFolderAfterExtract", m_openFolderAfterExtract ? L"1" : L"0");
     WriteStr(L"General", L"OpenFolderCommand",      m_openFolderCommand.c_str());
@@ -104,6 +111,12 @@ void Settings::Save() const {
 
     _itow_s(m_mkDir, buf, 10);
     WriteStr(L"General", L"MkDir", buf);
+
+    // Extraction output-folder naming / structure
+    _itow_s(m_extStripMode, buf, 10);
+    WriteStr(L"General", L"ExtStripMode", buf);
+    WriteStr(L"General", L"StripTrailingNumber", m_stripTrailingNumber ? L"1" : L"0");
+    WriteStr(L"General", L"BreakDDir",           m_breakDDir           ? L"1" : L"0");
 
     // Advanced compress options
     WriteStr(L"AdvancedCompress", L"DictSize",   m_advDictSize.c_str());

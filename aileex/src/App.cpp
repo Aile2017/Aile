@@ -1,6 +1,7 @@
 ﻿#include "App.h"
 #include "MainWindow.h"
 #include "CompressDlg.h"
+#include "CompressPolicy.h"
 #include "CompressHelper.h"
 #include "I18n.h"
 #include "ProgressDlg.h"
@@ -65,7 +66,7 @@ void App::ReloadDlls() {
 
 int App::RunBrowseMode(const std::vector<std::wstring>& archivePaths, int nCmdShow,
                        const std::wstring& destDir) {
-    MainWindow wnd;
+    MainWindow wnd(Services());
     if (!wnd.Create(m_hInst, nCmdShow)) return 1;
 
     if (!destDir.empty())
@@ -148,9 +149,10 @@ static void ApplyOverrides(CompressDlg::Params& params,
         }
     }
 
-    // rar.exe expects -mN; sync method = level digit whenever format is RAR
-    if (params.format == L"rar")
-        params.method = std::to_wstring(params.rarLevel);
+    // Apply the shared format/method/SFX policy (same rule as the dialog's OnOK):
+    // RAR method = level digit, stream/tar take no method, 7z/zip drop a method
+    // that only restates the level preset. (sfxOverride is applied afterwards.)
+    CompressPolicy::NormalizeForFormat(params);
 
     if (!sfxOverride.empty()) {
         if (_wcsicmp(params.format.c_str(), L"7z") == 0 || _wcsicmp(params.format.c_str(), L"rar") == 0) {
@@ -163,18 +165,30 @@ static void ApplyOverrides(CompressDlg::Params& params,
     }
 }
 
+// Append ".<format>" unless the path already ends with it (case-insensitive).
+// A "does the path contain any dot" test is wrong: a dotted input name such as
+// "v-internalGW.log.ERROR" yields a stem "v-internalGW.log", which already
+// contains a dot, so the archive would be written without its ".7z" extension.
+// Match strictly on the trailing extension instead.
+static void EnsureArchiveExt(std::wstring& path, const std::wstring& format) {
+    const std::wstring suffix = L"." + format;
+    if (path.size() < suffix.size() ||
+        _wcsicmp(path.c_str() + path.size() - suffix.size(), suffix.c_str()) != 0)
+        path += suffix;
+}
+
 int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdShow,
                          const std::wstring& destDir,
                          const std::wstring& typeOverride,
                          const std::wstring& methodOverride,
                          const std::wstring& levelOverride,
                          const std::wstring& sfxOverride) {
-    MainWindow wnd;
+    MainWindow wnd(Services());
     if (!wnd.Create(m_hInst, nCmdShow)) return 1;
 
     CompressDlg::Params params;
     params.inputFiles = filePaths;
-    params.LoadFromSettings(m_settings);
+    CompressPolicy::Load(params, m_settings);
     params.outputPath = Settings::ComputeDefaultOutputPath(m_settings, filePaths, destDir);
     ApplyOverrides(params, typeOverride, methodOverride, levelOverride, sfxOverride);
 
@@ -195,18 +209,18 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
     const bool skipDialog = (!typeOverride.empty() || !sfxOverride.empty()) && (nCmdShow == SW_HIDE);
     if (skipDialog) {
         if (params.sfxMode.empty()) {
-            if (params.outputPath.find(L'.') == std::wstring::npos)
-                params.outputPath += L"." + params.format;
+            EnsureArchiveExt(params.outputPath, params.format);
         } else {
-            auto dot = params.outputPath.find_last_of(L'.');
-            if (dot != std::wstring::npos) params.outputPath.erase(dot);
-            params.outputPath += L".exe";
+            // ComputeDefaultOutputPath already returns an extension-less stem, so just
+            // append ".exe" — stripping a trailing dot would eat a dotted stem's last
+            // segment (e.g. "111.222.333.444" → "111.222.333").
+            EnsureArchiveExt(params.outputPath, L"exe");
         }
     } else {
         CompressDlg dlg;
         if (!dlg.Show(wnd.Hwnd(), params, enc, wf, rarAvailable))
             return 0;
-        params.SaveToSettings(m_settings);
+        CompressPolicy::Save(params, m_settings);
         m_settings.Save();
     }
 
@@ -273,7 +287,7 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
                              const std::wstring& sfxOverride) {
     if (filePaths.empty()) return 0;
 
-    MainWindow wnd;
+    MainWindow wnd(Services());
     if (!wnd.Create(m_hInst, SW_HIDE)) return 1;
 
     if (!m_sevenZip.IsLoaded()) {
@@ -285,7 +299,7 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
     // Show dialog once for the first file; apply chosen settings to all files.
     CompressDlg::Params baseParams;
     baseParams.inputFiles = { filePaths[0] };
-    baseParams.LoadFromSettings(m_settings);
+    CompressPolicy::Load(baseParams, m_settings);
     baseParams.outputPath = Settings::ComputeDefaultOutputPath(m_settings, { filePaths[0] }, destDir);
     ApplyOverrides(baseParams, typeOverride, methodOverride, levelOverride, sfxOverride);
 
@@ -304,7 +318,7 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
     } else {
         CompressDlg dlg;
         if (!dlg.Show(wnd.Hwnd(), baseParams, enc, wf, rarAvailable)) return 0;
-        baseParams.SaveToSettings(m_settings);
+        CompressPolicy::Save(baseParams, m_settings);
         m_settings.Save();
     }
 
@@ -383,18 +397,37 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
     return 0;
 }
 
-int App::RunExtractDialogMode(const std::wstring& archivePath, int nCmdShow,
+int App::RunExtractDialogMode(const std::vector<std::wstring>& archivePaths, int nCmdShow,
                                const std::wstring& destDir) {
-    MainWindow wnd;
-    // SW_HIDE: suppress list window; only the extract folder picker and progress dialog appear.
+    // Filter to actual archives; a shell/CLI selection may include non-archive files.
+    std::vector<std::wstring> archives;
+    for (const auto& p : archivePaths)
+        if (Get7z().IsArchivePath(p.c_str()))
+            archives.push_back(p);
+    if (archives.empty()) {
+        MessageBoxW(nullptr, I18n::Tr(IDS_ERR_OPEN_ARCHIVE).c_str(), L"AileEx", MB_ICONERROR);
+        return 1;
+    }
+
+    MainWindow wnd(Services());
+    // SW_HIDE: suppress the list window; only the extract folder picker and progress dialog appear.
     if (!wnd.Create(m_hInst, SW_HIDE)) return 1;
-    wnd.OpenArchive(archivePath.c_str());
-    wnd.TriggerExtract(destDir);
+
+    // Extract each archive in turn. With -d (destDir non-empty) every archive goes there
+    // without prompting. Otherwise the first archive shows the folder picker, which stores
+    // the choice as the session override so the remaining archives reuse it (one prompt for
+    // the whole batch). Each archive still lands in its own MkDir subfolder, so no collision.
+    for (const auto& path : archives) {
+        if (!wnd.OpenArchive(path.c_str()))
+            continue;  // open failed (error already shown); skip without extracting
+        if (!wnd.TriggerExtract(destDir))
+            break;     // user cancelled the destination folder picker → abort the batch
+    }
     return 0;
 }
 
 int App::RunTestMode(const std::wstring& archivePath, int /*nCmdShow*/) {
-    MainWindow wnd;
+    MainWindow wnd(Services());
     // SW_HIDE: suppress list window; only the progress dialog and result box appear.
     if (!wnd.Create(m_hInst, SW_HIDE)) return 1;
     wnd.OpenArchive(archivePath.c_str());

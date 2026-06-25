@@ -88,12 +88,8 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
             result = app.RunEmpty(nCmdShow);
             break;
         }
-        if (!app.Get7z().IsArchivePath(positional[0].c_str())) {
-            MessageBoxW(nullptr, I18n::Tr(IDS_ERR_OPEN_ARCHIVE).c_str(), L"AileEx", MB_ICONERROR);
-            app.Shutdown();
-            return 1;
-        }
-        result = app.RunExtractDialogMode(positional[0], nCmdShow, destDir);
+        // Extract all given archives (non-archives are filtered out inside the handler).
+        result = app.RunExtractDialogMode(positional, nCmdShow, destDir);
         break;
     }
     case Action::Test: {

@@ -2,11 +2,11 @@
 #include <strsafe.h>
 #include "B2eScript.h"
 
-bool B2e_LoadAndPreprocessScriptFile(const char* path, std::vector<char>* buffer)
+bool B2e_LoadAndPreprocessScriptFile(const wchar_t* path, std::vector<wchar_t>* buffer)
 {
     if (!path || !buffer) return false;
 
-    HANDLE hf = ::CreateFileA(path, GENERIC_READ, FILE_SHARE_READ,
+    HANDLE hf = ::CreateFileW(path, GENERIC_READ, FILE_SHARE_READ,
                               nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (hf == INVALID_HANDLE_VALUE) return false;
 
@@ -17,48 +17,57 @@ bool B2e_LoadAndPreprocessScriptFile(const char* path, std::vector<char>* buffer
     }
 
     DWORD sz = static_cast<DWORD>(size.QuadPart);
-    buffer->assign(sz + 1, '\0');
+    std::vector<char> raw(sz + 1, '\0');
 
     DWORD rd = 0;
-    bool ok = !!::ReadFile(hf, buffer->data(), sz, &rd, nullptr);
+    bool ok = !!::ReadFile(hf, raw.data(), sz, &rd, nullptr);
     ::CloseHandle(hf);
     if (!ok || rd != sz) {
         buffer->clear();
         return false;
     }
+    raw[rd] = '\0';
 
-    (*buffer)[rd] = '\0';
+    // .b2e scripts are byte text in the system code page (ASCII in practice).
+    // Decode to UTF-16 so the whole Rythp engine can run wide.
+    int need = ::MultiByteToWideChar(CP_ACP, 0, raw.data(), (int)rd, nullptr, 0);
+    if (need < 0) { buffer->clear(); return false; }
+    buffer->assign(need + 1, L'\0');
+    if (need > 0)
+        ::MultiByteToWideChar(CP_ACP, 0, raw.data(), (int)rd, buffer->data(), need);
+    (*buffer)[need] = L'\0';
+
     B2e_PreprocessScriptInPlace(buffer->data());
     return true;
 }
 
-void B2e_PreprocessScriptInPlace(char* script)
+void B2e_PreprocessScriptInPlace(wchar_t* script)
 {
     if (!script) return;
 
     bool inString = false;
-    for (char* p = script; *p; ++p) {
+    for (wchar_t* p = script; *p; ++p) {
         // Match the Rythp tokenizer's escape rule: the char after '%' is
         // literal, so %" must not toggle the string state.
-        if (*p == '%' && p[1]) {
+        if (*p == L'%' && p[1]) {
             ++p;
             continue;
         }
 
         // Rythp strings cannot span lines; confine any state drift to one line.
-        if (*p == '\n' || *p == '\r') {
+        if (*p == L'\n' || *p == L'\r') {
             inString = false;
             continue;
         }
 
-        if (*p == '"') {
+        if (*p == L'"') {
             inString = !inString;
             continue;
         }
 
-        if (!inString && *p == ';') {
-            while (*p && *p != '\n' && *p != '\r') {
-                *p = ' ';
+        if (!inString && *p == L';') {
+            while (*p && *p != L'\n' && *p != L'\r') {
+                *p = L' ';
                 ++p;
             }
             if (!*p) break;
@@ -66,63 +75,63 @@ void B2e_PreprocessScriptInPlace(char* script)
     }
 }
 
-bool B2e_IsSectionEmpty(const char* section)
+bool B2e_IsSectionEmpty(const wchar_t* section)
 {
     if (!section) return true;
-    while (*section == '\t' || *section == ' ' || *section == '\r' || *section == '\n')
+    while (*section == L'\t' || *section == L' ' || *section == L'\r' || *section == L'\n')
         ++section;
-    return *section == '\0';
+    return *section == L'\0';
 }
 
-static void SetSection(char** slot, char* label, size_t labelLen)
+static void SetSection(wchar_t** slot, wchar_t* label, size_t labelLen)
 {
-    *label = '\0';
+    *label = L'\0';
     *slot = label + labelLen;
 }
 
-static void NormalizeSection(char** slot)
+static void NormalizeSection(wchar_t** slot)
 {
     if (*slot && B2e_IsSectionEmpty(*slot))
         *slot = nullptr;
 }
 
-void B2e_SplitSectionsInPlace(char* script, B2eSections* sections)
+void B2e_SplitSectionsInPlace(wchar_t* script, B2eSections* sections)
 {
     if (!script || !sections) return;
     *sections = {};
 
-    for (char* line = script; *line; ) {
-        char* nextLine = line;
-        while (*nextLine && *nextLine != '\n' && *nextLine != '\r')
+    for (wchar_t* line = script; *line; ) {
+        wchar_t* nextLine = line;
+        while (*nextLine && *nextLine != L'\n' && *nextLine != L'\r')
             ++nextLine;
-        while (*nextLine == '\n' || *nextLine == '\r')
+        while (*nextLine == L'\n' || *nextLine == L'\r')
             ++nextLine;
 
-        char* p = line;
-        while (*p == ' ' || *p == '\t')
+        wchar_t* p = line;
+        while (*p == L' ' || *p == L'\t')
             ++p;
 
         switch (*p) {
-        case 'c': case 'd': case 'e': case 'l': case 's': case 't':
-            if (ki_memcmp(p, "load:", 5))
+        case L'c': case L'd': case L'e': case L'l': case L's': case L't':
+            if (ki_memcmp(p, L"load:", 5))
                 SetSection(&sections->load, p, 5);
-            else if (ki_memcmp(p, "encode:", 7))
+            else if (ki_memcmp(p, L"encode:", 7))
                 SetSection(&sections->encode, p, 7), sections->pack1 = false;
-            else if (ki_memcmp(p, "encode1:", 8))
+            else if (ki_memcmp(p, L"encode1:", 8))
                 SetSection(&sections->encode, p, 8), sections->pack1 = true;
-            else if (ki_memcmp(p, "decode:", 7))
+            else if (ki_memcmp(p, L"decode:", 7))
                 SetSection(&sections->decode, p, 7);
-            else if (ki_memcmp(p, "sfx:", 4))
+            else if (ki_memcmp(p, L"sfx:", 4))
                 SetSection(&sections->sfx, p, 4), sections->sfxDirect = false;
-            else if (ki_memcmp(p, "sfxd:", 5))
+            else if (ki_memcmp(p, L"sfxd:", 5))
                 SetSection(&sections->sfx, p, 5), sections->sfxDirect = true;
-            else if (ki_memcmp(p, "decode1:", 8))
+            else if (ki_memcmp(p, L"decode1:", 8))
                 SetSection(&sections->decode1, p, 8);
-            else if (ki_memcmp(p, "list:", 5))
+            else if (ki_memcmp(p, L"list:", 5))
                 SetSection(&sections->list, p, 5);
-            else if (ki_memcmp(p, "test:", 5))
+            else if (ki_memcmp(p, L"test:", 5))
                 SetSection(&sections->test, p, 5);
-            else if (ki_memcmp(p, "delete:", 7))
+            else if (ki_memcmp(p, L"delete:", 7))
                 SetSection(&sections->del, p, 7);
             break;
         }

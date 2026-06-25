@@ -1,0 +1,317 @@
+# kilib モダン化 設計メモ（wide 化）
+
+ブランチ: `refactor/kilib-wide-modernization`
+
+AileFlow の `kilib/`（Noah / K.I.LIB 由来、90年代末〜2000年代初頭の Win32 C++）を
+モダン化する長期作業の設計ドキュメント。本ファイルは **ステップ1（依存スコープ調査）** の成果物。
+
+## 目的とライセンス前提
+
+- **目的**: 古い narrow(ANSI/CP_ACP) ベースの kilib をモダン C++ + **wide(UNICODE)** へ移行する。
+  副次効果として `kl_str.cpp` の `IsDBCSLeadByte` 系 DBCS 先行バイト処理が消滅し、
+  非 ANSI ファイル名のロス（現状 `GetShortPathName` による 8.3 名回避策）も解消する。
+- **ライセンス**: Noah/kilib は **CC0 1.0**（完全パブリックドメイン）。改変・全面書き換え・
+  再ライセンス・帰属省略すべて自由。法的障害なし。ただし `.b2e` が呼ぶ外部実行ファイル
+  （7z.exe / WinRAR.exe 等）は各自ライセンスで別判断。
+
+## 戦略: B2eBridge を strangler の足場にする
+
+`B2eBridge`（`src/B2eBridge.cpp/h`）は「kilib 型を一切外に漏らさず Win32/std 型だけを公開する」
+境界。UI 層（`SevenZipB2e.cpp` 以上）は kilib を知らない。したがって **UI を一切触らず、
+ブリッジの裏側のエンジンを段階置換できる**（Strangler Fig）。一気に倒さず、各段階でビルドと
+回帰テストが通る状態を保つ。最終的に kilib が空になったらブリッジを passthrough 化 → 撤去。
+
+> 注: ブリッジ自身は既に STL（std::map/set/string/vector）を使用している。
+> CMakeLists の `# no STL` コメントは実態と不一致。wide 化の障害は STL の有無ではなく
+> narrow(char/ANSI) vs wide(wchar_t/UNICODE) の幅の違い。
+
+## kilib ファイル仕分け（依存スコープ調査結果）
+
+到達起点: `CArcB2e` → `CArchiver` → `kiRythpVM`、および `Archiver.cpp` の外部ツール実行。
+（`src kilib` 全 .cpp/.h を対象に各シンボルの外部参照数を計測）
+
+| ファイル | LOC | 主シンボル | 判定 | 対応 |
+|---|---:|---|---|---|
+| `kl_dnd.cpp` | 217 | `kiDataObject` `kiDropSource` | **死にコード** | `kilib.h` の include 除去＋ビルドから削除 |
+| `kl_reg.cpp` | 64 | `kiIniFile` | **死にコード**（外部参照0） | 削除候補 |
+| `kl_wnd.cpp` | 438 | `kiWindow` `kiDialog` `kiListView` `kiPropSheet` | **大半が死にコード** | 使われるのは静的 `kiWindow::msg()/init()/finish()` のみ（メッセージポンプ）。小さなポンプヘルパに置換し残り ~400 LOC を削除 |
+| `kl_app.cpp` | 89 | `kiApp` | 必要（最小） | `AileFlowKiApp` が継承。`kiWindow::init/finish` を呼ぶ。wide 化 |
+| ~~`kl_cmd.cpp`~~ | 79 | `kiCmdParser` | **削除済（2026-06-16）** | `kiCmdParser` は呼ばれない純粋仮想 `kiApp::run(kiCmdParser&)` の引数型としてしか残っていなかった（`AileFlowApp` が空オーバーライド）。`run()`＋空オーバーライドごと撤去し `kl_cmd.cpp/.h` 削除、`kilib.h` の include と CMake から除去 |
+| `kl_wcmn.cpp` | 146 | `kiSUtil` | 必要 | ArcB2e/Archiver/kl_str が使用。wide 化 |
+| `kl_file.cpp` | 118 | （ファイル操作） | 必要 | W API 化 |
+| `kl_find.cpp` | 67 | `kiFindFile` | 必要 | W API 化（`FindFirstFileW` 等） |
+| `kl_str.cpp` | 375 | `kiStr` `kiPath` | **コア** | wide 化。`IsDBCSLeadByte`/`st_lb[]` 消滅。`kiStr`→ wchar 内部 |
+| `kl_rythp.cpp` | 405 | `kiVar`(:public kiStr) `kiRythpVM` | **コア・最難関** | wide 化を最後に。`.b2e` 解釈の心臓部。要回帰テスト |
+| `kl_misc.h` | (h) | `kiArray<T>` `StrArray` `CharArray` | コンテナ | ヘッダのみ。`std::vector` 化 or 維持。`CharArray=kiArray<char*>` は wide 化で要見直し |
+
+**先行して削除できる量**: `kl_dnd`(217) + `kl_reg`(64) + `kl_wnd` の約400 ≈ **~680 LOC（kilib 全体 ~2000 の約34%）**。
+wide 化の本作業に入る前に、ここを落とすだけで対象が ~2000 → ~1300 LOC に縮む。
+
+## 内部エンコーディング方式: UTF-16 全面化（2026-06-16 決定）
+
+`char`(UTF-8) 維持案ではなく **UTF-16（`wchar_t`）全面化** を採用。型レベルで“真の wide”となり
+UI 層の `std::wstring` と型が揃うのが利点。代償として `kiStr`→`wchar_t` の flip が
+`kiPath`/`kiVar`/`kiRythpVM`/`CharArray`/`.b2e` 読み込みまで波及する大工事になる。
+Rythp VM は元来 char バッファのテキストエンジン（`eval(char*)`/`split`/`CharArray=kiArray<char*>`）
+なので、これらは**一斉に flip する必要があり**小さなコミットに割りづらい。
+→ フリップ前に回帰テストの安全網を用意し、まとまった単位で landing する。
+
+**UTF-16 フリップで同時に動く範囲（一括コミット候補）**:
+- `kiStr`/`kiPath`/`kiVar`: 内部バッファ `char*`→`wchar_t*`、`st_lb[]`/`IsDBCSLeadByte` 撤去
+- `kiRythpVM`: `eval`/`getarg`/`split`/`CharArray` を wide 化
+- `.b2e` 読み込み（`B2eScript.cpp`）: load 時に UTF-8/ANSI→UTF-16 変換
+- `Archiver.cpp` プロセス I/O: `CreateProcessW` + stdout を CP 指定で UTF-16 復号
+- `B2eBridge`: CP_ACP 変換群を撤去し wstring パススルー化（境界が消える方向）
+
+**先行/独立にできる作業**: 安全網（B2eBridge 公開 API を叩く小テスト）は flip と独立に先行可。
+`kl_file`/`kl_find`/`kl_wcmn` の W API 化は `kiStr` wide 化と同時か直後。
+
+## UTF-16 フリップ 実行計画（精密版・コア読込済み）
+
+`kl_str.cpp`/`kl_rythp.cpp`/`kl_misc.h`/`kilibext.h` を精読した上での実行手順。
+対象 ~3,490 行は密結合かつ VM が buffer を in-place 書換するため **原子的に一括** で倒し、
+ハーネス（gate 16 + カナリア2本）で検証してから 1 コミットする。
+
+### 鍵となるレバー: per-file `/UUNICODE` の除去
+
+`ki_strlen/strcpy/strcmp/strcmpi` は `::lstrlen` 等のマクロ（`kl_misc.h`）で、`UNICODE` 定義の
+有無で A/W が自動切替。同様に kilib 内の Win32 呼び出し（`GetModuleFileName`/`GetTempPath`/
+`CreateProcess`/`FindFirstFile`/`CreateDirectory`/`LoadString`/`GetShortPathName`/
+`SHGetPathFromIDList`/`GetDriveType` …）も A/W マクロ。
+→ **`CMakeLists.txt` の `KILIB_B2E_SOURCES` の `COMPILE_OPTIONS` から `/UUNICODE;/U_UNICODE` を外す**
+   だけで、これらが**一括で W 版に切替わる**。手作業は型と文字リテラルとバイト数に集中できる。
+
+### ⚠ 最大のバグ源: mem 系のバイト数
+
+`ki_memcpy/memmov/memzero` は `CopyMemory/MoveMemory/ZeroMemory`（**バイト単位**）。
+現状 `slen = ki_strlen(s)+1`（文字数）をそのまま渡している箇所が多数（`kl_str.cpp` の
+ctor/operator=/operator+=、`kl_rythp.cpp` の quote/unquote 等）。wchar 化後は
+**`* sizeof(wchar_t)` を掛ける**必要がある。`new char[n]`→`new wchar_t[n]` も同様。
+ここを機械的に潰すのが品質の要。
+
+### 手順（順序）
+
+1. **コンテナ/型**: `kl_misc.h` の `CharArray=kiArray<char*>`→`kiArray<wchar_t*>`、
+   `cCharArray` 同様。`kl_carc.h` の `INDIVIDUALINFO::szFileName[]` を `wchar_t` 化。
+2. **kiStr/kiPath**（`kl_str.h/.cpp`）: `m_pBuf` を `wchar_t*`、全 `char`→`wchar_t`、
+   リテラル→`L""`、`next(p)`/`isLeadByte`/`st_lb[]` 撤去（wchar は固定幅 ⇒ `++p`）、
+   mem 系にバイト換算。`standalone_init`/`init` は不要化（DBCS テーブル消滅）。
+3. **kiVar/kiRythpVM**（`kl_rythp.cpp`）: 同様に wchar 化。`ele[256]` は `(*p)&0xff`
+   のままで可（`.b2e` 変数名は ASCII）。`split`/`getarg`/`eval` は ASCII デリミタ走査なので
+   型・リテラル・mem 換算のみ。
+4. **.b2e 読込**（`B2eScript.cpp`）: ファイルバイト（ANSI/UTF-8）を読み、
+   `MultiByteToWideChar` で `wchar_t` バッファへ変換してからセクション分割（キーワードは ASCII）。
+5. **Archiver.cpp**: `CreateProcess` は cmdline が `wchar_t*` になり自動 W 化。
+   **stdout は `ReadFile` で生バイト**なので、ここだけ非機械的: ツール出力 CP を決めて
+   `MultiByteToWideChar` で `wchar_t` 化してから VM に渡す（7-Zip は `-scc` で UTF-8 強制可、
+   既定は OEM/コンソール CP）。`.b2e` に CP ヒントを持たせる設計に接続。
+6. **ArcB2e.cpp**: kiStr/kiPath/kiVar/CharArray を使う全箇所が wchar 化に追従。
+   コマンド組立の文字リテラル→`L""`。
+7. **B2eBridge.cpp**: CP_ACP 変換群（`WToA`/`AToWString`/`WideFsPathToAnsiPath` の
+   短名回避）を**撤去**し wstring パススルー化。`szFileName`(wchar) を直接 `std::wstring` へ。
+   → ここで**ブリッジが大幅に縮む**（境界が消える方向）。
+8. **kl_app.h**: `msgBox(const char*)`→`wchar`、`log`→`wchar`（軽微）。
+
+### 緑ゲート（検証）
+
+`cmake --build build --target AileFlowHarness` → 実行。
+- gate 16 が PASS のまま（既存機能の非回帰）
+- **カナリア**: `listed entry present: 日本語_😀.txt` と
+  `selective-extract locate/round-trip: 日本語_😀.txt` が **WARN→PASS** に転じれば成功。
+- AileFlow.exe 本体でも起動・圧縮・解凍のスモーク（ユーザー検証）。
+
+## フリップ進捗（2026-06-16）
+
+**✅ マイルストーン達成: 全面 UTF-16 フリップが「コンパイル＋ASCII ゲート緑」に到達。**
+kilib コア層＋エンジン層（`Archiver`/`ArcB2e`/`B2eScript`/`B2eBridge`/`AileFlowApp`）を
+すべて `wchar_t` 化。AileFlow（Debug/Release）・ハーネスともビルド成功し、ハーネスの
+gate 16 項目 PASS / 0 fail。コマンドラインは `CreateProcessW` で可逆化。境界（stdout 復号・
+レスポンスファイル）は当面 CP_ACP のままなので非 ASCII カナリア（`日本語_😀.txt` の
+listing / selective-extract）は WARN 据置＝非回帰。
+（→ その後 2026-06-16 の **最終段** で境界を UTF-8 化し、両カナリアとも PASS 化済み。下記参照。）
+
+**✅ 最終段 完了（2026-06-16）= 非 ASCII カナリア WARN→PASS**: 境界 CP を CP_ACP→UTF-8 へ。
+`Archiver` の stdout 復号（`lst_exe`/`tst_exe`）と `resp` 書き出しを UTF-8 化し、**7z 系の
+`.b2e`**（7z/zip/cab/lzh/rpm.cpio/tar系/0）の list/test に `-sccUTF-8`、resp 利用の encode に
+`-scsUTF-8` を付与。ハーネス **20 passed / 0 failed**（`日本語_😀.txt` の一覧・選択解凍が
+両カナリアとも PASS）。AileFlow Debug/Release ともビルド緑。
+
+実施内容:
+1. `Archiver.cpp` `lst_exe`/`tst_exe`: stdout 復号を `MultiByteToWideChar(CP_UTF8, …)` に（2 箇所）。
+2. `ArcB2e.cpp` `resp`: `writeAnsi`→`writeUtf8`、`WideCharToMultiByte(CP_UTF8, …)` に。
+3. `.b2e`（7z 系一括）: list の `7z.exe l` と test の `7z.exe t` に `-sccUTF-8`、
+   resp を使う encode/sfxd の `-scsWIN`→`-scsUTF-8`。
+
+スコープ判断（ユーザー確認済み「7z.exe 系を一括対応」）: stdout 復号はグローバルなので 7z 系を
+一括 UTF-8 化。**非 7z ツール**（cab の `cabarc.exe`・`rar.b2e` の `Rar.exe`・`zpaq64.exe`）は
+今回対象外。特に **CAB 作成（cabarc）は resp が UTF-8 になるため非 ASCII 名が壊れ得る**
+（ASCII は無事）。詳細は `limitations.md`「Non-ASCII Filenames (UTF-8 boundary)」参照。
+
+### ✅ 非 7z ツールの UTF-8 化（2026-06-16, commit 後述）
+
+実機で各ツールの非 ASCII 出力エンコーディングを実測（絵文字 😀 は CP932 表現不可なので判別子）:
+- **RAR = 対応完了**: `Rar.exe`/`WinRAR.exe` は `-sc<charset><object>` を持つ。実測で
+  `-scfr`（charset=f(UTF-8), object=r(redirected/console出力)）→ stdout が UTF-8、
+  `-scfl`（object=l(@list ファイル)）→ UTF-8 レスポンス読込。`rar.b2e` の list/test に `-scfr`、
+  encode の `cmd a …(resp@ …)` 5 箇所に `-scfl` を付与。`日本語_😀.txt` の格納・一覧を
+  Rar.exe/WinRAR.exe 両方で round-trip 確認済み。
+- **zpaq = ツール制約**: `zpaq64.exe l` は BMP を正規 UTF-8 で吐く（日本語等は既にグローバル
+  復号で通る）が、星界面（絵文字）は **CESU-8**（サロゲート各々を UTF-8 化、`ED A0 BD ED B8 80`）。
+  charset スイッチが無く、絵文字は化ける。BMP 非 ASCII は動作。
+- **cab = ツール制約**: `cabarc.exe` は ANSI 専用で UTF-8 list ファイル非対応。UTF-8 レスポンスを
+  ローカル ANSI と誤解釈し、コードページ外の名前で `FCIAddFile() code 1` 失敗（実測）。
+  **CAB の非 ASCII 名作成は不可**。一覧/テスト/展開は 7z.exe 経由なので影響なし。
+
+→ 修正可能だったのは RAR のみ。zpaq/cab はツール側の根本制約として `limitations.md`
+  「Non-ASCII Filenames (UTF-8 boundary)」に記録。
+
+### ✅ CAB / LZH の書き込み廃止（2026-06-16, 後続判断）
+
+cab（`cabarc.exe`）に加え LZH（`lha32.exe`）も同じ ANSI 専用ツールで非 ASCII 境界の
+ハザードを持つ。半端に壊れたニッチな書き込み経路を抱えるより read-only 化する方が単純、
+との判断で **`cab.b2e` / `lzh.b2e` を削除し、read-only の `rpm.cpio.b2e` を
+`cab.lzh.rpm.cpio.b2e` にリネーム**して 4 拡張子を 7-Zip 委譲の単一ビューアに集約。
+`encode:` が消えたことで `B2eBridge::BuildWritableFormats`（`!sections.encode` で skip）が
+両形式を圧縮ダイアログから自動的に除外する。一覧/テスト/展開は不変で、CAB/LZH は
+むしろ選択展開（`decode1` の `(list)`）を新たに獲得。cabarc/lha32 への依存も完全に解消。
+`0.b2e` の DecCabW/DecLHaW SFX stub 登録も除去。
+
+ついでの b2e 整理: **ZIP の `sfx:` も削除**（DecZipW.EXE スタブ結合方式の自己解凍を廃止）し、
+`0.b2e` から DecZipW 登録も除去。これで SFX stub 登録は 0 本に。代わりに、rar.b2e が
+`v`/`t`（list/test）で使う **`Rar.exe` を `0.b2e` に `(use)` 登録**して About のコンポーネント
+バージョン一覧に載るように（既定モジュールの `WinRAR.exe` は載るが Rar.exe は漏れていた）。
+備考: `(use)`/`m_subFile` は `ver()` の版列挙専用で、`(find)`（SearchPathW: exe→bin\→PATH）の
+解決には無関係。SFX は 7z / RAR のみ対応に整理された。
+
+### ▶ 残課題（後続・任意）
+
+- **ロードマップ 7「ブリッジ撤去」**: `B2eBridge` を passthrough 化 → 削除し
+  `SevenZipB2e` から直接呼び出し。境界変換が消えた今、縮小余地が大きい（残 664 行）。
+- GUI 実機で RAR 日本語名アーカイブの一覧・展開・圧縮のスモーク（ユーザー検証）。
+
+以下は作業当時のコア層メモ（履歴）。
+
+**完了（kilib コア）**:
+- `CMakeLists.txt`: `KILIB_B2E_SOURCES` から `/UUNICODE;/U_UNICODE` 除去（W 一括切替レバー）
+- `kl_misc.h`: `CharArray`/`cCharArray` を `wchar_t*`、`ki_memcmp` を `const wchar_t*`
+- `kl_carc.h`: `INDIVIDUALINFO::szFileName/szAttribute/szMode` を `wchar_t`（`dummy1` 削除）
+- `kl_str.h/.cpp`: `kiStr`/`kiPath` 全面 wide。`next()`=`p+1`、`st_lb`/DBCS 撤去、`standalone_init` no-op、
+  mem 系は `WB(n)=n*sizeof(wchar_t)` でバイト換算、Win32 を W 明示
+- `kl_rythp.h/.cpp`: `kiVar`/`kiRythpVM` 全面 wide（`eval`/`split`/`getarg`、`ele[(*p)&0xff]` 維持）
+- `kl_file.h/.cpp`・`kl_find.h/.cpp`・`kl_wcmn.h/.cpp`・`kl_cmd.h/.cpp`: W API 化
+- `kl_app.h`: `msgBox` を wide
+
+**残作業（エンジン層）= 次セッション**:
+- `Archiver.h`: `arcname`(lname/sname)・`CArcModule`(m_name)・`CArchiver`(mext)・`arcfile.rawline` を wchar
+- `Archiver.cpp`:
+  - `cmd`/`lst_exe`/`tst_exe`: `theCmd` は wide → `CreateProcessW`（cmdline 可逆化）
+  - **方針(暫定)**: stdout は全バイトを溜めて `MultiByteToWideChar(CP_ACP)` で一括 wide 化し、
+    既存の行解析を wide で実行（`BL`/`EL` wide、`szFileName` へ直接 wide 代入）。
+    レスポンスファイル(`resp`)は当面 CP_ACP バイトで書く（現状維持）。
+    → これで**コンパイル＋ASCII ゲート緑**を達成。非 ASCII カナリアは WARN 据置（非回帰）。
+  - `GetVersionInfoStr` も wide 化
+- `ArcB2e.h/.cpp`: `st_base`/`init_b2e_path`/`CArcB2e(ctor)`、`CB2eCore` の `arc/list/resp/input/inputpw`
+  を wide、リテラル `L""`、`ki_memcmp((const wchar_t*)name, L"...")`、`input` 系は既に wide ダイアログ
+  なので `b2e_input_impl` の MB↔WC 変換を撤去して簡素化
+- `B2eScript.h/.cpp`: `B2eSections` を `wchar_t*`、`B2e_LoadAndPreprocessScriptFile` は ANSI/UTF-8
+  ファイルを `MultiByteToWideChar` で wide バッファ化
+- `B2eBridge.cpp`: CP_ACP 変換群（`WToA`/`AToWString`/`WideFsPathToAnsiPath` 短名回避）を撤去し
+  wstring パススルー化（**大幅縮小**）。`.b2e` スキャンの char 解析を wide 化
+- `AileFlowApp.h`(`get_tempdir`)・`AileFlowKiLib.cpp`(`init_b2e_path` 戻り値 wide)
+
+**最終段（非 ASCII カナリア WARN→PASS, さらに後続）**: 境界 CP を CP_ACP→UTF-8 へ。
+`Archiver` の stdout 復号と `resp` 書き出しを UTF-8 化し、`.b2e` の list/test/resp コマンドに
+7-Zip の `-scc`/`-scs`（UTF-8）スイッチを付与。これでハーネスのカナリア2本が PASS に転じる。
+
+## 外部ツール I/O 境界（wide 化の本丸）
+
+`src/Archiver.cpp` に集約。ここが narrow の最終境界。
+
+- コマンドライン生成: `CreateProcess(NULL, (char*)theCmd, ...)`（行 ~64 / ~138 / ~320）
+  → `CreateProcessW` + wide コマンドラインへ。非 ANSI ファイル名を渡せるようになる。
+- stdout 取り込み: `CreatePipe`（行 ~129 / ~312）+ `ReadFile(rp, char buf, ...)`（行 ~173 / ~347）
+  → 子プロセスが吐く生バイトを `char` で受け、Rythp VM がパースしている。
+  **ここが本質的に厄介**: 出力エンコーディングを決めるのは外部ツール側。
+
+### stdout 復号の方針
+
+ツール出力 CP を決めて `MultiByteToWideChar` で wide 化してから VM に渡す。レバー:
+
+- **7-Zip 系**: `-scc`/`-scs`（コンソール文字コード）スイッチで UTF-8 出力を強制。
+- 子コンソール出力 CP の制御（環境 / `chcp 65001` 相当）。
+- 制御不能なツール: OEM/コンソール CP として `OEM→wide` 変換にフォールバック。
+
+→ **`.b2e` にコードページヒントを持たせ、パイプ境界で参照して復号する**設計に収束させる。
+   これで残存 narrow ポイントが「指定 CP で stdout を復号する1関数」だけになる。
+
+## ✅ kl_app.cpp のグローバルアロケータ撤去（2026-06-16 完了）
+
+`kl_app.cpp` はかつて **グローバル `operator new/delete`（`new[]`/`delete[]` 含む）を
+`GlobalAlloc`/`GlobalFree` で置き換えていた**（プロセス全体に作用＝UI 層・ブリッジの STL
+アロケーションも経由）。これを撤去し**標準 CRT の operator new/delete に統一**した。
+
+撤去前に確認した安全性:
+- **解放ミスマッチ無し**: `operator new` と `GlobalFree`/`GlobalLock` を混在させる箇所は皆無。
+  Global*/Local* の使用は全て自己完結したペア（`MainWindow.cpp` の D&D 用 DROPFILES の
+  `GlobalAlloc(GHND)`↔`GlobalFree`、`CommandLineToArgvW`→`LocalFree`、`FormatMessage`→`LocalFree`）。
+- **NULL 依存無し**: kilib は `new[]` の結果を NULL チェックせず即使用（例 `(m_pBuf=new wchar_t[...])[0]=…`）。
+  よって「OOM 時に NULL を返す（旧）vs std::bad_alloc を throw（新）」の差は OOM 時のみで、
+  どちらも致命的＝機能的退行なし。むしろ標準化で GlobalAlloc(GMEM_FIXED) の毎回オーバーヘッドが消える。
+
+検証: AileFlow Debug/Release・ハーネス全ビルド緑、ハーネス 20/20・exit 0（STL＋kilib の
+`new[]`/`delete[]` 実経路を通過）。**要 GUI 実機スモーク**（特に D&D・大量ファイル操作）。
+
+残るスキャフォールディング（**温存**）: `extern "C" __cxa_pure_virtual()`（純粋仮想呼び出しの
+リンク用）とダミー `int main()`（`/ENTRY` 無しビルドのリンクエラー回避）。これらは
+アロケータとは別物で、AileFlow は `wWinMain` 起点のため実行はされない。
+
+## 進行順（ロードマップ）
+
+1. ✅ **依存スコープ調査**（本メモ）
+2. ✅ **死にコード削除**: `kl_dnd`(217) / `kl_reg`(64) を撤去（commit `be4157b`）。
+   `kl_wnd`(438) を撤去し `kiWindow::msg()` を `Archiver.cpp` のローカル `pump_thread_messages()`
+   に退避、`kiApp` の `kiWindow*` 依存を `HWND` 直持ちに置換、死んだ `kilib_startUp()` を削除。
+   Debug/Release 両方リンク成功。**合計 ~719 LOC 削減**。
+3. **OS ラッパ層の W API 化**: `kl_file` / `kl_find` / `kl_wcmn`。
+4. **文字列/コンテナ wide 化**: `kiStr`/`kiPath`→ wchar 内部、`kiArray`/`StrArray`/`CharArray`→ std へ。
+5. **プロセス I/O の wide 化**: `Archiver.cpp` を `CreateProcessW` + stdout CP 復号へ。
+6. **Rythp VM wide 化**: `kl_rythp`（`kiVar`/`kiRythpVM`）。最後・最重点・回帰テスト必須。
+7. **ブリッジ撤去 → 評価の上で「維持」に変更（2026-06-16）**: 当初は passthrough 化→削除の予定
+   だったが、コード精読の結果 `B2eBridge` は今も**実役割**を持つと判明し、完全撤去は見送り。
+   - **役割①**: kilib 型 ↔ std/Win32 型の**実変換**（`CArcB2e`/`aflArray`/`arcfile`/`kiStr`/`kiPath`
+     → `ArchiveItem`/`std::wstring`）。CP_ACP 変換は消えたが型変換は残り、564 行の中身の大半。passthrough ではない。
+   - **役割②**: **コンパイルフラグ分離境界**。`B2eBridge.cpp` は kilib 群（`/EHs-c- /GR-`、
+     `WIN32_LEAN_AND_MEAN` 未定義）、`SevenZipB2e.cpp` は UI 群（例外/RTTI 有効）。
+     「UI 層は kilib を一切知らない」分離を成立させている。撤去すると `SevenZipB2e` を
+     kilib フラグ側へ移す必要があり、分離が消える。
+   - **役割③**: 回帰ハーネス（`tests/harness.cpp`）の**テスト入口**。`B2e_List/Extract/Compress/Test`
+     を直接叩く。撤去すると seam を失い書き換えが要る。
+   - → **撤去の害（分離喪失・ハーネス書換）が LOC 削減を上回る**ため意図的に維持。
+     代わりに**低リスクのスリム化**を実施: `B2e_GetWritableFormats()` を static-local で
+     キャッシュ化（Load/CompressDlg/Compress/AddToArchive の 4 経路で毎回 b2e ディレクトリを
+     全スキャンしていた冗長を解消、`GetExtMap()` と同パターン）。ハーネス 20/20 維持。
+
+## 回帰テストの担保（各ステップ共通）
+
+UI がモーダルで自動化しづらいため、`B2eBridge` の公開 API（`B2e_List`/`B2e_Extract`/
+`B2e_Compress`/`B2e_Test`）を叩くヘッドレスハーネスを用意した。
+
+- 実体: `tests/harness.cpp`、CMake ターゲット `AileFlowHarness`（`EXCLUDE_FROM_ALL`・
+  WIN32/wWinMain で `kl_app.cpp` のダミー `main()` と衝突回避）。
+- 実行: `cmake --build build --target AileFlowHarness` → `build/aileflow/AileFlowHarness.exe`。
+  結果は `%TEMP%\aileflow_harness_result.txt` ＋ AllocConsole。終了コード 0=gate 合格。
+- 内容: 一時ディレクトリで 7z / zip について Compress→List→Test→Extract のラウンドトリップ。
+  各ケースに **ASCII 名（gate）** と **非 ASCII 名（日本語＋絵文字, baseline）** を含む。
+- 7z.exe は `CArcModule` の検索順（exe→bin\→PATH）でシステム 7-Zip が見つかるため dev ビルドで実行可。
+
+### フリップ前ベースライン（2026-06-16, commit 段階）
+
+| ケース | 結果 | 意味 |
+|---|---|---|
+| ASCII 全項目（7z/zip） | PASS | 既存機能の健全性 |
+| 非 ASCII **解凍内容** | PASS | 全解凍は `7z.exe` が Unicode 名で書くため成功 |
+| 非 ASCII **一覧表示** | **WARN** | kilib が stdout を CP_ACP 復号 → 名前が化ける（narrow 境界） |
+
+→ **UTF-16 フリップ成功の判定 = 「listed entry present: 日本語_😀.txt」が WARN→PASS**。
+   選択解凍（index→`WToA`）も同様に wide 化で改善されるはず（現ハーネスは全解凍のみ検証。
+   将来 wide 経路の確証を強めるなら選択解凍ケースの追加を検討）。

@@ -16,9 +16,17 @@ AileEx/
 │   └── rar-extra-params.md       — rar.exe switch reference for RAR compression
 ├── src/
 │   ├── main.cpp                   — wWinMain, argument parsing, mode routing
-│   ├── App.h/.cpp                 — Singleton, DLL load management, message loop
-│   ├── MainWindow.h/.cpp          — Browse window (menu + toolbar + TreeView + ListView + status bar)
-│   ├── CompressDlg.h/.cpp         — Compression settings dialog
+│   ├── App.h/.cpp                 — Singleton, DLL load management, message loop; Services() builds AppServices
+│   ├── AppServices.h              — Injected service bundle (Settings/SevenZip/UnrarDll + reloadDlls) for the GUI
+│   ├── MainWindow.h               — Browse window class (menu + toolbar + TreeView + ListView + status bar)
+│   ├── MainWindow.cpp             — window lifecycle, message routing, layout, menus, dialogs (core)
+│   ├── MainWindowView.cpp         — tree/list population, sorting, selection, navigation
+│   ├── MainWindowOps.cpp          — thin command handlers + IArchiveUI implementation (UI services) + properties
+│   ├── MainWindowInternal.h       — file-local helpers shared by the three MainWindow TUs
+│   ├── ArchiveController.h/.cpp    — archive operation orchestration (open/extract/test/add/delete/comment/compress)
+│   ├── IArchiveUI.h               — UI-services seam between ArchiveController and MainWindow
+│   ├── CompressDlg.h/.cpp         — Compression settings dialog (input gathering)
+│   ├── CompressPolicy.h/.cpp      — Archive policy: settings persistence, format/method/SFX + extension rules (shared by dialog + CLI)
 │   ├── AdvancedCompressDlg.h/.cpp — 7z/ZIP advanced compression options (dict/word/solid/threads/extra)
 │   ├── RarAdvancedDlg.h/.cpp      — RAR advanced compression options (recovery/volume etc.)
 │   ├── CompressHelper.h/.cpp      — Single entry point for RAR compression (`RunRarCompressSync`)
@@ -28,9 +36,21 @@ AileEx/
 │   ├── PropertiesDlg.h/.cpp       — Archive-wide properties dialog
 │   ├── CommentDlg.h/.cpp          — Archive comment view/edit dialog
 │   ├── Settings.h/.cpp            — INI read/write, MRU management
-│   ├── SevenZip.h/.cpp            — 7z.dll wrapper (IIn/IOutArchive + DeleteItems + callbacks + Find7zDll)
+│   ├── SevenZip.h                 — 7z.dll wrapper public API (per-session archive operations + format/codec queries)
+│   ├── SevenZip.cpp               — core: load/unload, format-CLSID cache, OpenArchiveWithFallback, comment get/set, properties
+│   ├── SevenZipRead.cpp           — read ops: OpenArchive (enumerate + split/tar unwrap), Test, Extract
+│   ├── SevenZipWrite.cpp          — write ops: Compress (split volumes + SFX), AddToArchive, DeleteItems
+│   ├── SevenZipInternal.h         — PropToUInt64 (helper shared between SevenZip.cpp and SevenZipRead.cpp)
+│   ├── SevenZipCache.h/.cpp       — format-by-path + items-by-key (LRU) caches owned by SevenZip
+│   ├── SevenZipStreams.h/.cpp     — COM stream wrappers (CInFileStream/COutFileStream/CTempOutStream/CMultiVolOutStream) + ConcatFiles/ParseVolumeSize
+│   ├── SevenZipCallbacks.h/.cpp   — COM callbacks (COpen*/CTar*/CExtract*/CTest*/CUpdate*/CDelete*/CAdd*) + SrcEntry/EnumeratePaths/CanonicalizePath
+│   ├── FormatRegistry.h/.cpp      — Format/codec registry (ext→CLSID, writable formats, encoders, filters); composed by SevenZip
 │   ├── UnrarDll.h/.cpp            — unrar.dll C API wrapper
 │   ├── RarProcess.h/.cpp          — WinRAR.exe (GUI) / Rar.exe (console) subprocess (Compress / Delete)
+│   ├── IArchiveBackend.h          — Per-session archive backend interface (Open/Extract/Test/Add/Delete/comment + capabilities)
+│   ├── SevenZipBackend.h/.cpp     — IArchiveBackend adapter over 7z.dll
+│   ├── RarBackend.h/.cpp          — IArchiveBackend adapter over unrar.dll (read) + RarProcess (write)
+│   ├── ArchiveOpener.h/.cpp       — Backend selection / open-time fallback / password retry
 │   ├── ArchiveItem.h              — Archive entry POD struct
 │   ├── I18n.h/.cpp                — Localized string loading (en-US / ja-JP via SetProcessPreferredUILanguages)
 │   ├── WorkerThread.h/.cpp        — Worker thread + IExtractProgressSink + ProgressPostSink
@@ -136,13 +156,16 @@ PostMessageW(hwnd, WM_APP_DONE, hr, 0) ──→
 
 ```
 Is .rar file?
-  ├─ Yes → RarExtractor setting is "unrar" and unrar.dll loaded?
-  │   ├─ Yes → Try unrar.ListArchive()
-  │   │   └─ Fail → Fallback to 7z.OpenArchive()
-  │   └─ No  → Try 7z.OpenArchive()
-  │       └─ Fail → Fallback to unrar.ListArchive() (if loaded)
+  ├─ Yes → unrar.dll loaded?
+  │   ├─ Yes → Try unrar.ListArchive()   (binds the writable RarBackend)
+  │   │   └─ Fail → Fallback to 7z.OpenArchive() (read-only)
+  │   └─ No  → Try 7z.OpenArchive() (read-only)
   └─ No  → Try 7z.OpenArchive() only
 ```
+
+For `.rar`, unrar is always preferred when loaded so the archive binds the
+writable `RarBackend` (read = unrar.dll, write = rar.exe); 7z is only a
+read-only fallback when unrar is unavailable.
 
 `SevenZip::OpenArchive(path)`:
 - Determine CLSID from extension → get handler with `CreateInArchive`
@@ -179,3 +202,103 @@ After `Settings::Save()`, call `App::ReloadDlls()` to reload with new DLL paths.
 | `CreateAcceleratorTable` | Keyboard shortcuts |
 | `SetProcessDpiAwarenessContext` | DPI support (PerMonitorV2) |
 | `IFileOpenDialog` (Shell) | Folder selection dialog (extract destination, settings dialog) |
+
+## Object-Oriented Review Notes (2026-06)
+
+This section records refactoring concerns identified during a source review so they can
+be revisited without re-running the whole analysis.
+
+### Main concerns
+
+1. **`MainWindow` is a controller-heavy class.** *(Resolved.)*
+   It once owned window layout and message handling *and* the archive open/extract/test/add/delete
+   workflows, password prompting, MRU updates, temporary-file lifecycle, and backend selection. This
+   was unwound in two steps. First, the archive-**domain** state and lifecycle moved into a UI-free
+   `ArchiveSession` (`common/ArchiveSession.{h,cpp}`, shared by both apps): the open archive's
+   display/effective paths, password, read-only flag, backend, and listing, plus `Adopt()`/`Close()`
+   (with split-unwrap temp cleanup) and domain helpers (`SelectionNeedsPassword`, capability forwards).
+   Second, the operation **orchestration** moved into an `ArchiveController` (per app), which owns each
+   workflow's domain decisions and sequencing and drives the UI through an `IArchiveUI` seam.
+   `MainWindow` now: hosts the window/menu/tree/list (`MainWindow.cpp`/`MainWindowView.cpp`), gathers
+   UI input and forwards to the controller, and *implements* `IArchiveUI` (`MainWindowOps.cpp`) —
+   `RunOperation` (progress dialog + worker + message loop), prompts, folder picker, error/confirm
+   boxes, and post-open view refresh. The repeated "progress + sink + worker + loop" scaffold is
+   unified in one place. (AileFlow keeps its synchronous, dialog-only integrity test in the window
+   layer, and adds a second `RunBackgroundOp` seam for B2E ops that show their own dialog.)
+
+2. **`App` acts as a singleton service locator plus startup orchestrator.** *(Service-locator part resolved.)*
+   `App` still owns `Settings`/`SevenZip`/`UnrarDll` and the startup modes, but the GUI no longer
+   reaches them through `App::Instance()`. Services are now injected as an `AppServices` bundle
+   (`AppServices.h`): `App::Services()` builds it, `MainWindow` takes it at construction and forwards
+   it to `ArchiveController`, and the settings/about dialogs receive it too (AileEx's bundle also
+   carries a `reloadDlls` action so the settings dialog needn't reach the singleton). `App::Instance()`
+   now appears only at the composition root (`main.cpp`/`App.cpp`) and for `GetInstance` (HINSTANCE
+   identity), not service access. The startup-orchestration role of `App.cpp` (the `Run*Mode` methods)
+   is left as-is — it is the app's entry point, not the service-locator smell this concern targeted.
+
+3. **`SevenZip` is wider than a normal backend wrapper.** *(Partially addressed.)*
+   Besides 7z.dll loading it once also held, inline, the format/codec database, the format- and
+   item-listing caches, RAR5→RAR4 fallback, and the tar-in-stream / split-volume temp-unwrap logic.
+   These have been factored into focused units: format/codec → `FormatRegistry`; caches →
+   `SevenZipCache` (format-by-path + items-by-key LRU, with per-path invalidation); transparent
+   unwrap → `UnwrapTarStream` / `UnwrapSplitVolume` (so `OpenArchive` is open + enumerate). COM
+   plumbing already lives in `SevenZipStreams` / `SevenZipCallbacks`. What remains is the *public*
+   shape: `OpenArchive` still returns `effectivePath` and the path-based API carries format-specific
+   caveats. That leak is now contained by `ArchiveSession` (which owns the temp lifecycle), and the
+   API itself is frozen by the cross-app `SevenZip.h` contract, so narrowing it further is out of
+   scope unless that contract is revisited.
+
+4. **Archive backend behavior is selected by flags instead of polymorphism.** *(Resolved.)*
+   `MainWindow` previously relied on flags such as `m_openedWithUnrar`. Backend/session state now lives
+   in a polymorphic `IArchiveBackend` with explicit capability queries; `m_openedWithUnrar` is gone and
+   `ArchiveOpener` owns open-time backend selection. (`m_isReadOnly` and the display-vs-operative path
+   distinction remain.)
+
+5. **RAR and 7z backends duplicate responsibilities without sharing a common interface.** *(Resolved.)*
+   `UnrarDll`/`RarProcess` and `SevenZip` are now consumed through the shared `IArchiveBackend` contract
+   (`SevenZipBackend`, `RarBackend`), removing the ad-hoc cross-backend branching in `MainWindow`.
+   See `backend-interface-refactor.md` for the design and the completed incremental plan.
+
+6. **Dialogs contain business rules in addition to presentation.** *(Resolved.)*
+   `CompressDlg`'s archive policy — settings persistence (which fields are saved), format/method/SFX
+   normalization, and output-extension rewriting — moved into a `CompressPolicy` unit. The dialog now
+   only gathers input and calls the policy; the CLI override path (`App::ApplyOverrides`) and the
+   drop/add compress flows call the same functions, so the normalization rule that was duplicated
+   between dialog and CLI is now single-sourced. (AileFlow's `CompressPolicy` carries persistence and
+   the extension rule only; its B2E methods are .b2e-driven indices with no normalization step.)
+
+### Refactoring priority
+
+Done so far: the backend capability model (`IArchiveBackend` + `ArchiveOpener`, concerns #4/#5), and a
+file-level decomposition of the two largest sources (`SevenZip.cpp` → core/read/write + stream/callback
+files; `MainWindow.cpp` → core/view/ops, both apps). These were organizational/structural and did not
+change behavior.
+
+Also done (concern #1): archive domain state moved to `ArchiveSession`, then operation orchestration
+moved to `ArchiveController` behind an `IArchiveUI` seam (both apps). `MainWindow` is now window + view +
+UI-services, with operation logic in the controller.
+
+Also done (concern #3, internal): `SevenZip`'s caches and tar/split unwrap moved into `SevenZipCache`
+and `UnwrapTarStream`/`UnwrapSplitVolume`, leaving `OpenArchive` as open + enumerate. The remaining
+public-API leak (`effectivePath`) is contained by `ArchiveSession` and frozen by the cross-app contract.
+
+Also done (concern #2): GUI service access now goes through an injected `AppServices` bundle instead of
+`App::Instance()`; the singleton remains only as the composition root and for HINSTANCE identity.
+
+Also done (concern #6): archive policy (settings persistence, format/method/SFX normalization, output
+extension) moved from `CompressDlg` into `CompressPolicy`, shared by the dialog and the CLI path.
+
+All six review concerns are now addressed (concern #3 to the extent the cross-app `SevenZip.h`
+contract allows). No further items from this review pass remain.
+
+### Existing strengths worth preserving
+
+- `IExtractProgressSink` / `ProgressPostSink` keep worker-thread progress reporting separate from
+  archive implementations.
+- The COM callback/stream classes (now in `SevenZipCallbacks.h` / `SevenZipStreams.h`) use localized
+  ownership and RAII patterns, which helps contain COM/Win32 lifetime complexity. The original ~2990-line
+  `SevenZip.cpp` was decomposed in two passes: first the COM plumbing moved into the stream/callback
+  files, then the per-session operations were split by direction — `SevenZip.cpp` core (~690 lines:
+  lifecycle, cache, comment, properties), `SevenZipRead.cpp` (~500: open/test/extract) and
+  `SevenZipWrite.cpp` (~490: compress/add/delete). The public `SevenZip.h` API is unchanged throughout,
+  so the cross-app contract and AileFlow are untouched.

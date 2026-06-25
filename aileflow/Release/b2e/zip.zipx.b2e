@@ -45,12 +45,7 @@ encode:
     (let o "-p%p -mx=9 -mm=Deflate")))
 
  ; Create the archive from the response-file-expanded input list.
- (cmd a -tzip %o (arc.zip) (resp@ (listr)) -scsWIN)
-
-sfx:
- ; Build a simple self-extracting ZIP by concatenating the decoder stub and
- ; the archive payload.
- (xcmd copy /b (find DecZipW.EXE) + (arc) (arc.exe))
+ (cmd a -tzip %o (arc.zip) (resp@ (listr)) -scsUTF-8)
 
 decode:
  ; Extract all files.
@@ -66,8 +61,8 @@ delete:
 
 test:
  ; Verify archive integrity.
- (xcmd 7z.exe t (arc))
+ (xcmd 7z.exe t -sccUTF-8 (arc))
 
 list:
  ; Parse 7z list output for AileFlow's archive view.
- (xscan "------------------" 1 "------------------" 1 53 7z.exe l (arc))
+ (xscan "------------------" 1 "------------------" 1 53 7z.exe l -sccUTF-8 (arc))

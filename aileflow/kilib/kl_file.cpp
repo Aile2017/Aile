@@ -6,9 +6,9 @@
 
 //--------------------------- static --------------------------//
 
-unsigned long kiFile::getSize( const char* fname, unsigned long err )
+unsigned long kiFile::getSize( const wchar_t* fname, unsigned long err )
 {
-	HANDLE h = ::CreateFile( fname,
+	HANDLE h = ::CreateFileW( fname,
 				GENERIC_READ, FILE_SHARE_WRITE|FILE_SHARE_READ,
 				NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL|FILE_FLAG_SEQUENTIAL_SCAN, NULL );
 	if( h==INVALID_HANDLE_VALUE )
@@ -23,16 +23,16 @@ unsigned long kiFile::getSize( const char* fname, unsigned long err )
 //--------------------------- Open and close --------------------------//
 
 
-bool kiFile::open( const char* filename, bool read, bool create )
+bool kiFile::open( const wchar_t* filename, bool read, bool create )
 {
 	close();
 
 	if( m_bReadMode = read )
-		m_hFile = ::CreateFile( filename,
+		m_hFile = ::CreateFileW( filename,
 				GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
 				FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL );
 	else
-		m_hFile = ::CreateFile( filename,
+		m_hFile = ::CreateFileW( filename,
 				GENERIC_WRITE, FILE_SHARE_READ, NULL,
 				create ? CREATE_ALWAYS : OPEN_EXISTING,
 				FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL );

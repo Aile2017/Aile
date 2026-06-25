@@ -16,9 +16,6 @@ public:
                                                  const std::vector<std::wstring>& srcFiles,
                                                  const std::wstring& overrideDir = L"");
 
-    const std::wstring& GetRarExtractor() const    { return m_rarExtractor; }
-    void SetRarExtractor(const wchar_t* v)          { m_rarExtractor = v; }
-
     const std::wstring& GetRarExePath() const       { return m_rarExePath; }
     void SetRarExePath(const wchar_t* v)            { m_rarExePath = v; }
 
@@ -40,13 +37,21 @@ public:
     int  GetMkDir() const                           { return m_mkDir; }
     void SetMkDir(int v)                            { m_mkDir = v; }
 
+    // Extension strip mode for the generated output-folder name:
+    // 0=strip all known compound exts (default) / 1=strip one ext / 2=keep all
+    int  GetExtStripMode() const                    { return m_extStripMode; }
+    void SetExtStripMode(int v)                     { m_extStripMode = v; }
+
+    // Strip trailing digits/-/_/. from the output-folder name stem
+    bool GetStripTrailingNumber() const             { return m_stripTrailingNumber; }
+    void SetStripTrailingNumber(bool v)             { m_stripTrailingNumber = v; }
+
+    // break_ddir: collapse single-subfolder output after extraction
+    bool GetBreakDDir() const                       { return m_breakDDir; }
+    void SetBreakDDir(bool v)                       { m_breakDDir = v; }
+
     int  GetRarLevel() const                        { return m_rarLevel; }
     void SetRarLevel(int v)                         { m_rarLevel = v; }
-
-    // Self-extraction (SFX) mode — remembers the last selection in the compress dialog.
-    // Values: "" (none) / "gui" / "console".
-    const std::wstring& GetDefaultSfxMode() const   { return m_defaultSfxMode; }
-    void SetDefaultSfxMode(const wchar_t* v)        { m_defaultSfxMode = v; }
 
     // Advanced compress options (last-used values)
     const std::wstring& GetAdvDictSize() const      { return m_advDictSize; }
@@ -122,7 +127,6 @@ private:
     mutable wchar_t m_iniPath[MAX_PATH] = {};
 
     // All members are initialized by Load() before use
-    std::wstring m_rarExtractor;
     std::wstring m_rarExePath;
     std::wstring m_defaultOutputDir;
     bool         m_outputDirModeFixed;
@@ -130,7 +134,9 @@ private:
     int          m_compressionLevel;
     int          m_rarLevel;
     int          m_mkDir;
-    std::wstring m_defaultSfxMode;
+    int          m_extStripMode;
+    bool         m_stripTrailingNumber;
+    bool         m_breakDDir;
     std::wstring m_advDictSize;
     std::wstring m_advWordSize;
     std::wstring m_advSolidBlock;

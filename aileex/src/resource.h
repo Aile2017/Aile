@@ -61,7 +61,6 @@
 #define IDC_CANCEL          2003
 
 // Settings dialog controls
-#define IDC_RAR_EXTRACTOR   3001
 #define IDC_DEFAULT_DIR     3002
 #define IDC_BROWSE_DIR      3003
 #define IDC_7Z_DLL_PATH     3004
@@ -81,6 +80,12 @@
 // Output directory mode (radio buttons in the "Default output directory" group)
 #define IDC_OUTDIR_SOURCE   3015   // Same as source file location
 #define IDC_OUTDIR_FIXED    3016   // Use fixed DefaultOutputDir
+// Extraction output-folder naming / structure
+#define IDC_EXT_STRIP_ALL       3017  // Strip all known extensions (default)
+#define IDC_EXT_STRIP_ONE       3018  // Strip one extension only
+#define IDC_EXT_STRIP_KEEP      3019  // Keep all extensions
+#define IDC_STRIP_TRAILING_NUM  3020  // Strip trailing digits/-/_/. from stem
+#define IDC_COLLAPSE_SINGLE_DIR 3021  // Collapse single-subfolder output (break_ddir)
 
 // Info dialog controls
 #define IDC_INFO_LIST       5001

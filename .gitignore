@@ -1,6 +1,9 @@
-# Build output
+# Build output (incl. 32-bit trees from the x86 Native Tools prompt)
 build/
 build_release/
+build_x86/
+build_release_x86/
+build_x86_release/
 out/
 
 # MSVC artifacts
@@ -38,3 +41,8 @@ CLAUDE.md
 *.tmp
 *.bak
 Thumbs.db
+
+# Stray root-level scratch dir (a test archive 'a/b2e.7z' was once committed here)
+/a/
+
+.rtk/

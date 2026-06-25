@@ -1,4 +1,5 @@
 ﻿#include "CompressDlg.h"
+#include "CompressPolicy.h"
 #include "AdvancedCompressDlg.h"
 #include "DialogUtils.h"
 #include "I18n.h"
@@ -6,44 +7,6 @@
 #include "Settings.h"
 #include "resource.h"
 #include <commctrl.h>
-
-void CompressDlg::Params::LoadFromSettings(const Settings& s) {
-    format         = s.GetDefaultFormat();
-    level          = s.GetCompressionLevel();
-    rarLevel       = s.GetRarLevel();
-    dictSize       = s.GetAdvDictSize();
-    wordSize       = s.GetAdvWordSize();
-    solidBlock     = s.GetAdvSolidBlock();
-    threads        = s.GetAdvThreads();
-    extra          = s.GetAdvExtra();
-    volumeSize     = s.GetAdvVolume();
-    rarDictSize    = s.GetRarAdvDictSize();
-    rarSolid       = s.GetRarAdvSolid();
-    rarThreads     = s.GetRarAdvThreads();
-    rarRecoveryPct = s.GetRarAdvRecovery();
-    rarSplitVolume = s.GetRarAdvVolume();
-    rarExtra       = s.GetRarAdvExtra();
-    sfxMode        = s.GetDefaultSfxMode();
-}
-
-void CompressDlg::Params::SaveToSettings(Settings& s) const {
-    s.SetDefaultFormat(format.c_str());
-    s.SetCompressionLevel(level);
-    s.SetRarLevel(rarLevel);
-    s.SetAdvDictSize(dictSize.c_str());
-    s.SetAdvWordSize(wordSize.c_str());
-    s.SetAdvSolidBlock(solidBlock.c_str());
-    s.SetAdvThreads(threads.c_str());
-    s.SetAdvExtra(extra.c_str());
-    s.SetAdvVolume(volumeSize.c_str());
-    s.SetRarAdvDictSize(rarDictSize.c_str());
-    s.SetRarAdvSolid(rarSolid);
-    s.SetRarAdvThreads(rarThreads);
-    s.SetRarAdvRecovery(rarRecoveryPct);
-    s.SetRarAdvVolume(rarSplitVolume.c_str());
-    s.SetRarAdvExtra(rarExtra.c_str());
-    s.SetDefaultSfxMode(sfxMode.c_str());
-}
 
 struct MethodEntry { const wchar_t* label; const wchar_t* id; };
 
@@ -198,43 +161,12 @@ void CompressDlg::UpdateOutputExt(HWND hwnd, const wchar_t* fmtId, const wchar_t
     GetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, outPath, MAX_PATH);
     if (!outPath[0] || !fmtId) return;
 
-    bool isStream = SevenZip::IsStreamExt(fmtId);
-    bool is7z  = (wcscmp(fmtId, L"7z")  == 0);
-    bool isRar = (wcscmp(fmtId, L"rar") == 0);
-    bool sfxOn = (sfxMode && sfxMode[0] && (is7z || isRar));
+    bool needsTar = CompressPolicy::NeedsTarWrapper(fmtId, m_params.inputFiles);
+    std::wstring ext = CompressPolicy::OutputExtension(fmtId, sfxMode ? sfxMode : L"", needsTar);
 
-    bool needsTar = false;
-    if (isStream) {
-        needsTar = m_params.inputFiles.size() > 1;
-        if (!needsTar && m_params.inputFiles.size() == 1) {
-            DWORD attrs = GetFileAttributesW(m_params.inputFiles[0].c_str());
-            needsTar = (attrs != INVALID_FILE_ATTRIBUTES &&
-                        (attrs & FILE_ATTRIBUTE_DIRECTORY));
-        }
-    }
-
-    std::wstring ext;
-    if (sfxOn) {
-        ext = L".exe";
-    } else if (needsTar) {
-        ext = std::wstring(L".tar.") + fmtId;
-    } else {
-        ext = std::wstring(L".") + fmtId;
-    }
-
-    // Strip existing archive extension from the path, including any .tar/.exe prefix
-    wchar_t* dot = wcsrchr(outPath, L'.');
-    if (dot && !wcschr(dot, L'\\') && !wcschr(dot, L'/')) {
-        *dot = L'\0';  // remove last extension
-    }
-    size_t blen = wcslen(outPath);
-    if (blen >= 4 && _wcsicmp(outPath + blen - 4, L".tar") == 0) {
-        outPath[blen - 4] = L'\0';
-    }
-    std::wstring newPath(outPath);
-    newPath += ext;
-    wcsncpy_s(outPath, newPath.c_str(), MAX_PATH - 1);
-    SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, outPath);
+    std::wstring path(outPath);
+    CompressPolicy::ApplyOutputExtension(path, ext, m_writableFormats);
+    SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, path.c_str());
 }
 
 void CompressDlg::OnSfxChange(HWND hwnd) {
@@ -444,14 +376,6 @@ bool CompressDlg::OnOK(HWND hwnd) {
         const wchar_t* mId = (const wchar_t*)SendMessageW(hMethod, CB_GETITEMDATA, msel, 0);
         if (mId) m_params.method = mId;
     }
-    // For RAR, the compression level is passed as the method digit (-m0..-m5)
-    if (m_params.format == L"rar") {
-        m_params.rarLevel = m_params.level;
-        m_params.method   = std::to_wstring(m_params.level);
-    } else if (m_params.format != L"7z" && m_params.format != L"zip") {
-        m_params.method.clear();
-    }
-
     // Read password
     wchar_t pw[256] = {};
     GetDlgItemTextW(hwnd, IDC_PASSWORD, pw, 256);
@@ -459,7 +383,7 @@ bool CompressDlg::OnOK(HWND hwnd) {
 
     m_params.encryptHeaders = (IsDlgButtonChecked(hwnd, IDC_ENCRYPT_HDR) == BST_CHECKED);
 
-    // Read SFX mode (forced to "" for formats other than 7z / RAR)
+    // Read SFX mode (combo value as-is; format applicability is enforced below).
     HWND hSfx = GetDlgItem(hwnd, IDC_SFX_MODE);
     int  ssel = (int)SendMessageW(hSfx, CB_GETCURSEL, 0, 0);
     if (ssel != CB_ERR) {
@@ -468,8 +392,9 @@ bool CompressDlg::OnOK(HWND hwnd) {
     } else {
         m_params.sfxMode.clear();
     }
-    if (m_params.format != L"7z" && m_params.format != L"rar")
-        m_params.sfxMode.clear();
+
+    // Apply the format/method/SFX policy in one place (shared with the CLI path).
+    CompressPolicy::NormalizeForFormat(m_params);
 
     return true;
 }

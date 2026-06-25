@@ -12,12 +12,12 @@ class kiFile
 public: //-- static ----------------------------------------
 
 	// Get file size (name, value to return on error)
-	static unsigned long getSize( const char* fname, unsigned long err=0xffffffff );
+	static unsigned long getSize( const wchar_t* fname, unsigned long err=0xffffffff );
 
 public: //-- Public interface --------------------------
 
 	// Open and close
-	bool open( const char* filename, bool read=true, bool create=true );
+	bool open( const wchar_t* filename, bool read=true, bool create=true );
 	void close();
 
 	// Read and write

@@ -11,9 +11,9 @@ class kiFindFile
 {
 public: //-- Public interface --------------------------
 
-	static bool findfirst( const char* wild, WIN32_FIND_DATA* pfd );
-	bool begin( const char* wild );
-	bool next( WIN32_FIND_DATA* pfd );
+	static bool findfirst( const wchar_t* wild, WIN32_FIND_DATAW* pfd );
+	bool begin( const wchar_t* wild );
+	bool next( WIN32_FIND_DATAW* pfd );
 
 public: //-- Internal processing -----------------------------------
 
@@ -26,7 +26,7 @@ public: //-- Internal processing -----------------------------------
 private:
 	HANDLE h;
 	bool first;
-	WIN32_FIND_DATA fd;
+	WIN32_FIND_DATAW fd;
 };
 
 #endif

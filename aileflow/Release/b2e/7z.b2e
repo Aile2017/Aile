@@ -67,8 +67,8 @@ encode:
  ;   -r0       = recurse into folders with depth limit 0 (unlimited)
  ;   (arc.7z)  = output archive path (substituted by AileFlow)
  ;   (listr)   = input file list (substituted via response file)
- ;   -scsWIN   = set charset to Windows (OEM) for console output
- (cmd a -t7z %o -r0 (arc.7z) (resp@ (listr)) -scsWIN)
+ ;   -scsUTF-8 = read the response file (list charset) as UTF-8 (lossless names)
+ (cmd a -t7z %o -r0 (arc.7z) (resp@ (listr)) -scsUTF-8)
 
 sfxd:
  ; Self-extracting archive (SFX Desktop) section
@@ -97,7 +97,7 @@ sfxd:
  ; Execute SFX creation: same as encode but with -sfx7z.sfx prepended
  ;   -sfx7z.sfx = embed 7z.sfx stub (Desktop SFX flavor)
  ;   (arc.exe)  = output .exe file (substituted by AileFlow)
- (cmd a -t7z %o -r0 -sfx7z.sfx (arc.exe) (resp@ (listr)) -scsWIN)
+ (cmd a -t7z %o -r0 -sfx7z.sfx (arc.exe) (resp@ (listr)) -scsUTF-8)
 
 decode:
  ; Full extraction section: called when user double-clicks archive or clicks "Extract All"
@@ -126,7 +126,7 @@ test:
  ; Verify archive integrity (called from context menu or Tools)
  ; Uses xcmd (external command, doesn't wait for output)
  ;   t = test archive
- (xcmd 7z.exe t (arc))
+ (xcmd 7z.exe t -sccUTF-8 (arc))
 
 list:
  ; List archive contents: called when user opens archive or refreshes view
@@ -138,4 +138,4 @@ list:
  ;   1 = skip 1 line after end delimiter
  ;   53 = column position for parsing (7z uses column 53 for size/flags)
  ;   7z.exe l (arc) = command to run (list mode)
- (xscan "------------------" 1 "------------------" 1 53 7z.exe l (arc))
+ (xscan "------------------" 1 "------------------" 1 53 7z.exe l -sccUTF-8 (arc))

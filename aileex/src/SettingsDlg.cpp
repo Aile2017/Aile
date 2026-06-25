@@ -10,7 +10,8 @@
 #include <shobjidl_core.h>
 #include <commdlg.h>
 
-void SettingsDlg::Show(HWND hwndParent) {
+void SettingsDlg::Show(HWND hwndParent, const AppServices& svc) {
+    m_svc = &svc;
     DialogBoxParamW(
         GetModuleHandleW(nullptr),
         MAKEINTRESOURCEW(IDD_SETTINGS),
@@ -45,6 +46,11 @@ INT_PTR SettingsDlg::HandleMsg(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case IDC_MKDIR_3:
             CheckRadioButton(hwnd, IDC_MKDIR_0, IDC_MKDIR_3, LOWORD(wp));
             break;
+        case IDC_EXT_STRIP_ALL:
+        case IDC_EXT_STRIP_ONE:
+        case IDC_EXT_STRIP_KEEP:
+            CheckRadioButton(hwnd, IDC_EXT_STRIP_ALL, IDC_EXT_STRIP_KEEP, LOWORD(wp));
+            break;
         case IDC_BROWSE_FONT:
             OnBrowseFont(hwnd);
             break;
@@ -73,18 +79,7 @@ INT_PTR SettingsDlg::HandleMsg(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 }
 
 void SettingsDlg::OnInit(HWND hwnd) {
-    Settings& s = App::Instance().GetSettings();
-
-    // RAR extractor combo
-    // Add unrar.dll as an option only when it is loaded
-    HWND hExt = GetDlgItem(hwnd, IDC_RAR_EXTRACTOR);
-    bool unrarLoaded = App::Instance().GetUnrar().IsLoaded();
-    SendMessageW(hExt, CB_ADDSTRING, 0, (LPARAM)L"7z.dll (7-Zip)");
-    if (unrarLoaded)
-        SendMessageW(hExt, CB_ADDSTRING, 0, (LPARAM)L"unrar.dll (UnRAR)");
-    // If unrar.dll is not loaded, fall back to 7z even if the saved setting is "unrar"
-    int extSel = (unrarLoaded && s.GetRarExtractor() == L"unrar") ? 1 : 0;
-    SendMessageW(hExt, CB_SETCURSEL, extSel, 0);
+    Settings& s = m_svc->settings;
 
     // Font — show current name; user opens ChooseFont via "..." button.
     SetDlgItemTextW(hwnd, IDC_FONT_NAME, s.GetFontName().c_str());
@@ -108,6 +103,15 @@ void SettingsDlg::OnInit(HWND hwnd) {
         if (v > 3) v = 3;
         CheckRadioButton(hwnd, IDC_MKDIR_0, IDC_MKDIR_3, IDC_MKDIR_0 + v);
     }
+
+    // Extraction output-folder naming / structure
+    {
+        int v = s.GetExtStripMode();
+        if (v < 0 || v > 2) v = 0;
+        CheckRadioButton(hwnd, IDC_EXT_STRIP_ALL, IDC_EXT_STRIP_KEEP, IDC_EXT_STRIP_ALL + v);
+    }
+    CheckDlgButton(hwnd, IDC_STRIP_TRAILING_NUM,  s.GetStripTrailingNumber() ? BST_CHECKED : BST_UNCHECKED);
+    CheckDlgButton(hwnd, IDC_COLLAPSE_SINGLE_DIR, s.GetBreakDDir()           ? BST_CHECKED : BST_UNCHECKED);
 
     // DLL / exe paths: show saved value, or auto-detect if empty
     auto resolve = [](const std::wstring& saved, const std::wstring& detected) {
@@ -151,13 +155,9 @@ void SettingsDlg::OnBrowseFile(HWND hwnd, int pathCtrlId, UINT filterId, UINT ti
 }
 
 bool SettingsDlg::OnOK(HWND hwnd) {
-    Settings& s = App::Instance().GetSettings();
+    Settings& s = m_svc->settings;
 
     s.SetOutputDirModeFixed(IsDlgButtonChecked(hwnd, IDC_OUTDIR_FIXED) == BST_CHECKED);
-
-    HWND hExt = GetDlgItem(hwnd, IDC_RAR_EXTRACTOR);
-    int  sel  = (int)SendMessageW(hExt, CB_GETCURSEL, 0, 0);
-    s.SetRarExtractor(sel == 1 ? L"unrar" : L"7z");
 
     // Font selection
     wchar_t fontBuf[LF_FACESIZE] = {};
@@ -177,6 +177,17 @@ bool SettingsDlg::OnOK(HWND hwnd) {
     }
     s.SetMkDir(mkDir);
 
+    // Extraction output-folder naming / structure
+    {
+        int extStrip = 0;
+        for (int i = 0; i <= 2; ++i) {
+            if (IsDlgButtonChecked(hwnd, IDC_EXT_STRIP_ALL + i) == BST_CHECKED) { extStrip = i; break; }
+        }
+        s.SetExtStripMode(extStrip);
+    }
+    s.SetStripTrailingNumber(IsDlgButtonChecked(hwnd, IDC_STRIP_TRAILING_NUM)  == BST_CHECKED);
+    s.SetBreakDDir(          IsDlgButtonChecked(hwnd, IDC_COLLAPSE_SINGLE_DIR) == BST_CHECKED);
+
     // If the path field was left at the auto-detected value (i.e. the saved setting was empty),
     // store an empty string so auto-detection continues to work next time.
     // If the user manually changed the value, save it as-is.
@@ -193,6 +204,6 @@ bool SettingsDlg::OnOK(HWND hwnd) {
     saveAutoPath(IDC_RAR_EXE_PATH,   s.GetRarExePath(),   RarProcess::FindRarExe(), &Settings::SetRarExePath);
 
     s.Save();
-    App::Instance().ReloadDlls();
+    m_svc->reloadDlls();
     return true;
 }

@@ -27,8 +27,8 @@ encode:
  ; Step 1: always create a plain tar archive from the input list.
  ; -ttar   = tar container
  ; -r0     = recurse through directories
- ; -scsWIN = Windows charset for response-file handling
- (cmd a -ttar -r0 (arc.tar) (resp@ (listr)) -scsWIN)
+ ; -scsUTF-8 = read the response file (list charset) as UTF-8 (lossless names)
+ (cmd a -ttar -r0 (arc.tar) (resp@ (listr)) -scsUTF-8)
 
  ; Store the temporary tar path for reuse below.
  (let f (arc.tar))
@@ -107,8 +107,8 @@ decode1:
 
 test:
  ; Verify archive integrity.
- (xcmd 7z.exe t (arc))
+ (xcmd 7z.exe t -sccUTF-8 (arc))
 
 list:
  ; Parse 7z list output for AileFlow's archive view.
- (xscan "------------------" 1 "------------------" 1 53 7z.exe l (arc))
+ (xscan "------------------" 1 "------------------" 1 53 7z.exe l -sccUTF-8 (arc))

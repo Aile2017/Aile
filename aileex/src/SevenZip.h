@@ -5,18 +5,9 @@
 #include <string>
 #include "ArchiveItem.h"
 #include "WorkerThread.h"
+#include "FormatRegistry.h"  // FormatRegistry + WritableFormat (format/codec registry)
+#include "SevenZipCache.h"   // per-session format/items caches
 #include "7zip/Archive/IArchive.h"
-
-typedef HRESULT (WINAPI *Func_GetNumberOfMethods)(UINT32* numMethods);
-typedef HRESULT (WINAPI *Func_GetMethodProperty)(UINT32 index, PROPID propID, PROPVARIANT* value);
-typedef HRESULT (WINAPI *Func_GetNumberOfFormats)(UINT32* numFormats);
-typedef HRESULT (WINAPI *Func_GetHandlerProperty2)(UINT32 index, PROPID propID, PROPVARIANT* value);
-
-// Format info for the compress dialog: writable formats
-struct WritableFormat {
-    std::wstring label;  // Display name e.g. "7-Zip (.7z)"
-    std::wstring ext;    // Extension e.g. "7z"
-};
 
 // Whole-archive properties (for the properties dialog).
 // Populated by SevenZip::GetArchiveProperties() via IInArchive::GetArchiveProperty.
@@ -146,7 +137,7 @@ public:
 
     // Returns lowercased encoder names supported by the loaded DLL.
     // Empty if DLL is not loaded or enumeration is unavailable.
-    const std::vector<std::wstring>& GetEncoderNames() const { return m_encoderNames; }
+    const std::vector<std::wstring>& GetEncoderNames() const { return m_registry.GetEncoderNames(); }
 
     // ext: extension only (no dot, e.g. L"7z"). Case-insensitive.
     bool IsArchiveExt(const wchar_t* ext) const;
@@ -168,7 +159,7 @@ public:
     std::wstring GetExtensionFilterPattern() const;
 
     // Writable formats supported by the loaded 7z.dll (RAR not included).
-    const std::vector<WritableFormat>& GetWritableFormats() const { return m_writableFormats; }
+    const std::vector<WritableFormat>& GetWritableFormats() const { return m_registry.GetWritableFormats(); }
 
 private:
     HMODULE                      m_hDll               = nullptr;
@@ -176,45 +167,36 @@ private:
     std::wstring                 m_loadedName;
     std::wstring                 m_loadedPath;        // Full path to loaded DLL (for caching codec enumeration)
     Func_CreateObject            m_pfnCreateObject    = nullptr;
-    Func_GetNumberOfMethods      m_pfnGetNumMethods   = nullptr;
-    Func_GetMethodProperty       m_pfnGetMethodProp   = nullptr;
-    Func_GetNumberOfFormats      m_pfnGetNumFormats   = nullptr;
-    Func_GetHandlerProperty2     m_pfnGetHandlerProp2 = nullptr;
-    std::vector<std::wstring>    m_encoderNames;   // lowercased; populated by EnumerateCodecs()
-    std::map<std::wstring, GUID> m_extToClsid;     // extension (lowercase) → CLSID
-    std::vector<WritableFormat>  m_writableFormats; // writable formats (for UI)
-    // Cache: path → actual format CLSID after RAR5→RAR4 fallback detection
-    std::map<std::wstring, GUID> m_pathFormatCache;
-    // Cache: (path + password_hash + format_guid) → ArchiveItem vector
-    // Keyed as: std::wstring composed of path + "|" + password_hash + "|" + guid_hex
-    // Limit: 100 entries (oldest evicted)
-    struct CacheEntry {
-        std::vector<ArchiveItem> items;
-        int order;  // for LRU eviction
-    };
-    std::map<std::wstring, CacheEntry> m_itemsCache;
-    int m_cacheOrder = 0;
-    static constexpr int MAX_CACHE_ENTRIES = 100;
-    
-    // Build cache key from path, password, and format GUID
-    static std::wstring BuildCacheKey(const wchar_t* path, const wchar_t* password, const GUID& fmt);
-
-    // Hash password to short string (for cache key)
-    static UINT32 HashPassword(const wchar_t* password);
-
-    // Remove all cache entries for the given archive path (call after modifying the archive)
-    void InvalidateCacheForPath(const wchar_t* path);
-
-    void EnumerateCodecs();
-    void EnumerateFormats();
+    // Archive-independent format/codec database; populated from the DLL at Load().
+    // The format queries below delegate here so this class stays per-session.
+    FormatRegistry               m_registry;
+    // Format-by-path and items-by-key caches (RAR5→RAR4 detection result + entry
+    // listings). Factored into SevenZipCache to keep this class a thin adapter.
+    SevenZipCache                m_cache;
 
     HRESULT CreateInArchive(const GUID& clsid, IInArchive** ppArc);
     HRESULT CreateOutArchive(const GUID& clsid, IOutArchive** ppArc);
-    GUID FormatToInGuid(const wchar_t* path) const;
-    GUID FormatToOutGuid(const wchar_t* format) const;
+    // Thin delegators to m_registry, kept so the many per-session call sites and the
+    // cross-app SevenZip.h contract are unchanged.
+    GUID FormatToInGuid(const wchar_t* path) const { return m_registry.InGuidForPath(path); }
+    GUID FormatToOutGuid(const wchar_t* format) const { return m_registry.OutGuidForFormat(format); }
     // Open archive with RAR5→RAR4 fallback, caching result for future calls
     HRESULT OpenArchiveWithFallback(const wchar_t* path, const GUID& primaryGuid,
                                     IInStream* fileSpec, const UInt64& maxCheck,
                                     IArchiveOpenCallback* openCb, IInArchive*& archive);
+    // Transparent unwrap helpers split out of OpenArchive. When the freshly opened
+    // archive is a single-entry stream/volume wrapper, these extract the inner
+    // archive to a temp file and re-enumerate it in place.
+    //  - UnwrapTarStream: .tar.gz/.tar.bz2/... — sets resolvedPath/effectivePath to
+    //    the temp .tar and replaces `items`; returns true if unwrapped.
+    //  - UnwrapSplitVolume: .001 split volume — detects the inner format by magic
+    //    bytes, re-opens it, and on success sets `items`/effectivePath and returns
+    //    true (the caller then returns S_OK). Cleans up its temp file on failure.
+    bool UnwrapTarStream(const wchar_t* path, const wchar_t* password, IInArchive* archive,
+                         std::vector<ArchiveItem>& items, std::wstring& resolvedPath,
+                         std::wstring* effectivePath);
+    bool UnwrapSplitVolume(const wchar_t* path, const wchar_t* password, bool isSplit,
+                           IInArchive* archive, std::vector<ArchiveItem>& items,
+                           std::wstring* effectivePath);
     static std::wstring ExtOfPath(const wchar_t* path);
 };

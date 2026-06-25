@@ -30,6 +30,25 @@ When using a different DLL build, enumerate and verify with `GetNumberOfFormats`
 
 `archive->Open()` returns `S_FALSE` on format mismatch. Since `FAILED(S_FALSE) == false`, error checking must test both `FAILED(hr) || hr == S_FALSE`. Conversion to `E_FAIL` is caller's responsibility.
 
+## PROPVARIANT Integer Width Varies by Format (entry size shows 0)
+
+`IInArchive::GetProperty` returns integer properties (`kpidSize`, `kpidPackSize`, …)
+with a width that depends on the **format handler**, not a fixed type:
+
+- 7z / Zip / most modern formats → `VT_UI8` (64-bit, read via `prop.uhVal.QuadPart`)
+- **CAB and other 32-bit formats → `VT_UI4`** (32-bit, read via `prop.ulVal`)
+
+A strict `if (prop.vt == VT_UI8)` check therefore **silently drops CAB sizes**, and the
+file list shows size 0 even though `7z.exe l` reports the correct size. Always coerce the
+PROPVARIANT through a width-agnostic helper (`PropToUInt64()` in `SevenZip.cpp`) that
+handles `VT_UI8`/`VT_UI4`/`VT_UI2`/`VT_UI1` (and signed variants).
+
+Note this is distinct from the **packed (compressed) size of a solid CAB block**, which is
+genuinely absent per file: CAB compresses multiple files into one LZX block, so 7z.dll
+returns `kpidPackSize` as `VT_EMPTY` → 0 for each entry (only the archive total is
+meaningful). `7z.exe l` likewise leaves the per-file "Compressed" column blank. That 0 is
+correct 7z.dll behavior, not a bug.
+
 ## RAR4 / RAR5 Routing
 
 Cannot distinguish RAR4 / RAR5 by `.rar` extension alone (magic bytes required). Initial implementation tries RAR5 handler and falls back to RAR4 on `S_FALSE`. Must fallback not only when `archive->Open` returns `S_FALSE`, but also on `FAILED(hr)`.

@@ -17,7 +17,7 @@
 #define ki_memcpy(p,s,l)  ::CopyMemory(p,s,l)
 #define ki_memmov(p,s,l)  ::MoveMemory(p,s,l)
 #define ki_memset(p,c,l)  ::FillMemory(p,l,c)
-inline bool ki_memcmp( const char* x, const char* y, int l )
+inline bool ki_memcmp( const wchar_t* x, const wchar_t* y, int l )
 {
 	while( *x++==*y++ && --l );
 	return l==0;
@@ -119,8 +119,8 @@ public:
 };
 
 #define  BoolArray kiArray<bool>
-#define  CharArray kiArray<char*>
-#define cCharArray kiArray<const char*>
+#define  CharArray kiArray<wchar_t*>
+#define cCharArray kiArray<const wchar_t*>
 #define   StrArray kiArray<kiStr>
 
 #endif

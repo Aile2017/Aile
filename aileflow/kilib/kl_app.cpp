@@ -13,67 +13,18 @@ kiApp* app()
 	return kiApp::st_pApp;
 }
 
-//-------------------- Startup code ------------------------//
-
-void kilib_startUp()
-{
-	// For English locale testing
-	//::SetThreadUILanguage(0x0409);
-
-	//-- K.I.LIB initialization
-	kiStr::init();
-	kiWindow::init();
-
-	//-- Clear keyboard state
-	::GetAsyncKeyState( VK_SHIFT );
-
-	//-- Create application instance
-	kilib_create_new_app();
-	if( app() )
-	{
-		// Command line splitting
-		kiCmdParser cmd( ::GetCommandLine(), true );
-
-		// Execute
-		app()->run( cmd );
-	}
-
-	//-- K.I.LIB termination
-	kiWindow::finish();
-
-	delete app();
-	::ExitProcess( 0 );
-}
-
-void* operator new( size_t siz )
-{
-	return (void*)::GlobalAlloc( GMEM_FIXED, siz );
-}
-
-void* operator new[]( size_t siz )
-{
-	return (void*)::GlobalAlloc( GMEM_FIXED, siz );
-}
-
-void operator delete( void* ptr )
-{
-	::GlobalFree( (HGLOBAL)ptr );
-}
-
-void operator delete( void* ptr, size_t )
-{
-	::GlobalFree( (HGLOBAL)ptr );
-}
-
-void operator delete[]( void* ptr )
-{
-	::GlobalFree( (HGLOBAL)ptr );
-}
-
-void operator delete[]( void* ptr, size_t )
-{
-	::GlobalFree( (HGLOBAL)ptr );
-}
+//-------------------- Runtime scaffolding ------------------------------------//
+// AileFlow enters through wWinMain, not kilib's kilib_startUp(), so the original
+// startup routine (which drove kiWindow and app()->run()) has been removed along
+// with the kilib windowing framework.
+//
+// The legacy global operator new/delete overrides (which routed every allocation
+// in the process through GlobalAlloc/GlobalFree) have been removed: the standard
+// CRT operator new/delete are used everywhere now.  This is safe because nothing
+// pairs operator new with GlobalFree/GlobalLock (the only Global*/Local* uses are
+// self-contained HGLOBAL handles for drag-drop and Win32 API buffers), and kilib
+// never null-checks a new[] result (so the only behavioral difference — throwing
+// std::bad_alloc instead of returning NULL on OOM — is moot; both are fatal).
 
 extern "C" void __cxa_pure_virtual()
 {

@@ -1,14 +1,13 @@
 ﻿#include "App.h"
 #include "MainWindow.h"
 #include "CompressDlg.h"
+#include "CompressPolicy.h"
 #include "DialogUtils.h"
 #include "I18n.h"
 #include "WorkerThread.h"
 #include "resource.h"
 #include <commctrl.h>
 #include <ole2.h>
-#include <map>
-#include <shlwapi.h>
 #include <map>
 #include <shlwapi.h>
 
@@ -44,7 +43,7 @@ void App::Shutdown() {
 
 int App::RunBrowseMode(const std::vector<std::wstring>& archivePaths, int nCmdShow,
                        const std::wstring& destDir) {
-    MainWindow wnd;
+    MainWindow wnd(Services());
     if (!wnd.Create(m_hInst, nCmdShow)) return 1;
 
     if (!destDir.empty())
@@ -87,21 +86,14 @@ int App::RunBrowseMode(const std::vector<std::wstring>& archivePaths, int nCmdSh
     return (int)msg.wParam;
 }
 
-// Derive output path for a single source file (no extension, CompressDlg appends it).
-// destDir overrides the OutputDirMode setting when non-empty (CLI -o or D&D target).
-static std::wstring DeriveOutputPath(const Settings& s, const std::wstring& srcFile,
-                                     const std::wstring& destDir) {
-    std::wstring outDir;
-    if (!destDir.empty()) {
-        outDir = destDir;
-    } else if (s.GetOutputDirModeFixed()) {
-        outDir = s.GetDefaultOutputDir();
-    } else {
-        auto sl = srcFile.find_last_of(L"\\/");
-        outDir  = (sl != std::wstring::npos) ? srcFile.substr(0, sl) : L"";
-    }
-    std::wstring stem = StemFromPath(srcFile);
-    return outDir.empty() ? stem : outDir + L"\\" + stem;
+// Derive the output FOLDER (no file name / extension — the .b2e script decides those).
+// destDir overrides the OutputDirMode setting when non-empty (CLI -d or D&D target).
+static std::wstring DeriveOutputFolder(const Settings& s, const std::wstring& srcFile,
+                                       const std::wstring& destDir) {
+    if (!destDir.empty()) return destDir;
+    if (s.GetOutputDirModeFixed()) return s.GetDefaultOutputDir();
+    auto sl = srcFile.find_last_of(L"\\/");
+    return (sl != std::wstring::npos) ? srcFile.substr(0, sl) : L"";
 }
 
 int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdShow,
@@ -109,40 +101,34 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
                          const std::wstring& typeOverride,
                          const std::wstring& methodOverride,
                          bool sfx) {
-    MainWindow wnd;
+    MainWindow wnd(Services());
     if (!wnd.Create(m_hInst, nCmdShow)) return 1;
 
     CompressDlg::Params params;
     params.inputFiles = filePaths;
     params.sfx        = sfx;
-    params.LoadFromSettings(m_settings);
-    if (!filePaths.empty()) {
-        params.outputPath = DeriveOutputPath(m_settings, filePaths[0], destDir);
-    } else if (!destDir.empty()) {
-        params.outputPath = destDir;
-    } else if (m_settings.GetOutputDirModeFixed()) {
-        params.outputPath = m_settings.GetDefaultOutputDir();
-    }
+    CompressPolicy::Load(params, m_settings);
+    // outputPath holds the destination FOLDER; the script names the file.
+    params.outputPath = DeriveOutputFolder(m_settings,
+                                           filePaths.empty() ? L"" : filePaths[0], destDir);
 
     // Apply -t/-m CLI overrides (skip dialog); otherwise show CompressDlg.
     if (!typeOverride.empty()) {
         params.format = typeOverride;
         if (!methodOverride.empty()) params.method = methodOverride;
-        if (params.sfx) {
-            auto dot = params.outputPath.find_last_of(L'.');
-            if (dot != std::wstring::npos) params.outputPath.erase(dot);
-            params.outputPath += L".exe";
-        } else if (params.outputPath.find(L'.') == std::wstring::npos) {
-            params.outputPath += L"." + params.format;
-        }
     } else {
         CompressDlg dlg;
         if (!dlg.Show(wnd.Hwnd(), params)) {
             return 0;
         }
-        params.SaveToSettings(m_settings);
+        CompressPolicy::Save(params, m_settings);
         m_settings.Save();
     }
+
+    // Build the extension-less base; the .b2e (arc.XXX) appends the real extension.
+    params.outputPath = CompressPolicy::MakeOutputBase(
+        params.outputPath, filePaths.empty() ? L"" : filePaths[0]);
+    if (params.outputPath.empty()) return 0;
 
     {
         auto& sz = m_sevenZip;
@@ -174,30 +160,24 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
                              bool sfx) {
     if (filePaths.empty()) return 0;
 
-    MainWindow wnd;
+    MainWindow wnd(Services());
     if (!wnd.Create(m_hInst, SW_HIDE)) return 1;
 
     // Show CompressDlg once for the first file; apply same settings to all files.
     CompressDlg::Params baseParams;
     baseParams.inputFiles = { filePaths[0] };
     baseParams.sfx        = sfx;
-    baseParams.LoadFromSettings(m_settings);
-    baseParams.outputPath = DeriveOutputPath(m_settings, filePaths[0], destDir);
+    CompressPolicy::Load(baseParams, m_settings);
+    // outputPath holds the destination FOLDER; the script names each file.
+    baseParams.outputPath = DeriveOutputFolder(m_settings, filePaths[0], destDir);
 
     if (!typeOverride.empty()) {
         baseParams.format = typeOverride;
         if (!methodOverride.empty()) baseParams.method = methodOverride;
-        if (baseParams.sfx) {
-            auto dot = baseParams.outputPath.find_last_of(L'.');
-            if (dot != std::wstring::npos) baseParams.outputPath.erase(dot);
-            baseParams.outputPath += L".exe";
-        } else if (baseParams.outputPath.find(L'.') == std::wstring::npos) {
-            baseParams.outputPath += L"." + baseParams.format;
-        }
     } else {
         CompressDlg dlg;
         if (!dlg.Show(wnd.Hwnd(), baseParams)) return 0;
-        baseParams.SaveToSettings(m_settings);
+        CompressPolicy::Save(baseParams, m_settings);
         m_settings.Save();
     }
 
@@ -205,14 +185,11 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
     for (const auto& file : filePaths) {
         CompressDlg::Params params = baseParams;
         params.inputFiles  = { file };
-        params.outputPath  = DeriveOutputPath(m_settings, file, destDir);
-        if (params.sfx) {
-            auto dot = params.outputPath.find_last_of(L'.');
-            if (dot != std::wstring::npos) params.outputPath.erase(dot);
-            params.outputPath += L".exe";
-        } else if (params.outputPath.find(L'.') == std::wstring::npos) {
-            params.outputPath += L"." + params.format;
-        }
+        // Per-file destination folder (each file's own parent in same-as-source mode).
+        std::wstring folder = DeriveOutputFolder(m_settings, file, destDir);
+        // Extension-less base; the .b2e (arc.XXX) appends the real extension.
+        params.outputPath = CompressPolicy::MakeOutputBase(folder, file);
+        if (params.outputPath.empty()) continue;
 
         {
             auto& sz = m_sevenZip;
@@ -237,18 +214,40 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
     return 0;
 }
 
-int App::RunExtractDialogMode(const std::wstring& archivePath, int nCmdShow,
+int App::RunExtractDialogMode(const std::vector<std::wstring>& archivePaths, int nCmdShow,
                                const std::wstring& destDir) {
-    MainWindow wnd;
-    // SW_HIDE: suppress list window; only the extract folder picker and progress dialog appear.
+    // Filter to actual archives; a shell/CLI selection may include non-archive files.
+    auto& sz7 = Get7z();
+    std::vector<std::wstring> archives;
+    for (const auto& p : archivePaths) {
+        const wchar_t* dot = wcsrchr(p.c_str(), L'.');
+        if (dot && sz7.IsArchiveExt(dot + 1))
+            archives.push_back(p);
+    }
+    if (archives.empty()) {
+        MessageBoxW(nullptr, I18n::Tr(IDS_ERR_OPEN_ARCHIVE).c_str(), L"AileFlow", MB_ICONERROR);
+        return 1;
+    }
+
+    MainWindow wnd(Services());
+    // SW_HIDE: suppress the list window; only the extract folder picker and progress dialog appear.
     if (!wnd.Create(m_hInst, SW_HIDE)) return 1;
-    wnd.OpenArchive(archivePath.c_str());
-    wnd.TriggerExtract(destDir);
+
+    // Extract each archive in turn. With -d (destDir non-empty) every archive goes there
+    // without prompting. Otherwise the first archive shows the folder picker, which stores
+    // the choice as the session override so the remaining archives reuse it (one prompt for
+    // the whole batch). Each archive still lands in its own MkDir subfolder, so no collision.
+    for (const auto& path : archives) {
+        if (!wnd.OpenArchive(path.c_str()))
+            continue;  // open failed (error already shown); skip without extracting
+        if (!wnd.TriggerExtract(destDir))
+            break;     // user cancelled the destination folder picker → abort the batch
+    }
     return 0;
 }
 
 int App::RunTestMode(const std::wstring& archivePath, int /*nCmdShow*/) {
-    MainWindow wnd;
+    MainWindow wnd(Services());
     // SW_HIDE: suppress list window; only the result dialog appears.
     if (!wnd.Create(m_hInst, SW_HIDE)) return 1;
     // CanTest() must be evaluated after OpenArchive — the B2E script is loaded there.

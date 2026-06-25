@@ -125,7 +125,6 @@ Saved to `AileEx.ini` in the same folder as the EXE. Editable via the settings d
 
 ```ini
 [General]
-RarExtractor=7z          ; "7z" or "unrar"
 RarExePath=              ; Absolute path to WinRAR.exe / Rar.exe (empty = auto-detect from registry)
 DefaultOutputDir=        ; Default extraction destination (used when OutputDirMode=fixed)
 OutputDirMode=source     ; "source" = use source file directory; "fixed" = use DefaultOutputDir
@@ -133,7 +132,6 @@ DefaultFormat=7z         ; Default compression format
 CompressionLevel=5       ; 0-9
 RarLevel=3               ; RAR compression level 0-5
 MkDir=2                  ; Subfolder creation on extract: 0=never/1=single/2=multiple(default)/3=always
-DefaultSfxMode=          ; SFX mode "" / "gui" / "console" — last selected in compress dialog
 FontName=Segoe UI        ; Font used in main window controls
 OpenFolderAfterExtract=0 ; Open output folder in Explorer after extraction (0/1)
 OpenFolderCommand=       ; INI-only. Custom command to open folder (%1 = path). Empty = Explorer.
@@ -201,6 +199,14 @@ main()
 
 ## Credits
 
+### Bundled 7-Zip Modules
+
+The `bin\` folder ships `7z.dll` and the SFX stubs (`7z.sfx`, `7zCon.sfx`),
+which are built from [**7-Zip Zstandard**](https://github.com/mcmilk/7-Zip-zstd/)
+— Tino Reichardt's fork of Igor Pavlov's [7-Zip](https://www.7-zip.org/) that
+adds the Zstandard / Brotli / LZ4 / LZ5 / Lizard / FastLZMA2 codecs. Distributed
+under the GNU LGPL-2.1 with the unRAR-restricted license; see `bin\License.txt`.
+
 ### Application Icon
 
-[Archiver - free Icon in PNG and SVG](https://icon-icons.com/icon/archiver/37045) by [icon-icons.com](https://icon-icons.com/), used under free for commercial use license.
+[Paperplane - free Icon in PNG and SVG](https://icon-icons.com/icon/paperplane-dm-chat-fly-interaction-communication-message-send/195724) by [icon-icons.com](https://icon-icons.com/), used under free for commercial use license.

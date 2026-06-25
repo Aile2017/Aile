@@ -17,10 +17,13 @@ with B2E script-driven external tool calls, while keeping the UI and settings st
 ```
 AileFlow/
   src/
-    [B] MainWindow.cpp          … Main window — tree + list view, toolbar, menus
+    [B] MainWindow.cpp          … Main window core — lifecycle, message routing, layout, menus
                                   (B2E patches: m_isReadOnly for all archives,
                                    skip outer password retry, OnTest not-supported guard,
                                    openAfterCompress=true in OnAddFiles)
+    [B] MainWindowView.cpp      … tree/list population, sorting, selection, navigation, drag-out
+    [B] MainWindowOps.cpp       … archive operations (open/extract/test/compress/add/delete)
+    [C] MainWindowInternal.h    … file-local helpers shared by the three MainWindow TUs
     [A] MainWindow.h            … Unchanged from AileEx
     [B] CompressDlg.cpp/h       … Compression dialog
                                   (B2E patches: B2E mode hides Level/Password/SFX/Advanced;
@@ -61,9 +64,7 @@ AileFlow/
       zip.zipx.b2e
       rar.b2e
       tar.gz.bz2.xz.zst.liz.lz4.lz5.br.b2e
-      lzh.b2e
-      cab.b2e
-      rpm.cpio.b2e
+      cab.lzh.rpm.cpio.b2e          … read-only viewer (CAB/LZH/RPM/CPIO via 7-Zip)
       0.b2e
   res/                          … [A] Resources (icons, RC file — from AileEx)
   docs/
@@ -235,7 +236,7 @@ User opens About dialog
   → About dialog displays:
       Application name: AileFlow Archive Manager
       URL: https://github.com/Aile2017/AileFlow
-      Component versions: 7z.exe, DecCabW.EXE, DecLHaW.EXE, DecZipW.EXE, WinRAR.exe, ...
+      Component versions: 7z.exe, WinRAR.exe, Rar.exe, ...
 ```
 
 ---
@@ -263,3 +264,56 @@ Structure is compatible with `AileEx.ini`. B2E-irrelevant keys
 (`7zDllPath`, `UnrarDllPath`, `RarExePath`, `RarExtractor`) are ignored.
 
 See `../AileEx/docs/specification.md` for the full INI key reference.
+
+---
+
+## Object-Oriented Review Notes (2026-06)
+
+This section captures design concerns found during a source review so future AileEx sync work
+and backend refactors can use the same baseline.
+
+### Main concerns
+
+1. **`MainWindow` is still a god object in B2E mode.**
+   As in AileEx, the window class owns layout and command routing, but also archive lifecycle,
+   extraction/compression orchestration, worker-thread coordination, MRU handling, temporary-view
+   extraction, and read-only policy. B2E-specific branches increase the amount of hidden state.
+
+2. **Backend mode is represented by sentinel values and feature flags.**
+   `SevenZipB2e.cpp` marks the backend as "loaded" with `m_hDll = (HMODULE)1`, and callers use
+   `GetLoadedPath().empty()` to infer B2E mode. Additional flags such as `m_isReadOnly`,
+   `CanAddToCurrent()`, `CanDelete()`, and `CanTest()` are then combined in the UI to decide what
+   the current archive supports. This is functional, but fragile and hard to reason about.
+
+3. **The AileEx compatibility contract is shape-based rather than abstraction-based.**
+   `SevenZip.h` intentionally mirrors the AileEx public API, and `AileFlowApp.h` exists partly as
+   a stub so Noah-origin code can compile with minimal edits. This preserves source compatibility,
+   but also means "same signature" does not guarantee "same semantics".
+
+4. **`SevenZipB2e` is a semantic adapter, not a true substitute.**
+   Several parameters from the AileEx-oriented API are ignored or reduced in meaning in B2E mode
+   (password, archive folder targeting, advanced compression knobs, header encryption). The adapter
+   is practical, but it violates the expectation that a shared interface behaves uniformly.
+
+5. **UI and backend execution are tightly coupled.**
+   The UI explicitly sets dialog parenting around backend calls via `B2e_SetDialogParent()`.
+   That keeps password prompts usable, but it also means backend execution depends on UI-driven
+   ambient state instead of a more explicit operation context object.
+
+6. **Duplicated near-clone surfaces can drift from AileEx over time.**
+   `MainWindow`, `App`, and `SevenZip` are intentionally similar across the two apps, but the
+   differences are implemented by selective branching and local patches rather than by a shared
+   abstraction hierarchy. This is the main long-term maintenance risk when syncing upstream changes.
+
+### Refactoring priority
+
+- First priority: replace sentinel/flag-based backend detection with an explicit backend/session model.
+- Second priority: extract archive operation orchestration out of `MainWindow`.
+- Third priority: document or narrow the semantic differences in the shared `SevenZip`-shaped API so
+  future syncs do not assume unsupported behavior exists in B2E mode.
+
+### Existing strengths worth preserving
+
+- `B2eBridge` is a good boundary: kilib/B2E internals are not leaked into the UI layer.
+- `CompressDlg` dynamically queries writable formats from the bridge instead of hardcoding them,
+  which keeps script-driven capability discovery localized.

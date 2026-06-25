@@ -8,10 +8,7 @@
 
 // --- Minimal kiApp subclass so that kilib's app() returns a valid pointer ---
 
-class AileFlowKiApp : public kiApp {
-protected:
-    void run(kiCmdParser&) override {}  // never called; AileFlow uses its own message loop
-};
+class AileFlowKiApp : public kiApp {};
 
 inline AileFlowKiApp& aileflow_kiapp() {
     static AileFlowKiApp s_instance;
@@ -20,31 +17,45 @@ inline AileFlowKiApp& aileflow_kiapp() {
 
 // --- Config stub ---
 
+// Dynamic archive-extension registry from B2eBridge: true when `ext` is handled by
+// a .b2e script in the b2e/ directory (cached map lookup; no engine re-entry).
+// Forward-declared here to avoid pulling B2eBridge.h's includes into this ANSI TU.
+bool B2e_IsArchiveExt(const wchar_t* ext);
+
 struct AileFlowCnf {
     bool miniboot() const { return false; }  // always run external tools normally
-    int  extnum()   const { return 2; }      // strip all compound extensions (e.g. .tar.gz)
+
+    // True when `ext` (a single dot-separated token, no leading dot) is an archive
+    // extension handled by a loaded .b2e script. Driven entirely by the scripts —
+    // no hardcoded extension list — so user-added formats (e.g. zpaq) are recognized
+    // and the engine agrees with the UI. CArcB2e::arc() also recognizes the
+    // extension that the running (arc.XXX) is re-applying (e.g. .exe for SFX), so
+    // output-only extensions need no special case here either.
+    bool isArcExt(const wchar_t* ext) const {
+        if (!ext || !ext[0]) return false;
+        return B2e_IsArchiveExt(ext);
+    }
 };
 
 // --- App stub ---
 
 struct AileFlowApp {
-    // Returns a freshly created, empty, unique temp subdirectory (ANSI path with trailing \).
+    // Returns a freshly created, empty, unique temp subdirectory (wide path with trailing \).
     // Mirrors Noah's CNoahApp::get_tempdir(): a single parent dir is created once per
     // session, and each call creates a new uniquely named child dir inside it.
     // This is required by arc2sfx(), which scans the returned directory and copies every
     // file it finds to the output — so the directory must be isolated and contain only
     // files produced by the current compress/sfx operation.
     void get_tempdir(kiPath& tmp) {
-        if (m_tmpDir[0] == '\0') {
-            // Build ANSI system temp path via short name to avoid ANSI-incompatible chars.
-            char sysTmpA[MAX_PATH] = {};
-            if (!GetAnsiTempPath(sysTmpA, MAX_PATH)) { tmp = ""; return; }
+        if (m_tmpDir[0] == L'\0') {
+            wchar_t sysTmp[MAX_PATH] = {};
+            if (!::GetTempPathW(MAX_PATH, sysTmp)) { tmp = L""; return; }
 
-            // Create parent session dir: GetTempFileNameA creates a unique name,
-            // DeleteFileA removes the placeholder file, then mkdir creates the dir.
-            char buf[MAX_PATH] = {};
-            if (!::GetTempFileNameA(sysTmpA, "afl", 0, buf)) { tmp = ""; return; }
-            ::DeleteFileA(buf);
+            // Create parent session dir: GetTempFileNameW creates a unique name,
+            // DeleteFileW removes the placeholder file, then mkdir creates the dir.
+            wchar_t buf[MAX_PATH] = {};
+            if (!::GetTempFileNameW(sysTmp, L"afl", 0, buf)) { tmp = L""; return; }
+            ::DeleteFileW(buf);
             ki_strcpy(m_tmpDir, buf);
             kiPath p(m_tmpDir); p.beBackSlash(true);
             ki_strcpy(m_tmpDir, p);
@@ -52,26 +63,17 @@ struct AileFlowApp {
             m_tmpID = ::GetCurrentProcessId();
         }
         // Create unique child dir inside the parent.
-        char buf[MAX_PATH] = {};
-        if (!::GetTempFileNameA(m_tmpDir, "afl", m_tmpID++, buf)) { tmp = ""; return; }
-        ::DeleteFileA(buf);
+        wchar_t buf[MAX_PATH] = {};
+        if (!::GetTempFileNameW(m_tmpDir, L"afl", m_tmpID++, buf)) { tmp = L""; return; }
+        ::DeleteFileW(buf);
         tmp = buf;
         tmp.beBackSlash(true);
         tmp.mkdir();
     }
     AileFlowCnf& cnf() { return m_cnf; }
 private:
-    static bool GetAnsiTempPath(char* buf, int bufSize) {
-        wchar_t wbuf[MAX_PATH] = {};
-        if (!::GetTempPathW(MAX_PATH, wbuf)) return false;
-        wchar_t shortBuf[MAX_PATH] = {};
-        DWORD sl = ::GetShortPathNameW(wbuf, shortBuf, MAX_PATH);
-        const wchar_t* src = (sl && sl < MAX_PATH) ? shortBuf : wbuf;
-        return ::WideCharToMultiByte(CP_ACP, 0, src, -1, buf, bufSize, NULL, NULL) > 0;
-    }
-
     AileFlowCnf m_cnf;
-    char m_tmpDir[MAX_PATH] = {};
+    wchar_t m_tmpDir[MAX_PATH] = {};
     UINT m_tmpID = 0;
 };
 
