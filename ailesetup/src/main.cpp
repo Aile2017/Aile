@@ -79,11 +79,16 @@ INT_PTR CALLBACK DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
             modDir = GetModuleDir();
             for (const auto& ext : g_exts) {
                 std::wstring fullPath = modDir + L"\\" + ext.dllName;
+                HWND hItem = GetDlgItem(hwndDlg, ext.checkboxId);
                 if (!FileExists(fullPath)) {
-                    EnableWindow(GetDlgItem(hwndDlg, ext.checkboxId), FALSE);
+                    EnableWindow(hItem, FALSE);
+                    wchar_t buf[256];
+                    GetWindowTextW(hItem, buf, 256);
+                    wcscat_s(buf, L" (見つかりません)");
+                    SetWindowTextW(hItem, buf);
                 } else {
                     if (IsRegistered(ext)) {
-                        SendDlgItemMessageW(hwndDlg, ext.checkboxId, BM_SETCHECK, BST_CHECKED, 0);
+                        SendMessageW(hItem, BM_SETCHECK, BST_CHECKED, 0);
                     }
                 }
             }
