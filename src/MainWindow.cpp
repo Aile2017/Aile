@@ -10,6 +10,7 @@
 #include "PropertiesDlg.h"
 #include "ProgressDlg.h"
 #include "SevenZipBackend.h"
+#include "B2eBridge.h"
 #include "ArchiveOpener.h"
 #include "SettingsDlg.h"
 #include "resource.h"
@@ -832,7 +833,9 @@ static INT_PTR CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
             entries.push_back({ LeafName(p), p });
         }
 
-        // Get versions + align by max name column width
+        // B2E tools aren't loaded DLLs with fixed version properties, but B2eBridge
+        // provides formatted version strings directly via executing the tools.
+        // We append them manually after calculating the DLL name widths.
         size_t maxName = 0;
         std::vector<std::wstring> versions;
         versions.reserve(entries.size());
@@ -849,7 +852,15 @@ static INT_PTR CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
             text += versions[i].empty() ? I18n::Tr(IDS_ABOUT_NO_VERSION) : versions[i];
             text += L"\r\n";
         }
-        if (entries.empty())
+        
+        // Append B2E components
+        std::vector<std::wstring> b2eVersions = B2e_GetComponentVersions();
+        for (const auto& bv : b2eVersions) {
+            text += bv;
+            text += L"\r\n";
+        }
+
+        if (text.empty())
             text = I18n::Tr(IDS_ABOUT_NOT_LOADED);
 
         SetDlgItemTextW(hwnd, IDC_ABOUT_LIST, text.c_str());
