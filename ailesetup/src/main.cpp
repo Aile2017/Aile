@@ -84,7 +84,9 @@ INT_PTR CALLBACK DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
                     EnableWindow(hItem, FALSE);
                     wchar_t buf[256];
                     GetWindowTextW(hItem, buf, 256);
-                    wcscat_s(buf, L" (見つかりません)");
+                    wchar_t notFound[64];
+                    LoadStringW(GetModuleHandle(nullptr), IDS_NOT_FOUND, notFound, 64);
+                    wcscat_s(buf, notFound);
                     SetWindowTextW(hItem, buf);
                 } else {
                     if (IsRegistered(ext)) {
@@ -109,7 +111,11 @@ INT_PTR CALLBACK DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
                         }
                     }
                 }
-                MessageBoxW(hwndDlg, L"設定を更新しました。\n反映されない場合はエクスプローラーを再起動してください。", L"AileSetup", MB_OK | MB_ICONINFORMATION);
+                wchar_t msg[256];
+                wchar_t title[64];
+                LoadStringW(GetModuleHandle(nullptr), IDS_MSG_UPDATED, msg, 256);
+                LoadStringW(GetModuleHandle(nullptr), IDS_APP_TITLE, title, 64);
+                MessageBoxW(hwndDlg, msg, title, MB_OK | MB_ICONINFORMATION);
                 EndDialog(hwndDlg, IDOK);
                 return TRUE;
             }

@@ -11,3 +11,7 @@
 
 #define IDC_BTN_OK 1
 #define IDC_BTN_CANCEL 2
+
+#define IDS_APP_TITLE 2001
+#define IDS_MSG_UPDATED 2002
+#define IDS_NOT_FOUND 2003

@@ -3,7 +3,36 @@
 
 #pragma code_page(65001)
 
-LANGUAGE LANG_JAPANESE, SUBLANG_DEFAULT
+// ============================================================================
+// English Resources
+// ============================================================================
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+
+IDD_SETUP_DIALOG DIALOGEX 0, 0, 200, 140
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Aile Shell Extension Setup"
+FONT 9, "Segoe UI", 0, 0, 0x1
+BEGIN
+    LTEXT           "Select shell extensions to install:", IDC_STATIC, 10, 10, 180, 10
+    CONTROL         "AileEx Shell Extension (64-bit)", IDC_CHK_AILEEX_64, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 15, 30, 170, 10
+    CONTROL         "AileFlow Shell Extension (64-bit)", IDC_CHK_AILEFLOW_64, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 15, 45, 170, 10
+    CONTROL         "AileEx Shell Extension (32-bit)", IDC_CHK_AILEEX_32, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 15, 60, 170, 10
+    CONTROL         "AileFlow Shell Extension (32-bit)", IDC_CHK_AILEFLOW_32, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 15, 75, 170, 10
+    DEFPUSHBUTTON   "OK", IDC_BTN_OK, 90, 115, 45, 15
+    PUSHBUTTON      "Cancel", IDC_BTN_CANCEL, 140, 115, 45, 15
+END
+
+STRINGTABLE
+BEGIN
+    IDS_APP_TITLE   "AileSetup"
+    IDS_MSG_UPDATED "Settings have been updated.\nPlease restart Explorer if changes are not reflected."
+    IDS_NOT_FOUND   " (Not Found)"
+END
+
+// ============================================================================
+// Japanese Resources
+// ============================================================================
+LANGUAGE LANG_JAPANESE, SUBLANG_JAPANESE_JAPAN
 
 IDD_SETUP_DIALOG DIALOGEX 0, 0, 200, 140
 STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
@@ -17,6 +46,13 @@ BEGIN
     CONTROL         "AileFlow Shell Extension (32-bit)", IDC_CHK_AILEFLOW_32, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 15, 75, 170, 10
     DEFPUSHBUTTON   "OK", IDC_BTN_OK, 90, 115, 45, 15
     PUSHBUTTON      "キャンセル", IDC_BTN_CANCEL, 140, 115, 45, 15
+END
+
+STRINGTABLE
+BEGIN
+    IDS_APP_TITLE   "AileSetup"
+    IDS_MSG_UPDATED "設定を更新しました。\n反映されない場合はエクスプローラーを再起動してください。"
+    IDS_NOT_FOUND   " (見つかりません)"
 END
 
 // Add Manifest for visual styles
