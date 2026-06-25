@@ -5,9 +5,8 @@
 #include <string>
 #include "resource.h"
 
-// CLSIDs from AileEx and AileFlow shell extension configs
-const wchar_t* CLSID_AILEEX = L"Software\\Classes\\CLSID\\{A50BB570-A951-4D73-A1B2-CA2B709FFD34}";
-const wchar_t* CLSID_AILEFLOW = L"Software\\Classes\\CLSID\\{62EF5960-FE49-490D-BC9B-ADCCE789A7B3}";
+// CLSIDs from Aile shell extension configs
+const wchar_t* CLSID_AILE = L"Software\\Classes\\CLSID\\{A50BB570-A951-4D73-A1B2-CA2B709FFD34}";
 
 struct ShellExtInfo {
     int checkboxId;
@@ -17,10 +16,8 @@ struct ShellExtInfo {
 };
 
 ShellExtInfo g_exts[] = {
-    { IDC_CHK_AILEEX_64, L"AileExShell.dll", CLSID_AILEEX, false },
-    { IDC_CHK_AILEFLOW_64, L"AileFlowShell.dll", CLSID_AILEFLOW, false },
-    { IDC_CHK_AILEEX_32, L"AileExShell32.dll", CLSID_AILEEX, true },
-    { IDC_CHK_AILEFLOW_32, L"AileFlowShell32.dll", CLSID_AILEFLOW, true },
+    { IDC_CHK_AILE_64, L"AileShell.dll", CLSID_AILE, false },
+    { IDC_CHK_AILE_32, L"AileShell32.dll", CLSID_AILE, true },
 };
 
 std::wstring GetModuleDir() {

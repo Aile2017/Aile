@@ -1,20 +1,11 @@
 name: Package Release
 
-# Builds and releases AileEx and/or AileFlow from the Aile monorepo.
-# Tag format: AileEx_{version}_{yyyyMMdd} / AileFlow_{version}_{yyyyMMdd}
+# Builds and releases Aile.
+# Tag format: Aile_{version}_{yyyyMMdd}
 
 on:
   workflow_dispatch:
     inputs:
-      app:
-        description: 'App to release'
-        required: true
-        type: choice
-        options:
-          - both
-          - AileEx
-          - AileFlow
-        default: both
       version:
         description: 'Version string (e.g. 1.0.0). Leave empty to use git describe'
         required: false
@@ -30,12 +21,10 @@ on:
         default: false
 
 jobs:
-  # ── Build both apps from monorepo root ───────────────────────────────────────
   build:
     runs-on: windows-latest
     outputs:
-      aileex_tag: ${{ steps.names.outputs.aileex_tag }}
-      aileflow_tag: ${{ steps.names.outputs.aileflow_tag }}
+      aile_tag: ${{ steps.names.outputs.aile_tag }}
     steps:
       - uses: actions/checkout@v4
 
@@ -54,12 +43,6 @@ jobs:
       - name: Build
         run: cmake --build build_release
 
-      # ── 32-bit shell extensions ────────────────────────────────────────────
-      # 32-bit Explorer hosts (e.g. a 32-bit file manager) can only load a 32-bit
-      # in-proc context-menu DLL. We build *only* the shell DLLs in x86; they
-      # still delegate to the 64-bit AileEx.exe / AileFlow.exe shipped above.
-      # This MSVC setup overrides the x64 toolchain env, so it must run after the
-      # x64 build completes.
       - name: Set up MSVC x86
         uses: ilammy/msvc-dev-cmd@v1
         with:
@@ -73,7 +56,7 @@ jobs:
           -DCMAKE_CXX_COMPILER=cl
 
       - name: Build 32-bit shell extensions
-        run: cmake --build build_release_x86 --target AileExShell AileFlowShell
+        run: cmake --build build_release_x86 --target AileShell
 
       - name: Configure CMake AileSetup
         run: >
@@ -98,74 +81,35 @@ jobs:
           }
           $input_date = "${{ inputs.date }}"
           $d = if ($input_date -ne "") { $input_date } else { (Get-Date).ToString("yyyyMMdd") }
-          "aileex_tag=AileEx_${ver}_${d}"     | Out-File $env:GITHUB_OUTPUT -Append
-          "aileflow_tag=AileFlow_${ver}_${d}" | Out-File $env:GITHUB_OUTPUT -Append
+          "aile_tag=Aile_${ver}_${d}" | Out-File $env:GITHUB_OUTPUT -Append
 
-      - name: Package AileEx
-        if: ${{ inputs.app == 'both' || inputs.app == 'AileEx' }}
+      - name: Package Aile
         shell: pwsh
         run: |
-          $tag = "${{ steps.names.outputs.aileex_tag }}"
-          New-Item -ItemType Directory -Force pkg_aileex\bin | Out-Null
-          Copy-Item build_release\aileex\AileEx.exe pkg_aileex\AileEx.exe
-          Copy-Item aileex\README.md               pkg_aileex\README.md
-          # Vendored 7-Zip ZS (x64) backend — apps search exe\bin\ automatically.
+          $tag = "${{ steps.names.outputs.aile_tag }}"
+          New-Item -ItemType Directory -Force pkg_aile\bin | Out-Null
+          Copy-Item build_release\aile\Aile.exe pkg_aile\Aile.exe
+          Copy-Item aile\README.md               pkg_aile\README.md
+          Copy-Item -Recurse aile\Release\b2e    pkg_aile\b2e
           $vendor = "third_party\7zip-zstd"
-          Copy-Item $vendor\7z.dll      pkg_aileex\bin\7z.dll
-          Copy-Item $vendor\7z.sfx      pkg_aileex\bin\7z.sfx
-          Copy-Item $vendor\7zCon.sfx   pkg_aileex\bin\7zCon.sfx
-          Copy-Item $vendor\License.txt pkg_aileex\bin\License.txt
-          # Explorer shell-extension DLL — must sit next to AileEx.exe (resolves it as sibling).
-          Copy-Item build_release\aileex\AileExShell.dll        pkg_aileex\AileExShell.dll
-          # 32-bit shell handler for 32-bit Explorer hosts (still launches the 64-bit AileEx.exe).
-          Copy-Item build_release_x86\aileex\AileExShell32.dll        pkg_aileex\AileExShell32.dll
-          # GUI Setup Tool
-          Copy-Item build_release_setup\ailesetup\AileSetup.exe pkg_aileex\AileSetup.exe
-          Compress-Archive -Path pkg_aileex\* -DestinationPath "${tag}.zip"
+          Copy-Item $vendor\7z.dll      pkg_aile\bin\7z.dll
+          Copy-Item $vendor\7z.sfx      pkg_aile\bin\7z.sfx
+          Copy-Item $vendor\7zCon.sfx   pkg_aile\bin\7zCon.sfx
+          Copy-Item $vendor\License.txt pkg_aile\bin\License.txt
+          Copy-Item build_release\aile\AileShell.dll        pkg_aile\AileShell.dll
+          Copy-Item build_release_x86\aile\AileShell32.dll        pkg_aile\AileShell32.dll
+          Copy-Item build_release_setup\ailesetup\AileSetup.exe pkg_aile\AileSetup.exe
+          Compress-Archive -Path pkg_aile\* -DestinationPath "${tag}.zip"
           Write-Host "Created: ${tag}.zip ($([Math]::Round((Get-Item "${tag}.zip").Length/1KB)) KB)"
 
-      - name: Package AileFlow
-        if: ${{ inputs.app == 'both' || inputs.app == 'AileFlow' }}
-        shell: pwsh
-        run: |
-          $tag = "${{ steps.names.outputs.aileflow_tag }}"
-          New-Item -ItemType Directory -Force pkg_aileflow\bin | Out-Null
-          Copy-Item build_release\aileflow\AileFlow.exe pkg_aileflow\AileFlow.exe
-          Copy-Item aileflow\README.md                  pkg_aileflow\README.md
-          Copy-Item -Recurse aileflow\Release\b2e       pkg_aileflow\b2e
-          # Vendored 7-Zip ZS (x64) backend — apps search exe\bin\ automatically.
-          # We no longer package 7z.exe / 7zG.exe since native 7z is used instead.
-          $vendor = "third_party\7zip-zstd"
-          Copy-Item $vendor\7z.dll      pkg_aileflow\bin\7z.dll
-          Copy-Item $vendor\7z.sfx      pkg_aileflow\bin\7z.sfx
-          Copy-Item $vendor\License.txt pkg_aileflow\bin\License.txt
-          # Explorer shell-extension DLL — must sit next to AileFlow.exe (resolves it as sibling).
-          Copy-Item build_release\aileflow\AileFlowShell.dll         pkg_aileflow\AileFlowShell.dll
-          # 32-bit shell handler for 32-bit Explorer hosts (still launches the 64-bit AileFlow.exe).
-          Copy-Item build_release_x86\aileflow\AileFlowShell32.dll        pkg_aileflow\AileFlowShell32.dll
-          # GUI Setup Tool
-          Copy-Item build_release_setup\ailesetup\AileSetup.exe pkg_aileflow\AileSetup.exe
-          Compress-Archive -Path pkg_aileflow\* -DestinationPath "${tag}.zip"
-          Write-Host "Created: ${tag}.zip ($([Math]::Round((Get-Item "${tag}.zip").Length/1KB)) KB)"
-
-      - name: Upload AileEx artifact
-        if: ${{ inputs.app == 'both' || inputs.app == 'AileEx' }}
+      - name: Upload Aile artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.names.outputs.aileex_tag }}
-          path: ${{ steps.names.outputs.aileex_tag }}.zip
+          name: ${{ steps.names.outputs.aile_tag }}
+          path: ${{ steps.names.outputs.aile_tag }}.zip
 
-      - name: Upload AileFlow artifact
-        if: ${{ inputs.app == 'both' || inputs.app == 'AileFlow' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.names.outputs.aileflow_tag }}
-          path: ${{ steps.names.outputs.aileflow_tag }}.zip
-
-  # ── Publish AileEx release ────────────────────────────────────────────────────
-  release-aileex:
+  release-aile:
     needs: build
-    if: ${{ inputs.app == 'both' || inputs.app == 'AileEx' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -175,18 +119,18 @@ jobs:
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: ${{ needs.build.outputs.aileex_tag }}
+          name: ${{ needs.build.outputs.aile_tag }}
           path: dist
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.build.outputs.aileex_tag }}
-          name: ${{ needs.build.outputs.aileex_tag }}
+          tag_name: ${{ needs.build.outputs.aile_tag }}
+          name: ${{ needs.build.outputs.aile_tag }}
           prerelease: ${{ inputs.prerelease }}
           generate_release_notes: true
           body: |
-            ## AileEx
+            ## Aile
 
             Built from commit ${{ github.sha }} (`${{ github.ref_name }}`)
 
@@ -194,68 +138,16 @@ jobs:
 
             | File | Description |
             |---|---|
-            | `AileEx.exe`           | Executable (MSVC x64 Release) |
+            | `Aile.exe`           | Executable (MSVC x64 Release) |
             | `README.md`            | Overview and usage |
-            | `AileExShell.dll`         | Explorer right-click menu handler (64-bit hosts) |
-            | `AileExShell32.dll`       | Explorer right-click menu handler (32-bit hosts; launches the 64-bit exe) |
+            | `b2e/`                 | B2E archive handler scripts |
+            | `AileShell.dll`         | Explorer right-click menu handler (64-bit hosts) |
+            | `AileShell32.dll`       | Explorer right-click menu handler (32-bit hosts) |
             | `AileSetup.exe`           | GUI Setup Tool to register/unregister shell extensions |
-            | `bin\7z.dll`           | 7-Zip ZS (zstd fork) x64 backend |
+            | `bin\7z.dll`           | Native 7z Engine |
             | `bin\7z.sfx`           | SFX stub (Desktop) |
             | `bin\7zCon.sfx`        | SFX stub (console) |
             | `bin\License.txt`      | 7-Zip license |
-
-            > `7z.dll`（zstd 対応 x64 ビルド）を `bin\` に同梱しています。別途インストール不要です。
-            > Visual C++ Redistributable 2015–2022（`VCRUNTIME140.dll`, `MSVCP140.dll`）は必要です。
-            > RAR 機能は別途 `WinRAR.exe` / `Rar.exe` または `unrar.dll` を参照します（同梱なし）。詳細は README を参照してください。
-          files: dist/${{ needs.build.outputs.aileex_tag }}.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # ── Publish AileFlow release ──────────────────────────────────────────────────
-  release-aileflow:
-    needs: build
-    if: ${{ inputs.app == 'both' || inputs.app == 'AileFlow' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ needs.build.outputs.aileflow_tag }}
-          path: dist
-
-      - name: Publish release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.build.outputs.aileflow_tag }}
-          name: ${{ needs.build.outputs.aileflow_tag }}
-          prerelease: ${{ inputs.prerelease }}
-          generate_release_notes: true
-          body: |
-            ## AileFlow
-
-            Built from commit ${{ github.sha }} (`${{ github.ref_name }}`)
-
-            ### Package contents
-
-            | File | Description |
-            |---|---|
-            | `AileFlow.exe`         | Executable (MSVC x64 Release) |
-            | `README.md`            | Overview and usage |
-            | `b2e/`                 | B2E archive handler scripts |
-            | `AileFlowShell.dll`         | Explorer right-click menu handler (64-bit hosts) |
-            | `AileFlowShell32.dll`       | Explorer right-click menu handler (32-bit hosts; launches the 64-bit exe) |
-            | `AileSetup.exe`           | GUI Setup Tool to register/unregister shell extensions |
-            | `bin\7z.dll`           | Codec/format engine (native 7z) |
-            | `bin\7z.sfx`           | SFX stub (Desktop) |
-            | `bin\License.txt`      | 7-Zip license |
-
-            > 7-Zip ZS（zstd 対応 x64 ビルド）の `7z.dll` を `bin\` に同梱しています。7z 系フォーマットは別途インストール不要です。
-            > Visual C++ Redistributable 2015–2022（`VCRUNTIME140.dll`, `MSVCP140.dll`）は必要です。
-            > RAR 等その他フォーマットは対応外部ツール（`WinRAR.exe` 等）を別途参照します（同梱なし）。詳細は README を参照してください。
-          files: dist/${{ needs.build.outputs.aileflow_tag }}.zip
+          files: dist/${{ needs.build.outputs.aile_tag }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

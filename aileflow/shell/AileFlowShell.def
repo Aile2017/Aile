@@ -1,7 +1,0 @@
-; No LIBRARY line: the output name varies (AileFlowShell / AileFlowShell32), and
-; a fixed name here would mismatch the linker /OUT and trigger LNK4070.
-EXPORTS
-    DllGetClassObject   PRIVATE
-    DllCanUnloadNow     PRIVATE
-    DllRegisterServer   PRIVATE
-    DllUnregisterServer PRIVATE
