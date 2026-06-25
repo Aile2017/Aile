@@ -3,6 +3,7 @@
 #define IDC_STATIC -1
 
 #define IDD_SETUP_DIALOG 101
+#define IDI_APP_ICON 102
 
 #define IDC_CHK_AILEEX_64 1001
 #define IDC_CHK_AILEFLOW_64 1002

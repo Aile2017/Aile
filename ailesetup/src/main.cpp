@@ -76,6 +76,10 @@ INT_PTR CALLBACK DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPara
 
     switch (uMsg) {
         case WM_INITDIALOG: {
+            HICON hIcon = LoadIconW(GetModuleHandle(nullptr), MAKEINTRESOURCEW(IDI_APP_ICON));
+            SendMessageW(hwndDlg, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
+            SendMessageW(hwndDlg, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
+
             modDir = GetModuleDir();
             for (const auto& ext : g_exts) {
                 std::wstring fullPath = modDir + L"\\" + ext.dllName;

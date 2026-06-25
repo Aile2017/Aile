@@ -69,3 +69,6 @@ BEGIN
     "  </dependency>\n"
     "</assembly>\n"
 END
+
+// Application Icon
+IDI_APP_ICON ICON "AileSetup.ico"
