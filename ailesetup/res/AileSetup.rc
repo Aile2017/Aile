@@ -1,0 +1,33 @@
+#include "resource.h"
+#include <windows.h>
+
+LANGUAGE LANG_JAPANESE, SUBLANG_DEFAULT
+
+IDD_SETUP_DIALOG DIALOGEX 0, 0, 200, 140
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Aile Shell Extension Setup"
+FONT 9, "Meiryo UI", 0, 0, 0x1
+BEGIN
+    LTEXT           "インストールする拡張機能を選択してください:", IDC_STATIC, 10, 10, 180, 10
+    CONTROL         "AileEx Shell Extension (64-bit)", IDC_CHK_AILEEX_64, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 15, 30, 170, 10
+    CONTROL         "AileFlow Shell Extension (64-bit)", IDC_CHK_AILEFLOW_64, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 15, 45, 170, 10
+    CONTROL         "AileEx Shell Extension (32-bit)", IDC_CHK_AILEEX_32, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 15, 60, 170, 10
+    CONTROL         "AileFlow Shell Extension (32-bit)", IDC_CHK_AILEFLOW_32, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 15, 75, 170, 10
+    DEFPUSHBUTTON   "OK", IDC_BTN_OK, 90, 115, 45, 15
+    PUSHBUTTON      "キャンセル", IDC_BTN_CANCEL, 140, 115, 45, 15
+END
+
+// Add Manifest for visual styles
+1 RT_MANIFEST
+BEGIN
+    "<?xml version=""1.0"" encoding=""UTF-8"" standalone=""yes""?>\n"
+    "<assembly xmlns=""urn:schemas-microsoft-com:asm.v1"" manifestVersion=""1.0"">\n"
+    "  <assemblyIdentity version=""1.0.0.0"" processorArchitecture=""*"" name=""AileSetup"" type=""win32""/>\n"
+    "  <description>Aile Shell Extension Setup</description>\n"
+    "  <dependency>\n"
+    "    <dependentAssembly>\n"
+    "      <assemblyIdentity type=""win32"" name=""Microsoft.Windows.Common-Controls"" version=""6.0.0.0"" processorArchitecture=""*"" publicKeyToken=""6595b64144ccf1df"" language=""*""/>\n"
+    "    </dependentAssembly>\n"
+    "  </dependency>\n"
+    "</assembly>\n"
+END

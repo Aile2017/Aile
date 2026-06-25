@@ -1,0 +1,13 @@
+#pragma once
+
+#define IDC_STATIC -1
+
+#define IDD_SETUP_DIALOG 101
+
+#define IDC_CHK_AILEEX_64 1001
+#define IDC_CHK_AILEFLOW_64 1002
+#define IDC_CHK_AILEEX_32 1003
+#define IDC_CHK_AILEFLOW_32 1004
+
+#define IDC_BTN_OK 1
+#define IDC_BTN_CANCEL 2

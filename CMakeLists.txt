@@ -3,3 +3,4 @@ project(Aile LANGUAGES CXX RC)
 
 add_subdirectory(aileex)
 add_subdirectory(aileflow)
+add_subdirectory(ailesetup)
