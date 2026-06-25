@@ -11,10 +11,9 @@ public:
     struct Params {
         std::vector<std::wstring> inputFiles;
         std::wstring outputPath;
-        std::wstring format   = L"7z";   // "7z","zip","tar","gz","bz2","xz","rar"
+        std::wstring format   = L"7z";   // "7z","zip","tar","gz","bz2","xz"
         std::wstring method   = L"lzma2";
         int          level    = 5;
-        int          rarLevel = 3;       // RAR compression level 0-5 (-m0..-m5)
         std::wstring password;
         bool         encryptHeaders = false;
         // Advanced options (shown in the sub-dialog)
@@ -24,15 +23,8 @@ public:
         std::wstring threads;     // "" = auto; "4","8"
         std::wstring extra;       // free-form "key=value" pairs
         std::wstring volumeSize;  // "" = no split; "100m","1g" etc. (7z/zip only)
-        // RAR-specific advanced options
-        std::wstring rarDictSize;    // "" = auto; "128k","1m","4g"
-        bool         rarSolid       = true;
-        int          rarThreads     = 0;
-        int          rarRecoveryPct = 0;
-        std::wstring rarSplitVolume;
-        std::wstring rarExtra;
         // Self-extraction (SFX) mode — "" = none / "gui" / "console"
-        // Valid for 7z and rar only. Non-empty values force the output extension to .exe.
+        // Valid for 7z only. Non-empty values force the output extension to .exe.
         std::wstring sfxMode;
         // Persistence (which fields are saved) and format/method policy live in
         // CompressPolicy, not here — see CompressPolicy.h.
@@ -42,11 +34,9 @@ public:
     // encoderNames: lowercased encoder names from SevenZip::GetEncoderNames().
     // writableFormats: writable formats from SevenZip::GetWritableFormats().
     //                 nullptr or empty = use static fallback list.
-    // includeRar: if false, RAR is omitted from the format list (rar.exe not found).
     bool Show(HWND hwndParent, Params& params,
               const std::vector<std::wstring>* encoderNames = nullptr,
-              const std::vector<WritableFormat>* writableFormats = nullptr,
-              bool includeRar = true);
+              const std::vector<WritableFormat>* writableFormats = nullptr);
 
     static INT_PTR CALLBACK DlgProc(HWND, UINT, WPARAM, LPARAM);
     INT_PTR HandleMsg(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);

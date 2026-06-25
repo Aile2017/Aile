@@ -10,8 +10,6 @@
 #include "InfoDlg.h"
 #include "PropertiesDlg.h"
 #include "ProgressDlg.h"
-#include "RarProcess.h"
-#include "RarBackend.h"
 #include "SevenZipBackend.h"
 #include "ArchiveOpener.h"
 #include "SettingsDlg.h"

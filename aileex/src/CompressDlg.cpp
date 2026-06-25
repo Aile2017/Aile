@@ -1,9 +1,8 @@
-﻿#include "CompressDlg.h"
+#include "CompressDlg.h"
 #include "CompressPolicy.h"
 #include "AdvancedCompressDlg.h"
 #include "DialogUtils.h"
 #include "I18n.h"
-#include "RarAdvancedDlg.h"
 #include "Settings.h"
 #include "resource.h"
 #include <commctrl.h>
@@ -36,34 +35,17 @@ static const MethodEntry kMethodsZip[] = {
     // 7-Zip Zstandard extension (shown only when DLL supports it)
     {L"Zstandard",      L"zstd"},
 };
-// rar.exe -m0..-m5
-static const MethodEntry kMethodsRar[] = {
-    {L"Store",          L"0"},
-    {L"Fastest",        L"1"},
-    {L"Fast",           L"2"},
-    {L"Normal",         L"3"},
-    {L"Good",           L"4"},
-    {L"Best",           L"5"},
-};
 
 bool CompressDlg::Show(HWND hwndParent, Params& params,
                        const std::vector<std::wstring>* encoderNames,
-                       const std::vector<WritableFormat>* writableFormats,
-                       bool includeRar) {
+                       const std::vector<WritableFormat>* writableFormats) {
     if (!writableFormats || writableFormats->empty()) return false;
 
     m_params       = params;
     m_encoderNames = encoderNames;
 
-    // Build format list from 7z.dll → append RAR at end
+    // Build format list from 7z.dll
     m_writableFormats = *writableFormats;
-    // RAR is handled via rar.exe; only include when rar.exe is found
-    if (includeRar) {
-        m_writableFormats.push_back({L"RAR (.rar)", L"rar"});
-    } else if (m_params.format == L"rar") {
-        // Fall back to 7z if the previously saved format was RAR but rar.exe is gone
-        m_params.format = L"7z";
-    }
     INT_PTR result = DialogBoxParamW(
         GetModuleHandleW(nullptr),
         MAKEINTRESOURCEW(IDD_COMPRESS),
@@ -190,10 +172,9 @@ void CompressDlg::OnFormatChange(HWND hwnd) {
     const wchar_t* fmtId = (const wchar_t*)SendMessageW(hFmt, CB_GETITEMDATA, sel, 0);
     bool is7z  = (fmtId && wcscmp(fmtId, L"7z")  == 0);
     bool isZip = (fmtId && wcscmp(fmtId, L"zip") == 0);
-    bool isRar = (fmtId && wcscmp(fmtId, L"rar") == 0);
 
-    // SFX is supported only for 7z / RAR; reset to "none" for other formats.
-    bool sfxAvailable = (is7z || isRar);
+    // SFX is supported only for 7z; reset to "none" for other formats.
+    bool sfxAvailable = is7z;
     EnableWindow(hSfx, sfxAvailable);
     if (!sfxAvailable) SendMessageW(hSfx, CB_SETCURSEL, 0, 0);  // index 0 = "none"
 
@@ -210,23 +191,6 @@ void CompressDlg::OnFormatChange(HWND hwnd) {
 
     HWND hLevel = GetDlgItem(hwnd, IDC_LEVEL);
     SendMessageW(hLevel, CB_RESETCONTENT, 0, 0);
-
-    if (isRar) {
-        // RAR uses -m0..-m5 compression levels; populate level combo with RAR-specific options
-        for (int i = 0; i < (int)_countof(kMethodsRar); ++i) {
-            int idx = (int)SendMessageW(hLevel, CB_ADDSTRING, 0, (LPARAM)kMethodsRar[i].label);
-            SendMessageW(hLevel, CB_SETITEMDATA, idx, i);
-            if (m_params.rarLevel == i)
-                SendMessageW(hLevel, CB_SETCURSEL, idx, 0);
-        }
-        if (SendMessageW(hLevel, CB_GETCURSEL, 0, 0) == CB_ERR)
-            SendMessageW(hLevel, CB_SETCURSEL, 3, 0);  // default = Normal (index 3)
-        EnableWindow(hLevel, TRUE);
-        EnableWindow(hMethod, FALSE);
-        EnableWindow(GetDlgItem(hwnd, IDC_PASSWORD), TRUE);
-        EnableWindow(GetDlgItem(hwnd, IDC_ENCRYPT_HDR), TRUE);  // RAR supports header encryption via -hp
-        return;
-    }
 
     // Non-RAR: populate level combo with 7z/zip levels (0-9 scale)
     const UINT levelIds[]  = { IDS_LEVEL_0, IDS_LEVEL_1, IDS_LEVEL_3,
@@ -302,44 +266,23 @@ void CompressDlg::OnAdvanced(HWND hwnd) {
         if (fmtId) fmt = fmtId;
     }
 
-    if (fmt == L"rar") {
-        // RAR-specific advanced settings
-        RarAdvancedDlg::Params rp;
-        rp.dictSize    = m_params.rarDictSize;
-        rp.solid       = m_params.rarSolid;
-        rp.threads     = m_params.rarThreads;
-        rp.recoveryPct = m_params.rarRecoveryPct;
-        rp.splitVolume = m_params.rarSplitVolume;
-        rp.extra       = m_params.rarExtra;
+    // Advanced settings for 7z/zip/etc.
+    AdvancedCompressDlg::Params advParams;
+    advParams.dictSize   = m_params.dictSize;
+    advParams.wordSize   = m_params.wordSize;
+    advParams.solidBlock = m_params.solidBlock;
+    advParams.threads    = m_params.threads;
+    advParams.extra      = m_params.extra;
+    advParams.volumeSize = m_params.volumeSize;
 
-        RarAdvancedDlg rarDlg;
-        if (rarDlg.Show(hwnd, rp)) {
-            m_params.rarDictSize    = rp.dictSize;
-            m_params.rarSolid       = rp.solid;
-            m_params.rarThreads     = rp.threads;
-            m_params.rarRecoveryPct = rp.recoveryPct;
-            m_params.rarSplitVolume = rp.splitVolume;
-            m_params.rarExtra       = rp.extra;
-        }
-    } else {
-        // Advanced settings for 7z/zip/etc.
-        AdvancedCompressDlg::Params advParams;
-        advParams.dictSize   = m_params.dictSize;
-        advParams.wordSize   = m_params.wordSize;
-        advParams.solidBlock = m_params.solidBlock;
-        advParams.threads    = m_params.threads;
-        advParams.extra      = m_params.extra;
-        advParams.volumeSize = m_params.volumeSize;
-
-        AdvancedCompressDlg advDlg;
-        if (advDlg.Show(hwnd, fmt.c_str(), advParams)) {
-            m_params.dictSize   = advParams.dictSize;
-            m_params.wordSize   = advParams.wordSize;
-            m_params.solidBlock = advParams.solidBlock;
-            m_params.threads    = advParams.threads;
-            m_params.extra      = advParams.extra;
-            m_params.volumeSize = advParams.volumeSize;
-        }
+    AdvancedCompressDlg advDlg;
+    if (advDlg.Show(hwnd, fmt.c_str(), advParams)) {
+        m_params.dictSize   = advParams.dictSize;
+        m_params.wordSize   = advParams.wordSize;
+        m_params.solidBlock = advParams.solidBlock;
+        m_params.threads    = advParams.threads;
+        m_params.extra      = advParams.extra;
+        m_params.volumeSize = advParams.volumeSize;
     }
 }
 

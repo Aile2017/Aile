@@ -4,7 +4,6 @@
 #include "ArchiveController.h"
 #include "I18n.h"
 #include "CompressHelper.h"
-#include "RarProcess.h"
 #include "ArchiveOpener.h"
 #include "SevenZip.h"
 #include "Settings.h"
@@ -36,24 +35,16 @@ static void OpenExtractedFolder(const Settings& settings, const std::wstring& di
 }
 
 bool ArchiveController::Open(const wchar_t* path) {
-    // Resolve the rar.exe writer path once (used by RarBackend for write ops).
-    std::wstring rarExe = m_svc.settings.GetRarExePath();
-    if (rarExe.empty()) rarExe = RarProcess::FindRarExe();
-
     // Delegate backend selection, fallback and password retry to ArchiveOpener.
     // The session is left untouched until the open succeeds, so a failed open
     // needs no rollback; reuse the current password as the first retry guess.
-    ArchiveOpener opener(m_svc.sevenZip, m_svc.unrar, rarExe);
+    ArchiveOpener opener(m_svc.sevenZip);
     ArchiveOpener::Result opened =
         opener.Open(path, m_session.Password(), [this]{ return m_ui.PromptPassword(); });
 
     if (!opened.backend) {
         std::wstring msg = I18n::Tr(IDS_ERR_OPEN_ARCHIVE);
-        if (!m_svc.sevenZip.IsLoaded() && !m_svc.unrar.IsLoaded()) {
-            msg += I18n::Tr(IDS_ERR_OPEN_ARCHIVE_7Z_UNRAR);
-            if (m_svc.sevenZip.IsWrongBitness())
-                msg += I18n::Tr(IDS_ERR_7Z_WRONG_BITNESS);
-        } else if (!m_svc.sevenZip.IsLoaded()) {
+        if (!m_svc.sevenZip.IsLoaded()) {
             msg += I18n::Tr(IDS_ERR_OPEN_ARCHIVE_7Z);
             if (m_svc.sevenZip.IsWrongBitness())
                 msg += I18n::Tr(IDS_ERR_7Z_WRONG_BITNESS);
@@ -199,9 +190,7 @@ void ArchiveController::Add(std::vector<std::wstring> srcPaths) {
     // Level is the only format-specific input: RAR takes a 0..5 method index, 7z/zip
     // a 0..9 level. Only RarBackend writes .rar, so the extension picks the scale.
     const Settings& s = m_svc.settings;
-    const wchar_t* dot = wcsrchr(archivePath.c_str(), L'.');
-    bool isRar = dot && _wcsicmp(dot + 1, L"rar") == 0;
-    int level = isRar ? s.GetRarLevel() : s.GetCompressionLevel();
+    int level = s.GetCompressionLevel();
     IArchiveBackend* backend = m_session.Backend();
     std::wstring folder = archiveFolder;
     OpResult res = m_ui.RunOperation(I18n::Tr(IDS_PROGRESS_ADDING).c_str(),
@@ -273,69 +262,62 @@ void ArchiveController::Compress(CompressDlg::Params params, bool openAfterCompr
 
     HRESULT hrDone = S_OK;
 
-    if (params.format == L"rar") {
-        hrDone = m_ui.RunRarCompress(params);
-        if (hrDone == E_FAIL) return;  // launch failure, already surfaced
-    } else {
-        if (!m_svc.sevenZip.IsLoaded()) {
-            m_ui.ShowError(I18n::Tr(IDS_ERR_7Z_NOT_LOADED).c_str(), 0);
+    if (!m_svc.sevenZip.IsLoaded()) {
+        m_ui.ShowError(I18n::Tr(IDS_ERR_7Z_NOT_LOADED).c_str(), 0);
+        return;
+    }
+    auto& sz = m_svc.sevenZip;
+
+    // Resolve the 7z SFX module (search in the same folder as 7z.dll if specified).
+    std::wstring sfxModulePath;
+    if (!params.sfxMode.empty()) {
+        sfxModulePath = Resolve7zSfxModulePath(
+            sz.GetLoadedPath().c_str(), params.sfxMode.c_str());
+        if (sfxModulePath.empty()) {
+            const wchar_t* leaf = (params.sfxMode == L"console") ? L"7zCon.sfx" : L"7z.sfx";
+            m_ui.ShowMessage(I18n::TrFmt(IDS_FMT_SFX_NOT_FOUND_7Z, leaf), MB_ICONERROR);
             return;
         }
-        auto& sz = m_svc.sevenZip;
-
-        // Resolve the 7z SFX module (search in the same folder as 7z.dll if specified).
-        std::wstring sfxModulePath;
-        if (!params.sfxMode.empty()) {
-            sfxModulePath = Resolve7zSfxModulePath(
-                sz.GetLoadedPath().c_str(), params.sfxMode.c_str());
-            if (sfxModulePath.empty()) {
-                const wchar_t* leaf = (params.sfxMode == L"console") ? L"7zCon.sfx" : L"7z.sfx";
-                m_ui.ShowMessage(I18n::TrFmt(IDS_FMT_SFX_NOT_FOUND_7Z, leaf), MB_ICONERROR);
-                return;
-            }
-        }
-
-        auto inputs  = params.inputFiles;
-        auto outPath = params.outputPath;
-        auto format  = params.format;
-        int  level   = params.level;
-        auto method  = params.method;
-        auto pw      = params.password;
-        auto advDict    = params.dictSize;
-        auto advWord    = params.wordSize;
-        auto advSolid   = params.solidBlock;
-        auto advThreads = params.threads;
-        auto advExtra   = params.extra;
-        auto advVolume  = params.volumeSize;
-        bool encHdr     = params.encryptHeaders;
-        OpResult res = m_ui.RunOperation(I18n::Tr(IDS_PROGRESS_COMPRESSING).c_str(),
-            [&sz, inputs, outPath, format, level, method, pw,
-             advDict, advWord, advSolid, advThreads, advExtra, advVolume,
-             sfxModulePath, encHdr](IExtractProgressSink* sink) -> HRESULT {
-                CompressAdvanced adv;
-                adv.dictSize      = advDict;
-                adv.wordSize      = advWord;
-                adv.solidBlock    = advSolid;
-                adv.threads       = advThreads;
-                adv.extra         = advExtra;
-                adv.volumeSize    = advVolume;
-                adv.sfxModulePath = sfxModulePath;
-                return sz.Compress(inputs, outPath.c_str(), format.c_str(),
-                                   level, method.c_str(), pw.empty() ? nullptr : pw.c_str(),
-                                   sink, &adv, encHdr);
-            });
-        hrDone = res.hr;
     }
+
+    auto inputs  = params.inputFiles;
+    auto outPath = params.outputPath;
+    auto format  = params.format;
+    int  level   = params.level;
+    auto method  = params.method;
+    auto pw      = params.password;
+    auto advDict    = params.dictSize;
+    auto advWord    = params.wordSize;
+    auto advSolid   = params.solidBlock;
+    auto advThreads = params.threads;
+    auto advExtra   = params.extra;
+    auto advVolume  = params.volumeSize;
+    bool encHdr     = params.encryptHeaders;
+    OpResult res = m_ui.RunOperation(I18n::Tr(IDS_PROGRESS_COMPRESSING).c_str(),
+        [&sz, inputs, outPath, format, level, method, pw,
+         advDict, advWord, advSolid, advThreads, advExtra, advVolume,
+         sfxModulePath, encHdr](IExtractProgressSink* sink) -> HRESULT {
+            CompressAdvanced adv;
+            adv.dictSize      = advDict;
+            adv.wordSize      = advWord;
+            adv.solidBlock    = advSolid;
+            adv.threads       = advThreads;
+            adv.extra         = advExtra;
+            adv.volumeSize    = advVolume;
+            adv.sfxModulePath = sfxModulePath;
+            return sz.Compress(inputs, outPath.c_str(), format.c_str(),
+                               level, method.c_str(), pw.empty() ? nullptr : pw.c_str(),
+                               sink, &adv, encHdr);
+        });
+    hrDone = res.hr;
 
     if (FAILED(hrDone) && hrDone != E_ABORT) {
         m_ui.ShowError(I18n::Tr(IDS_ERR_COMPRESS_FAILED).c_str(), hrDone);
     } else if (SUCCEEDED(hrDone) && openAfterCompress) {
         // For split volumes (7z/zip), the first file is <outputPath>.001.
         std::wstring pathToOpen = params.outputPath;
-        if (!params.volumeSize.empty() && params.format != L"rar")
+        if (!params.volumeSize.empty())
             pathToOpen += L".001";
-        // Skip auto-open for RAR split volumes (part01.rar naming is ambiguous).
-        if (params.volumeSize.empty() || params.format != L"rar")
-            Open(pathToOpen.c_str());
+        Open(pathToOpen.c_str());
     }
 }

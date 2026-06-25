@@ -5,7 +5,6 @@
 #include "CompressHelper.h"
 #include "I18n.h"
 #include "ProgressDlg.h"
-#include "RarProcess.h"
 #include "WorkerThread.h"
 #include "resource.h"
 #include <commctrl.h>
@@ -33,12 +32,6 @@ bool App::Init(HINSTANCE hInst) {
     if (!m_sevenZip.Load(m_settings.Get7zDllPath().empty()
                          ? nullptr
                          : m_settings.Get7zDllPath().c_str())) {
-        // Non-fatal: user can still use RAR mode.
-    }
-
-    if (!m_unrar.Load(m_settings.GetUnrarDllPath().empty()
-                      ? nullptr
-                      : m_settings.GetUnrarDllPath().c_str())) {
         // Non-fatal.
     }
 
@@ -49,19 +42,15 @@ bool App::Init(HINSTANCE hInst) {
 
 void App::Shutdown() {
     m_sevenZip.Unload();
-    m_unrar.Unload();
     m_settings.Save();
     OleUninitialize();
 }
 
 void App::ReloadDlls() {
     m_sevenZip.Unload();
-    m_unrar.Unload();
 
     m_sevenZip.Load(m_settings.Get7zDllPath().empty()
                     ? nullptr : m_settings.Get7zDllPath().c_str());
-    m_unrar.Load(m_settings.GetUnrarDllPath().empty()
-                 ? nullptr : m_settings.GetUnrarDllPath().c_str());
 }
 
 int App::RunBrowseMode(const std::vector<std::wstring>& archivePaths, int nCmdShow,
@@ -125,40 +114,25 @@ static void ApplyOverrides(CompressDlg::Params& params,
             params.method.clear();
     }
 
-    // -m applies to 7z/zip only; RAR has no method concept
-    if (!methodOverride.empty() && params.format != L"rar")
+    if (!methodOverride.empty())
         params.method = methodOverride;
 
     if (!levelOverride.empty()) {
-        if (params.format == L"rar") {
-            static const struct { const wchar_t* name; int lv; } kRar[] = {
-                {L"store",0},{L"fastest",1},{L"fast",2},{L"normal",3},{L"good",4},{L"best",5},
-            };
-            std::wstring lo = levelOverride;
-            for (auto& c : lo) c = (wchar_t)towlower(c);
-            int found = -1;
-            for (auto& e : kRar)
-                if (lo == e.name) { found = e.lv; break; }
-            if (found < 0 && lo.size() == 1 && iswdigit(lo[0])) {
-                int v = lo[0] - L'0';
-                if (v <= 5) found = v;
-            }
-            if (found >= 0) params.level = params.rarLevel = found;
-        } else if (levelOverride.size() == 1 && iswdigit(levelOverride[0])) {
+        if (levelOverride.size() == 1 && iswdigit(levelOverride[0])) {
             params.level = levelOverride[0] - L'0';
         }
     }
 
     // Apply the shared format/method/SFX policy (same rule as the dialog's OnOK):
-    // RAR method = level digit, stream/tar take no method, 7z/zip drop a method
+    // stream/tar take no method, 7z/zip drop a method
     // that only restates the level preset. (sfxOverride is applied afterwards.)
     CompressPolicy::NormalizeForFormat(params);
 
     if (!sfxOverride.empty()) {
-        if (_wcsicmp(params.format.c_str(), L"7z") == 0 || _wcsicmp(params.format.c_str(), L"rar") == 0) {
+        if (_wcsicmp(params.format.c_str(), L"7z") == 0) {
             params.sfxMode = sfxOverride;
         } else {
-            // SFX is not supported for formats other than 7z and rar.
+            // SFX is not supported for formats other than 7z.
             // Fallback to normal archive (ignore -ca).
             params.sfxMode.clear();
         }
@@ -200,9 +174,6 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
 
     const auto* enc = &m_sevenZip.GetEncoderNames();
     const auto* wf  = &m_sevenZip.GetWritableFormats();
-    const bool rarAvailable = !m_settings.GetRarExePath().empty()
-        ? (PathFileExistsW(m_settings.GetRarExePath().c_str()) == TRUE)
-        : !RarProcess::FindRarExe().empty();
 
     // Skip dialog only when -t is given in forced (-a/-w) mode (SW_HIDE).
     // In auto-detect mode (nCmdShow != SW_HIDE) always show dialog with presets.
@@ -211,14 +182,11 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
         if (params.sfxMode.empty()) {
             EnsureArchiveExt(params.outputPath, params.format);
         } else {
-            // ComputeDefaultOutputPath already returns an extension-less stem, so just
-            // append ".exe" — stripping a trailing dot would eat a dotted stem's last
-            // segment (e.g. "111.222.333.444" → "111.222.333").
             EnsureArchiveExt(params.outputPath, L"exe");
         }
     } else {
         CompressDlg dlg;
-        if (!dlg.Show(wnd.Hwnd(), params, enc, wf, rarAvailable))
+        if (!dlg.Show(wnd.Hwnd(), params, enc, wf))
             return 0;
         CompressPolicy::Save(params, m_settings);
         m_settings.Save();
@@ -227,55 +195,48 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
     ProgressDlg progDlg;
     progDlg.Show(wnd.Hwnd(), I18n::Tr(IDS_PROGRESS_COMPRESSING).c_str());
 
-    if (params.format == L"rar") {
-        auto* sink = new ProgressPostSink(wnd.Hwnd(), WM_APP_PROGRESS, WM_APP_DONE);
-        RunRarCompressSync(wnd.Hwnd(), params,
-                           m_settings.GetRarExePath().c_str(),
-                           progDlg, sink);
-        delete sink;
-    } else {
-        // Resolve 7z SFX module (search same folder as 7z.dll if specified)
-        std::wstring sfxModulePath;
-        if (!params.sfxMode.empty()) {
-            sfxModulePath = Resolve7zSfxModulePath(
-                m_sevenZip.GetLoadedPath().c_str(), params.sfxMode.c_str());
-            if (sfxModulePath.empty()) {
-                progDlg.Dismiss();
-                const wchar_t* leaf = (params.sfxMode == L"console") ? L"7zCon.sfx" : L"7z.sfx";
-                std::wstring msg = I18n::TrFmt(IDS_FMT_SFX_NOT_FOUND_7Z, leaf);
-                MessageBoxW(wnd.Hwnd(), msg.c_str(), I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
-                return 0;
-            }
+    // Resolve 7z SFX module (search same folder as 7z.dll if specified)
+    std::wstring sfxModulePath;
+    if (!params.sfxMode.empty()) {
+        sfxModulePath = Resolve7zSfxModulePath(
+            m_sevenZip.GetLoadedPath().c_str(), params.sfxMode.c_str());
+        if (sfxModulePath.empty()) {
+            progDlg.Dismiss();
+            const wchar_t* leaf = (params.sfxMode == L"console") ? L"7zCon.sfx" : L"7z.sfx";
+            std::wstring msg = I18n::TrFmt(IDS_FMT_SFX_NOT_FOUND_7Z, leaf);
+            MessageBoxW(wnd.Hwnd(), msg.c_str(), I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
+            return 0;
         }
-
-        auto* sink = new ProgressPostSink(wnd.Hwnd(), WM_APP_PROGRESS, WM_APP_DONE);
-        auto& sz   = m_sevenZip;
-        progDlg.SetSink(sink);
-
-        WorkerThread worker;
-        worker.Start([&sz, params, sink, sfxModulePath]() -> HRESULT {
-            const wchar_t* pw = params.password.empty() ? nullptr : params.password.c_str();
-            CompressAdvanced adv;
-            adv.dictSize      = params.dictSize;
-            adv.wordSize      = params.wordSize;
-            adv.solidBlock    = params.solidBlock;
-            adv.threads       = params.threads;
-            adv.extra         = params.extra;
-            adv.volumeSize    = params.volumeSize;
-            adv.sfxModulePath = sfxModulePath;
-            return sz.Compress(params.inputFiles, params.outputPath.c_str(),
-                               params.format.c_str(), params.level,
-                               params.method.c_str(), pw, sink, &adv,
-                               params.encryptHeaders);
-        }, wnd.Hwnd(), WM_APP_DONE);
-
-        HRESULT hr = progDlg.RunMessageLoop();
-        worker.Wait();
-        delete sink;
-        if (FAILED(hr) && hr != E_ABORT)
-            MessageBoxW(wnd.Hwnd(), I18n::Tr(IDS_ERR_COMPRESS_FAILED).c_str(),
-                        I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
     }
+
+    auto* sink = new ProgressPostSink(wnd.Hwnd(), WM_APP_PROGRESS, WM_APP_DONE);
+    auto& sz   = m_sevenZip;
+    progDlg.SetSink(sink);
+
+    WorkerThread worker;
+    worker.Start([&sz, params, sink, sfxModulePath]() -> HRESULT {
+        const wchar_t* pw = params.password.empty() ? nullptr : params.password.c_str();
+        CompressAdvanced adv;
+        adv.dictSize      = params.dictSize;
+        adv.wordSize      = params.wordSize;
+        adv.solidBlock    = params.solidBlock;
+        adv.threads       = params.threads;
+        adv.extra         = params.extra;
+        adv.volumeSize    = params.volumeSize;
+        adv.sfxModulePath = sfxModulePath;
+        return sz.Compress(params.inputFiles, params.outputPath.c_str(),
+                           params.format.c_str(), params.level,
+                           params.method.c_str(), pw, sink, &adv,
+                           params.encryptHeaders);
+    }, wnd.Hwnd(), WM_APP_DONE);
+
+    HRESULT hr = progDlg.RunMessageLoop();
+    worker.Wait();
+    delete sink;
+    if (FAILED(hr) && hr != E_ABORT)
+        MessageBoxW(wnd.Hwnd(), I18n::Tr(IDS_ERR_COMPRESS_FAILED).c_str(),
+                    I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
+
     return 0;
 }
 
@@ -305,9 +266,6 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
 
     const auto* enc = &m_sevenZip.GetEncoderNames();
     const auto* wf  = &m_sevenZip.GetWritableFormats();
-    const bool rarAvailable = !m_settings.GetRarExePath().empty()
-        ? (PathFileExistsW(m_settings.GetRarExePath().c_str()) == TRUE)
-        : !RarProcess::FindRarExe().empty();
 
     // RunCompressEachMode is only called from -w (always SW_HIDE), so skip dialog when -t/-ca given.
     const bool skipDialog = (!typeOverride.empty() || !sfxOverride.empty()) && (nCmdShow == SW_HIDE);
@@ -317,14 +275,14 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
         }
     } else {
         CompressDlg dlg;
-        if (!dlg.Show(wnd.Hwnd(), baseParams, enc, wf, rarAvailable)) return 0;
+        if (!dlg.Show(wnd.Hwnd(), baseParams, enc, wf)) return 0;
         CompressPolicy::Save(baseParams, m_settings);
         m_settings.Save();
     }
 
     // Resolve 7z SFX module once (reused for all files).
     std::wstring sfxModulePath;
-    if (!baseParams.sfxMode.empty() && baseParams.format != L"rar") {
+    if (!baseParams.sfxMode.empty()) {
         sfxModulePath = Resolve7zSfxModulePath(
             m_sevenZip.GetLoadedPath().c_str(), baseParams.sfxMode.c_str());
         if (sfxModulePath.empty()) {
@@ -358,41 +316,33 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
         ProgressDlg progDlg;
         progDlg.Show(wnd.Hwnd(), I18n::Tr(IDS_PROGRESS_COMPRESSING).c_str());
 
-        if (params.format == L"rar") {
-            auto* sink = new ProgressPostSink(wnd.Hwnd(), WM_APP_PROGRESS, WM_APP_DONE);
-            RunRarCompressSync(wnd.Hwnd(), params,
-                               m_settings.GetRarExePath().c_str(),
-                               progDlg, sink);
-            delete sink;
-        } else {
-            auto* sink = new ProgressPostSink(wnd.Hwnd(), WM_APP_PROGRESS, WM_APP_DONE);
-            auto& sz   = m_sevenZip;
-            progDlg.SetSink(sink);
+        auto* sink = new ProgressPostSink(wnd.Hwnd(), WM_APP_PROGRESS, WM_APP_DONE);
+        auto& sz   = m_sevenZip;
+        progDlg.SetSink(sink);
 
-            WorkerThread worker;
-            worker.Start([&sz, params, sink, sfxModulePath]() -> HRESULT {
-                const wchar_t* pw = params.password.empty() ? nullptr : params.password.c_str();
-                CompressAdvanced adv;
-                adv.dictSize      = params.dictSize;
-                adv.wordSize      = params.wordSize;
-                adv.solidBlock    = params.solidBlock;
-                adv.threads       = params.threads;
-                adv.extra         = params.extra;
-                adv.volumeSize    = params.volumeSize;
-                adv.sfxModulePath = sfxModulePath;
-                return sz.Compress(params.inputFiles, params.outputPath.c_str(),
-                                   params.format.c_str(), params.level,
-                                   params.method.c_str(), pw, sink, &adv,
-                                   params.encryptHeaders);
-            }, wnd.Hwnd(), WM_APP_DONE);
+        WorkerThread worker;
+        worker.Start([&sz, params, sink, sfxModulePath]() -> HRESULT {
+            const wchar_t* pw = params.password.empty() ? nullptr : params.password.c_str();
+            CompressAdvanced adv;
+            adv.dictSize      = params.dictSize;
+            adv.wordSize      = params.wordSize;
+            adv.solidBlock    = params.solidBlock;
+            adv.threads       = params.threads;
+            adv.extra         = params.extra;
+            adv.volumeSize    = params.volumeSize;
+            adv.sfxModulePath = sfxModulePath;
+            return sz.Compress(params.inputFiles, params.outputPath.c_str(),
+                               params.format.c_str(), params.level,
+                               params.method.c_str(), pw, sink, &adv,
+                               params.encryptHeaders);
+        }, wnd.Hwnd(), WM_APP_DONE);
 
-            HRESULT hr = progDlg.RunMessageLoop();
-            worker.Wait();
-            delete sink;
-            if (FAILED(hr) && hr != E_ABORT)
-                MessageBoxW(wnd.Hwnd(), I18n::Tr(IDS_ERR_COMPRESS_FAILED).c_str(),
-                            I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
-        }
+        HRESULT hr = progDlg.RunMessageLoop();
+        worker.Wait();
+        delete sink;
+        if (FAILED(hr) && hr != E_ABORT)
+            MessageBoxW(wnd.Hwnd(), I18n::Tr(IDS_ERR_COMPRESS_FAILED).c_str(),
+                        I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
     }
     return 0;
 }

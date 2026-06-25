@@ -40,19 +40,6 @@ OpResult MainWindow::RunOperation(const wchar_t* title,
     return { hr, sink->IsCancelled() };
 }
 
-HRESULT MainWindow::RunRarCompress(const CompressDlg::Params& params) {
-    ProgressDlg progDlg;
-    progDlg.Show(m_hwnd, I18n::Tr(IDS_PROGRESS_COMPRESSING).c_str());
-
-    SinkGuard sg(m_hwnd, m_pSink);
-    ProgressPostSink* sink = sg.sink;
-    progDlg.SetSink(sink);
-
-    return RunRarCompressSync(m_hwnd, params,
-                              m_svc.settings.GetRarExePath().c_str(),
-                              progDlg, sink);
-}
-
 bool MainWindow::BrowseDestFolder(std::wstring& dir) {
     return BrowseFolderDialog(m_hwnd, IDS_TITLE_SELECT_DEST_FOLDER, &dir);
 }

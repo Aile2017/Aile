@@ -4,8 +4,6 @@
 #include "I18n.h"
 #include "resource.h"
 #include "SevenZip.h"
-#include "UnrarDll.h"
-#include "RarProcess.h"
 #include <shlobj.h>
 #include <shobjidl_core.h>
 #include <commdlg.h>
@@ -57,14 +55,8 @@ INT_PTR SettingsDlg::HandleMsg(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case IDC_BROWSE_DIR:
             OnBrowseDir(hwnd);
             break;
-        case IDC_BROWSE_RAR:
-            OnBrowseFile(hwnd, IDC_RAR_EXE_PATH, IDS_FILTER_EXE, IDS_TITLE_SELECT_RAR);
-            break;
         case IDC_BROWSE_7Z:
             OnBrowseFile(hwnd, IDC_7Z_DLL_PATH, IDS_FILTER_DLL, IDS_TITLE_SELECT_7Z_DLL);
-            break;
-        case IDC_BROWSE_UNRAR:
-            OnBrowseFile(hwnd, IDC_UNRAR_DLL_PATH, IDS_FILTER_DLL, IDS_TITLE_SELECT_UNRAR_DLL);
             break;
         case IDOK:
             if (OnOK(hwnd)) EndDialog(hwnd, IDOK);
@@ -118,8 +110,6 @@ void SettingsDlg::OnInit(HWND hwnd) {
         return saved.empty() ? detected : saved;
     };
     SetDlgItemTextW(hwnd, IDC_7Z_DLL_PATH,    resolve(s.Get7zDllPath(),    SevenZip::Find7zDll()).c_str());
-    SetDlgItemTextW(hwnd, IDC_UNRAR_DLL_PATH, resolve(s.GetUnrarDllPath(), UnrarDll::FindUnrarDll()).c_str());
-    SetDlgItemTextW(hwnd, IDC_RAR_EXE_PATH,   resolve(s.GetRarExePath(),   RarProcess::FindRarExe()).c_str());
 }
 
 void SettingsDlg::OnBrowseFont(HWND hwnd) {
@@ -200,8 +190,6 @@ bool SettingsDlg::OnOK(HWND hwnd) {
         (s.*setter)(unchanged ? L"" : b);
     };
     saveAutoPath(IDC_7Z_DLL_PATH,    s.Get7zDllPath(),    SevenZip::Find7zDll(),    &Settings::Set7zDllPath);
-    saveAutoPath(IDC_UNRAR_DLL_PATH, s.GetUnrarDllPath(), UnrarDll::FindUnrarDll(), &Settings::SetUnrarDllPath);
-    saveAutoPath(IDC_RAR_EXE_PATH,   s.GetRarExePath(),   RarProcess::FindRarExe(), &Settings::SetRarExePath);
 
     s.Save();
     m_svc->reloadDlls();

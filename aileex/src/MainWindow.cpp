@@ -9,8 +9,6 @@
 #include "InfoDlg.h"
 #include "PropertiesDlg.h"
 #include "ProgressDlg.h"
-#include "RarProcess.h"
-#include "RarBackend.h"
 #include "SevenZipBackend.h"
 #include "ArchiveOpener.h"
 #include "SettingsDlg.h"
@@ -833,18 +831,6 @@ static INT_PTR CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
             std::wstring p = sz.GetLoadedPath();
             entries.push_back({ LeafName(p), p });
         }
-        auto& ur = svc->unrar;
-        if (ur.IsLoaded()) {
-            std::wstring p = ur.GetLoadedPath();
-            entries.push_back({ LeafName(p), p });
-        }
-        // RAR exe: if setting is empty, auto-detect (registry + known paths) as fallback,
-        // so About dialog shows it even if Settings not configured.
-        std::wstring rarExe = svc->settings.GetRarExePath();
-        if (rarExe.empty() || !PathFileExistsW(rarExe.c_str()))
-            rarExe = RarProcess::FindRarExe();
-        if (!rarExe.empty() && PathFileExistsW(rarExe.c_str()))
-            entries.push_back({ LeafName(rarExe), rarExe });
 
         // Get versions + align by max name column width
         size_t maxName = 0;

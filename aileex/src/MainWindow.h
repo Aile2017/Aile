@@ -9,7 +9,6 @@
 #include "ArchiveItem.h"
 #include "WorkerThread.h"
 #include "CompressDlg.h"
-#include "RarProcess.h"
 #include "IArchiveBackend.h"
 #include "ArchiveSession.h"
 #include "IArchiveUI.h"
@@ -102,7 +101,6 @@ private:
     // --- IArchiveUI implementation (UI services for ArchiveController) ---
     OpResult RunOperation(const wchar_t* title,
                 std::function<HRESULT(IExtractProgressSink*)> work) override;
-    HRESULT RunRarCompress(const CompressDlg::Params& params) override;
     std::wstring PromptPassword() override;   // entered password, or "" if cancelled
     std::wstring SelectedFolder() override { return SelectedFolderPath(); }
     std::wstring ExtractDestOverride() override { return m_extractDestOverride; }

@@ -4,7 +4,6 @@
 #include <string>
 #include "Settings.h"
 #include "SevenZip.h"
-#include "UnrarDll.h"
 #include "AppServices.h"
 
 class App {
@@ -17,9 +16,8 @@ public:
     HINSTANCE GetInstance() const { return m_hInst; }
     Settings& GetSettings()       { return m_settings; }
     SevenZip& Get7z()             { return m_sevenZip; }
-    UnrarDll& GetUnrar()          { return m_unrar; }
     // Reference bundle injected into the GUI object graph (see AppServices.h).
-    AppServices Services()        { return { m_settings, m_sevenZip, m_unrar,
+    AppServices Services()        { return { m_settings, m_sevenZip,
                                              [this]{ ReloadDlls(); } }; }
 
     // Reload DLLs after settings change.
@@ -58,5 +56,4 @@ private:
     HINSTANCE m_hInst   = nullptr;
     Settings  m_settings;
     SevenZip  m_sevenZip;
-    UnrarDll  m_unrar;
 };

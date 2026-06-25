@@ -10,19 +10,12 @@ namespace CompressPolicy {
 void Load(CompressDlg::Params& p, const Settings& s) {
     p.format         = s.GetDefaultFormat();
     p.level          = s.GetCompressionLevel();
-    p.rarLevel       = s.GetRarLevel();
     p.dictSize       = s.GetAdvDictSize();
     p.wordSize       = s.GetAdvWordSize();
     p.solidBlock     = s.GetAdvSolidBlock();
     p.threads        = s.GetAdvThreads();
     p.extra          = s.GetAdvExtra();
     p.volumeSize     = s.GetAdvVolume();
-    p.rarDictSize    = s.GetRarAdvDictSize();
-    p.rarSolid       = s.GetRarAdvSolid();
-    p.rarThreads     = s.GetRarAdvThreads();
-    p.rarRecoveryPct = s.GetRarAdvRecovery();
-    p.rarSplitVolume = s.GetRarAdvVolume();
-    p.rarExtra       = s.GetRarAdvExtra();
     // SFX mode is intentionally NOT loaded: the dialog must always open with SFX
     // off, and CLI "a" (no -sfx) must never inherit a remembered SFX state. SFX is
     // enabled only per invocation (dialog checkbox or -sfx switch).
@@ -32,28 +25,17 @@ void Load(CompressDlg::Params& p, const Settings& s) {
 void Save(const CompressDlg::Params& p, Settings& s) {
     s.SetDefaultFormat(p.format.c_str());
     s.SetCompressionLevel(p.level);
-    s.SetRarLevel(p.rarLevel);
     s.SetAdvDictSize(p.dictSize.c_str());
     s.SetAdvWordSize(p.wordSize.c_str());
     s.SetAdvSolidBlock(p.solidBlock.c_str());
     s.SetAdvThreads(p.threads.c_str());
     s.SetAdvExtra(p.extra.c_str());
     s.SetAdvVolume(p.volumeSize.c_str());
-    s.SetRarAdvDictSize(p.rarDictSize.c_str());
-    s.SetRarAdvSolid(p.rarSolid);
-    s.SetRarAdvThreads(p.rarThreads);
-    s.SetRarAdvRecovery(p.rarRecoveryPct);
-    s.SetRarAdvVolume(p.rarSplitVolume.c_str());
-    s.SetRarAdvExtra(p.rarExtra.c_str());
     // SFX mode is intentionally not persisted (see Load).
 }
 
 void NormalizeForFormat(CompressDlg::Params& p) {
-    if (p.format == L"rar") {
-        // RAR carries the compression level as the method digit (-m0..-m5).
-        p.rarLevel = p.level;
-        p.method   = std::to_wstring(p.level);
-    } else if (p.format != L"7z" && p.format != L"zip") {
+    if (p.format != L"7z" && p.format != L"zip") {
         // tar/gz/bz2/xz/... take no method.
         p.method.clear();
     } else if (p.level == 0 ||
@@ -63,8 +45,8 @@ void NormalizeForFormat(CompressDlg::Params& p) {
         // Store regardless, and the format default is byte-identical with/without it.
         p.method.clear();
     }
-    // SFX is valid only for 7z / RAR.
-    if (p.format != L"7z" && p.format != L"rar")
+    // SFX is valid only for 7z.
+    if (p.format != L"7z")
         p.sfxMode.clear();
 }
 
@@ -82,8 +64,7 @@ bool NeedsTarWrapper(const std::wstring& format,
 std::wstring OutputExtension(const std::wstring& format,
                              const std::wstring& sfxMode, bool needsTar) {
     bool is7z  = (format == L"7z");
-    bool isRar = (format == L"rar");
-    bool sfxOn = !sfxMode.empty() && (is7z || isRar);
+    bool sfxOn = !sfxMode.empty() && is7z;
     if (sfxOn)   return L".exe";
     if (needsTar) return L".tar." + format;
     return L"." + format;

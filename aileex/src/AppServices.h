@@ -2,7 +2,6 @@
 #include <functional>
 #include "Settings.h"
 #include "SevenZip.h"
-#include "UnrarDll.h"
 
 // Bundle of the app-owned services, injected by reference into the GUI object
 // graph (MainWindow → ArchiveController, dialogs) instead of reaching the App
@@ -11,8 +10,7 @@
 struct AppServices {
     Settings& settings;
     SevenZip& sevenZip;
-    UnrarDll& unrar;
-    // App-level "reload the 7z/unrar DLLs from current settings" action, injected
+    // App-level "reload the 7z DLL from current settings" action, injected
     // so the settings dialog can trigger it without reaching App::Instance().
     std::function<void()> reloadDlls;
 };

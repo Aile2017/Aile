@@ -9,7 +9,6 @@ void Settings::BuildIniPath() const {
 
 void Settings::Load() {
     BuildIniPath();
-    m_rarExePath       = ReadStr(L"General", L"RarExePath",       L"");
     m_defaultOutputDir = ReadStr(L"General", L"DefaultOutputDir", L"");
     {
         std::wstring mode = ReadStr(L"General", L"OutputDirMode", L"source");
@@ -17,7 +16,6 @@ void Settings::Load() {
     }
     m_defaultFormat    = ReadStr(L"General", L"DefaultFormat",    L"7z");
     m_7zDllPath        = ReadStr(L"General", L"7zDllPath",        L"");
-    m_unrarDllPath     = ReadStr(L"General", L"UnrarDllPath",     L"");
     m_fontName         = ReadStr(L"General", L"FontName",         L"Segoe UI");
 
     wchar_t buf[16] = {};
@@ -27,10 +25,6 @@ void Settings::Load() {
     GetPrivateProfileStringW(L"General", L"CompressionLevel", L"5", buf, 16, m_iniPath);
     m_compressionLevel = _wtoi(buf);
     if (m_compressionLevel < 0 || m_compressionLevel > 9) m_compressionLevel = 5;
-
-    GetPrivateProfileStringW(L"General", L"RarLevel", L"3", buf, 16, m_iniPath);
-    m_rarLevel = _wtoi(buf);
-    if (m_rarLevel < 0 || m_rarLevel > 5) m_rarLevel = 3;
 
     GetPrivateProfileStringW(L"General", L"MkDir", L"2", buf, 16, m_iniPath);
     m_mkDir = _wtoi(buf);
@@ -54,14 +48,6 @@ void Settings::Load() {
     m_advThreads    = ReadStr(L"AdvancedCompress", L"Threads",    L"");
     m_advExtra      = ReadStr(L"AdvancedCompress", L"Extra",      L"");
     m_advVolume     = ReadStr(L"AdvancedCompress", L"Volume",     L"");
-
-    // RAR advanced compress options
-    m_rarAdvDictSize  = ReadStr(L"RarAdvanced", L"DictSize",  L"");
-    m_rarAdvVolume    = ReadStr(L"RarAdvanced", L"Volume",    L"");
-    m_rarAdvExtra     = ReadStr(L"RarAdvanced", L"Extra",     L"");
-    GetPrivateProfileStringW(L"RarAdvanced", L"Solid",    L"1", buf, 16, m_iniPath); m_rarAdvSolid    = _wtoi(buf) != 0;
-    GetPrivateProfileStringW(L"RarAdvanced", L"Threads",  L"0", buf, 16, m_iniPath); m_rarAdvThreads  = _wtoi(buf);
-    GetPrivateProfileStringW(L"RarAdvanced", L"Recovery", L"0", buf, 16, m_iniPath); m_rarAdvRecovery = _wtoi(buf);
 
     // Window placement
     GetPrivateProfileStringW(L"Window", L"X",         L"-1",    buf, 16, m_iniPath); m_windowX        = _wtoi(buf);
@@ -92,12 +78,10 @@ void Settings::Load() {
 void Settings::Save() const {
     // Guard against writing to an empty path if Save() is called before Load()
     if (!m_iniPath[0]) BuildIniPath();
-    WriteStr(L"General", L"RarExePath",       m_rarExePath.c_str());
     WriteStr(L"General", L"DefaultOutputDir", m_defaultOutputDir.c_str());
     WriteStr(L"General", L"OutputDirMode",    m_outputDirModeFixed ? L"fixed" : L"source");
     WriteStr(L"General", L"DefaultFormat",    m_defaultFormat.c_str());
     WriteStr(L"General", L"7zDllPath",        m_7zDllPath.c_str());
-    WriteStr(L"General", L"UnrarDllPath",     m_unrarDllPath.c_str());
     WriteStr(L"General", L"FontName",         m_fontName.c_str());
     WriteStr(L"General", L"OpenFolderAfterExtract", m_openFolderAfterExtract ? L"1" : L"0");
     WriteStr(L"General", L"OpenFolderCommand",      m_openFolderCommand.c_str());
@@ -105,9 +89,6 @@ void Settings::Save() const {
     wchar_t buf[16] = {};
     _itow_s(m_compressionLevel, buf, 10);
     WriteStr(L"General", L"CompressionLevel", buf);
-
-    _itow_s(m_rarLevel, buf, 10);
-    WriteStr(L"General", L"RarLevel", buf);
 
     _itow_s(m_mkDir, buf, 10);
     WriteStr(L"General", L"MkDir", buf);
@@ -125,14 +106,6 @@ void Settings::Save() const {
     WriteStr(L"AdvancedCompress", L"Threads",    m_advThreads.c_str());
     WriteStr(L"AdvancedCompress", L"Extra",      m_advExtra.c_str());
     WriteStr(L"AdvancedCompress", L"Volume",     m_advVolume.c_str());
-
-    // RAR advanced compress options
-    WriteStr(L"RarAdvanced", L"DictSize",  m_rarAdvDictSize.c_str());
-    WriteStr(L"RarAdvanced", L"Volume",    m_rarAdvVolume.c_str());
-    WriteStr(L"RarAdvanced", L"Extra",     m_rarAdvExtra.c_str());
-    _itow_s(m_rarAdvSolid    ? 1 : 0, buf, 10); WriteStr(L"RarAdvanced", L"Solid",    buf);
-    _itow_s(m_rarAdvThreads,           buf, 10); WriteStr(L"RarAdvanced", L"Threads",  buf);
-    _itow_s(m_rarAdvRecovery,          buf, 10); WriteStr(L"RarAdvanced", L"Recovery", buf);
 
     // Window placement
     _itow_s(m_windowX,  buf, 10); WriteStr(L"Window", L"X",         buf);

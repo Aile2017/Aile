@@ -7,16 +7,13 @@
 #include "ArchiveItem.h"
 
 class SevenZip;
-class UnrarDll;
 
 // Owns the backend-selection policy that used to live inline in
 // MainWindow::OpenArchive: which IArchiveBackend to try and in what order, the
 // S_FALSE / failure fallback to the next candidate, and the password retry across
 // all candidates (a previously known password first, then a UI prompt).
 //
-//   - .rar : prefer unrar (RarBackend, read=unrar / write=rar.exe), then 7z as a
-//            read-only fallback.
-//   - other: 7z only.
+//   - 7z only.
 //
 // Only engines that are actually loaded become candidates, so a missing DLL is
 // simply skipped. A successful Open() returns a fully-bound backend ready for
@@ -35,14 +32,12 @@ public:
         bool                             anyCandidate = false;  // false → no engine available
     };
 
-    ArchiveOpener(SevenZip& sz, UnrarDll& unrar, std::wstring rarExePath)
-        : m_sz(sz), m_unrar(unrar), m_rarExePath(std::move(rarExePath)) {}
+    ArchiveOpener(SevenZip& sz)
+        : m_sz(sz) {}
 
     Result Open(const wchar_t* path, const std::wstring& knownPassword,
                 const PasswordPrompt& promptPassword);
 
 private:
     SevenZip&    m_sz;
-    UnrarDll&    m_unrar;
-    std::wstring m_rarExePath;
 };

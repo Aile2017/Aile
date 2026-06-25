@@ -16,9 +16,6 @@ public:
                                                  const std::vector<std::wstring>& srcFiles,
                                                  const std::wstring& overrideDir = L"");
 
-    const std::wstring& GetRarExePath() const       { return m_rarExePath; }
-    void SetRarExePath(const wchar_t* v)            { m_rarExePath = v; }
-
     const std::wstring& GetDefaultOutputDir() const { return m_defaultOutputDir; }
     void SetDefaultOutputDir(const wchar_t* v)      { m_defaultOutputDir = v; }
 
@@ -50,9 +47,6 @@ public:
     bool GetBreakDDir() const                       { return m_breakDDir; }
     void SetBreakDDir(bool v)                       { m_breakDDir = v; }
 
-    int  GetRarLevel() const                        { return m_rarLevel; }
-    void SetRarLevel(int v)                         { m_rarLevel = v; }
-
     // Advanced compress options (last-used values)
     const std::wstring& GetAdvDictSize() const      { return m_advDictSize; }
     const std::wstring& GetAdvWordSize() const      { return m_advWordSize; }
@@ -66,20 +60,6 @@ public:
     void SetAdvThreads(const wchar_t* v)            { m_advThreads    = v; }
     void SetAdvExtra(const wchar_t* v)              { m_advExtra      = v; }
     void SetAdvVolume(const wchar_t* v)             { m_advVolume     = v; }
-
-    // RAR advanced options (last-used values)
-    const std::wstring& GetRarAdvDictSize() const   { return m_rarAdvDictSize; }
-    bool                GetRarAdvSolid() const      { return m_rarAdvSolid; }
-    int                 GetRarAdvThreads() const    { return m_rarAdvThreads; }
-    int                 GetRarAdvRecovery() const   { return m_rarAdvRecovery; }
-    const std::wstring& GetRarAdvVolume() const     { return m_rarAdvVolume; }
-    const std::wstring& GetRarAdvExtra() const      { return m_rarAdvExtra; }
-    void SetRarAdvDictSize(const wchar_t* v)        { m_rarAdvDictSize  = v; }
-    void SetRarAdvSolid(bool v)                     { m_rarAdvSolid     = v; }
-    void SetRarAdvThreads(int v)                    { m_rarAdvThreads   = v; }
-    void SetRarAdvRecovery(int v)                   { m_rarAdvRecovery  = v; }
-    void SetRarAdvVolume(const wchar_t* v)          { m_rarAdvVolume    = v; }
-    void SetRarAdvExtra(const wchar_t* v)           { m_rarAdvExtra     = v; }
 
     // Window placement
     int  GetWindowX() const          { return m_windowX; }
@@ -105,9 +85,6 @@ public:
     const std::wstring& Get7zDllPath() const        { return m_7zDllPath; }
     void Set7zDllPath(const wchar_t* v)             { m_7zDllPath = v; }
 
-    const std::wstring& GetUnrarDllPath() const     { return m_unrarDllPath; }
-    void SetUnrarDllPath(const wchar_t* v)          { m_unrarDllPath = v; }
-
     const std::wstring& GetFontName() const         { return m_fontName; }
     void SetFontName(const wchar_t* v)              { m_fontName = v; }
 
@@ -127,12 +104,10 @@ private:
     mutable wchar_t m_iniPath[MAX_PATH] = {};
 
     // All members are initialized by Load() before use
-    std::wstring m_rarExePath;
     std::wstring m_defaultOutputDir;
     bool         m_outputDirModeFixed;
     std::wstring m_defaultFormat;
     int          m_compressionLevel;
-    int          m_rarLevel;
     int          m_mkDir;
     int          m_extStripMode;
     bool         m_stripTrailingNumber;
@@ -143,12 +118,6 @@ private:
     std::wstring m_advThreads;
     std::wstring m_advExtra;
     std::wstring m_advVolume;
-    std::wstring m_rarAdvDictSize;
-    bool         m_rarAdvSolid;
-    int          m_rarAdvThreads;
-    int          m_rarAdvRecovery;
-    std::wstring m_rarAdvVolume;
-    std::wstring m_rarAdvExtra;
     int          m_windowX;
     int          m_windowY;
     int          m_windowW;
@@ -160,7 +129,6 @@ private:
     bool         m_iconsVisible;
     bool         m_menubarVisible;
     std::wstring m_7zDllPath;
-    std::wstring m_unrarDllPath;
     std::wstring m_fontName;
     bool         m_openFolderAfterExtract = false;
     std::wstring m_openFolderCommand;

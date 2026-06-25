@@ -1,7 +1,5 @@
 #include "ArchiveOpener.h"
 #include "SevenZip.h"
-#include "UnrarDll.h"
-#include "RarBackend.h"
 #include "SevenZipBackend.h"
 #include <cwchar>
 
@@ -10,13 +8,8 @@ ArchiveOpener::Result ArchiveOpener::Open(const wchar_t* path,
                                           const PasswordPrompt& promptPassword) {
     Result result;
 
-    const wchar_t* dot = path ? wcsrchr(path, L'.') : nullptr;
-    bool isRar = dot && _wcsicmp(dot + 1, L"rar") == 0;
-
     // Build candidates in priority order, including only loaded engines.
     std::vector<std::unique_ptr<IArchiveBackend>> candidates;
-    if (isRar && m_unrar.IsLoaded())
-        candidates.push_back(std::make_unique<RarBackend>(m_unrar, m_rarExePath));
     if (m_sz.IsLoaded())
         candidates.push_back(std::make_unique<SevenZipBackend>(m_sz));
 

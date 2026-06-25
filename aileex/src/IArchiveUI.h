@@ -25,10 +25,6 @@ public:
     // the worker thread under a modal progress dialog titled `title`.
     virtual OpResult RunOperation(const wchar_t* title,
                     std::function<HRESULT(IExtractProgressSink*)> work) = 0;
-    // RAR compression bridge: rar.exe posts its own window messages, so it needs
-    // the progress dialog wired directly (see CompressHelper::RunRarCompressSync).
-    // Returns E_FAIL on launch failure (already surfaced), else the run result.
-    virtual HRESULT RunRarCompress(const CompressDlg::Params& params) = 0;
 
     // Prompts / pickers.
     virtual std::wstring PromptPassword() = 0;

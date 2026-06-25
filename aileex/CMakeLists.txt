@@ -29,7 +29,6 @@ add_executable(AileEx WIN32
     src/CompressPolicy.cpp
     src/CompressHelper.cpp
     src/AdvancedCompressDlg.cpp
-    src/RarAdvancedDlg.cpp
     src/InfoDlg.cpp
     src/PropertiesDlg.cpp
     src/CommentDlg.cpp
@@ -43,9 +42,6 @@ add_executable(AileEx WIN32
     src/SevenZipCache.cpp
     src/FormatRegistry.cpp
     src/SevenZipBackend.cpp
-    src/UnrarDll.cpp
-    src/RarBackend.cpp
-    src/RarProcess.cpp
     src/ArchiveOpener.cpp
     ${COMMON_DIR}/I18n.cpp
     ${COMMON_DIR}/WorkerThread.cpp
