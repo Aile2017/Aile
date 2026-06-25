@@ -144,20 +144,3 @@ if(MSVC)
         "/DEF:${CMAKE_CURRENT_SOURCE_DIR}/shell/AileExShell.def"
     )
 endif()
-
-# Generate the per-user register/unregister helpers next to the shell DLL. The
-# name and the DLL they target carry the bit suffix, so a 64-bit tree produces
-# AileEx_register.bat (→ AileExShell.dll) and an x86 tree produces
-# AileEx32_register.bat (→ AileExShell32.dll). A 32-bit DLL must be (un)registered
-# by the SysWOW64 regsvr32 so it loads and writes into the 32-bit registry view.
-set(SHELL_APP "AileEx${BITSUFFIX}")
-set(SHELL_DLL "AileExShell${BITSUFFIX}.dll")
-if(BITSUFFIX)
-    set(SHELL_REGSVR "%SystemRoot%\\SysWOW64\\regsvr32.exe")
-else()
-    set(SHELL_REGSVR "regsvr32")
-endif()
-configure_file(${COMMON_DIR}/shell/register.bat.in
-               ${CMAKE_CURRENT_BINARY_DIR}/AileEx${BITSUFFIX}_register.bat   @ONLY)
-configure_file(${COMMON_DIR}/shell/unregister.bat.in
-               ${CMAKE_CURRENT_BINARY_DIR}/AileEx${BITSUFFIX}_unregister.bat @ONLY)
