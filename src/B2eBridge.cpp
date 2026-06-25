@@ -364,16 +364,18 @@ HRESULT B2e_List(const wchar_t* archivePath, std::vector<ArchiveItem>& items,
         // szFileName (wide) → path
         item.path = af.inf.szFileName;
 
-        // Entries whose path ends with a separator are explicitly marked as dirs.
-        item.isDir = !item.path.empty() &&
-                     (item.path.back() == L'/' || item.path.back() == L'\\');
+        // Normalize: convert backslashes to forward slashes
+        for (auto& c : item.path) if (c == L'\\') c = L'/';
 
-        if (item.isDir) {
+        // Entries whose path ends with a separator are explicitly marked as dirs.
+        // Strip trailing slashes
+        while (!item.path.empty() && item.path.back() == L'/') {
+            item.isDir = true;
             item.path.pop_back();
         }
 
-        // Leaf name (part after last / or \)
-        std::wstring::size_type pos = item.path.find_last_of(L"/\\");
+        // Leaf name (part after last /)
+        std::wstring::size_type pos = item.path.rfind(L'/');
         item.name = (pos != std::wstring::npos) ? item.path.substr(pos + 1) : item.path;
 
         // rawline → comment (used by the "Info" ListView column).
@@ -391,15 +393,12 @@ HRESULT B2e_List(const wchar_t* archivePath, std::vector<ArchiveItem>& items,
         for (const auto& it : items) allPaths.insert(it.path);
         for (auto& it : items) {
             if (!it.isDir && !it.path.empty()) {
-                for (wchar_t sep : { L'/', L'\\' }) {
-                    std::wstring prefix = it.path + sep;
-                    auto lo = allPaths.lower_bound(prefix);
-                    if (lo != allPaths.end() &&
-                        lo->size() > prefix.size() &&
-                        lo->substr(0, prefix.size()) == prefix) {
-                        it.isDir = true;
-                        break;
-                    }
+                std::wstring prefix = it.path + L'/';
+                auto lo = allPaths.lower_bound(prefix);
+                if (lo != allPaths.end() &&
+                    lo->size() > prefix.size() &&
+                    lo->substr(0, prefix.size()) == prefix) {
+                    it.isDir = true;
                 }
             }
         }

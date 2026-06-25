@@ -1,5 +1,5 @@
 // List/tree view: population, sorting, selection and navigation for MainWindow.
-// Split out of MainWindow.cpp. AileEx-only.
+// Split out of MainWindow.cpp.
 #include "MainWindow.h"
 #include "App.h"
 #include "CompressDlg.h"
@@ -464,7 +464,14 @@ void MainWindow::PopulateList(const std::wstring& folderPath) {
         ListView_InsertItem(m_hListView, &lvi);
 
         // Size column
-        std::wstring sizeStr = it.isDir ? L"" : FormatFileSize(it.size);
+        std::wstring sizeStr;
+        if (it.isDir) {
+            sizeStr = L"";
+        } else if (!it.comment.empty()) {
+            sizeStr = it.comment; // B2E raw output line fallback
+        } else {
+            sizeStr = FormatFileSize(it.size);
+        }
         ListView_SetItemText(m_hListView, row, 1, const_cast<wchar_t*>(sizeStr.c_str()));
 
         // Packed size
