@@ -88,16 +88,16 @@ jobs:
         run: |
           $tag = "${{ steps.names.outputs.aile_tag }}"
           New-Item -ItemType Directory -Force pkg_aile\bin | Out-Null
-          Copy-Item build_release\aile\Aile.exe pkg_aile\Aile.exe
-          Copy-Item aile\README.md               pkg_aile\README.md
-          Copy-Item -Recurse aile\Release\b2e    pkg_aile\b2e
+          Copy-Item build_release\Aile.exe pkg_aile\Aile.exe
+          Copy-Item README.md               pkg_aile\README.md
+          Copy-Item -Recurse b2e            pkg_aile\b2e
           $vendor = "third_party\7zip-zstd"
           Copy-Item $vendor\7z.dll      pkg_aile\bin\7z.dll
           Copy-Item $vendor\7z.sfx      pkg_aile\bin\7z.sfx
           Copy-Item $vendor\7zCon.sfx   pkg_aile\bin\7zCon.sfx
           Copy-Item $vendor\License.txt pkg_aile\bin\License.txt
-          Copy-Item build_release\aile\AileShell.dll        pkg_aile\AileShell.dll
-          Copy-Item build_release_x86\aile\AileShell32.dll        pkg_aile\AileShell32.dll
+          Copy-Item build_release\AileShell.dll        pkg_aile\AileShell.dll
+          Copy-Item build_release_x86\AileShell32.dll        pkg_aile\AileShell32.dll
           Copy-Item build_release_setup\ailesetup\AileSetup.exe pkg_aile\AileSetup.exe
           Compress-Archive -Path pkg_aile\* -DestinationPath "${tag}.zip"
           Write-Host "Created: ${tag}.zip ($([Math]::Round((Get-Item "${tag}.zip").Length/1KB)) KB)"
