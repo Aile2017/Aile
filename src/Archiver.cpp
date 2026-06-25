@@ -45,7 +45,9 @@ CArcModule::CArcModule( const wchar_t* name )
 					if (RegOpenKeyExW(root, L"SOFTWARE\\WinRAR", 0, sam, &hKey) == ERROR_SUCCESS) {
 						wchar_t buf[MAX_PATH] = {};
 						DWORD sz = sizeof(buf), type = 0;
-						if (RegQueryValueExW(hKey, L"exe32", nullptr, &type, (BYTE*)buf, &sz) == ERROR_SUCCESS && type == REG_SZ) {
+						// Try exe64 first, then exe32
+						if ((RegQueryValueExW(hKey, L"exe64", nullptr, &type, (BYTE*)buf, &sz) == ERROR_SUCCESS && type == REG_SZ) ||
+							(RegQueryValueExW(hKey, L"exe32", nullptr, &type, (BYTE*)buf, &sz) == ERROR_SUCCESS && type == REG_SZ)) {
 							RegCloseKey(hKey);
 							std::wstring exePath(buf);
 							auto slash = exePath.rfind(L'\\');
