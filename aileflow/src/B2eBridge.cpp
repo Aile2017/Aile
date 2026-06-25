@@ -364,13 +364,17 @@ HRESULT B2e_List(const wchar_t* archivePath, std::vector<ArchiveItem>& items,
         // szFileName (wide) → path
         item.path = af.inf.szFileName;
 
-        // Leaf name (part after last / or \)
-        std::wstring::size_type pos = item.path.find_last_of(L"/\\");
-        item.name = (pos != std::wstring::npos) ? item.path.substr(pos + 1) : item.path;
-
         // Entries whose path ends with a separator are explicitly marked as dirs.
         item.isDir = !item.path.empty() &&
                      (item.path.back() == L'/' || item.path.back() == L'\\');
+
+        if (item.isDir) {
+            item.path.pop_back();
+        }
+
+        // Leaf name (part after last / or \)
+        std::wstring::size_type pos = item.path.find_last_of(L"/\\");
+        item.name = (pos != std::wstring::npos) ? item.path.substr(pos + 1) : item.path;
 
         // rawline → comment (used by the "Info" ListView column).
         item.comment = af.rawline;
