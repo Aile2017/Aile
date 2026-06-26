@@ -329,8 +329,7 @@ void MainWindow::CreateControls(HWND hwnd) {
     SendMessageW(m_hToolbar, TB_BUTTONSTRUCTSIZE, sizeof(TBBUTTON), 0);
 
     // The toolbar control does not scale bitmaps, so button size is bound to the
-    // source bitmap size (32x32). Down-scale the BMPs into an image list to get
-    // smaller buttons. Button size is then derived automatically (bitmap + padding).
+    // source bitmap size. 
     constexpr int kIconSize = 24;
     SendMessageW(m_hToolbar, TB_SETBITMAPSIZE, 0, MAKELPARAM(kIconSize, kIconSize));
     // Vertical padding centres the icon in a taller button, giving breathing room
@@ -338,40 +337,27 @@ void MainWindow::CreateControls(HWND hwnd) {
     SendMessageW(m_hToolbar, TB_SETPADDING,    0, MAKELPARAM(4, 10));
 
     const UINT bmpIds[] = {
-        IDB_TOOLBAR_EXTRACT, IDB_TOOLBAR_OPEN, IDB_TOOLBAR_ADD,
+        IDB_TOOLBAR_EXTRACT, IDB_TOOLBAR_ADD, IDB_TOOLBAR_DELETE,
         IDB_TOOLBAR_INFO,    IDB_TOOLBAR_TEST, IDB_TOOLBAR_SETTINGS,
     };
-    m_hToolbarImages = ImageList_Create(kIconSize, kIconSize, ILC_COLOR32 | ILC_MASK,
-                                        _countof(bmpIds), 0);
-    HDC hdcScreen = GetDC(nullptr);
+    
+    // The new 24x24 bitmaps are fully 32-bit with proper alpha channels (anti-aliasing).
+    // Use ILC_COLOR32 and simply Add them to retain the native alpha blending.
+    m_hToolbarImages = ImageList_Create(kIconSize, kIconSize, ILC_COLOR32, _countof(bmpIds), 0);
     for (UINT id : bmpIds) {
         HBITMAP hSrc = (HBITMAP)LoadImageW(hInst, MAKEINTRESOURCEW(id), IMAGE_BITMAP,
                                            0, 0, LR_CREATEDIBSECTION);
-        HDC hdcSrc = CreateCompatibleDC(hdcScreen);
-        HDC hdcDst = CreateCompatibleDC(hdcScreen);
-        HBITMAP hDst = CreateCompatibleBitmap(hdcScreen, kIconSize, kIconSize);
-        HBITMAP hOldSrc = (HBITMAP)SelectObject(hdcSrc, hSrc);
-        HBITMAP hOldDst = (HBITMAP)SelectObject(hdcDst, hDst);
-        // The (0,0) pixel is the transparent key colour, as the toolbar used to treat it.
-        // COLORONCOLOR keeps the background pure so the colour-key mask has no halo.
-        COLORREF crBg = GetPixel(hdcSrc, 0, 0);
-        SetStretchBltMode(hdcDst, COLORONCOLOR);
-        StretchBlt(hdcDst, 0, 0, kIconSize, kIconSize, hdcSrc, 0, 0, 32, 32, SRCCOPY);
-        SelectObject(hdcSrc, hOldSrc);
-        SelectObject(hdcDst, hOldDst);
-        ImageList_AddMasked(m_hToolbarImages, hDst, crBg);
-        DeleteObject(hDst);
-        DeleteObject(hSrc);
-        DeleteDC(hdcSrc);
-        DeleteDC(hdcDst);
+        if (hSrc) {
+            ImageList_Add(m_hToolbarImages, hSrc, nullptr);
+            DeleteObject(hSrc);
+        }
     }
-    ReleaseDC(nullptr, hdcScreen);
     SendMessageW(m_hToolbar, TB_SETIMAGELIST, 0, (LPARAM)m_hToolbarImages);
 
     TBBUTTON btns[] = {
         {0, ID_EXTRACT_SMART, TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
-        {1, ID_OPEN_ASSOC,    TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
-        {2, ID_ADD,           TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
+        {1, ID_ADD,           TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
+        {2, ID_DELETE,        TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
         {3, ID_INFO,          TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
         {4, ID_TEST,          TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
         {0, 0,                0,               BTNS_SEP,    {}, 0, 0},

@@ -9,7 +9,7 @@
 
 // Toolbar bitmaps
 #define IDB_TOOLBAR_EXTRACT 111
-#define IDB_TOOLBAR_OPEN    112
+#define IDB_TOOLBAR_DELETE  112
 #define IDB_TOOLBAR_ADD     113
 #define IDB_TOOLBAR_INFO    114
 #define IDB_TOOLBAR_SETTINGS 115
