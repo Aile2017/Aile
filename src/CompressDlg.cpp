@@ -391,9 +391,10 @@ void CompressDlg::OnFormatChange(HWND hwnd) {
         }
         SendMessageW(hMethod, CB_SETCURSEL, defaultIdx, 0);
         
-        // Update level combo and output extension based on the final determined method
-        UpdateLevelList(hwnd);
-        OnMethodChange(hwnd);
+        // Return without calling OnMethodChange directly from here.
+        // The GUI event loop or the caller (like OnInit) handles the cascade.
+        // Only update the extension explicitly.
+        UpdateOutputExt(hwnd, fmtId, currentSfxId.c_str(), L"");
         return;
     }
 
@@ -451,7 +452,11 @@ void CompressDlg::OnFormatChange(HWND hwnd) {
         
     // Update level combo and output extension based on the final determined method
     UpdateLevelList(hwnd);
-    OnMethodChange(hwnd);
+    
+    // Explicitly update extension without triggering another MethodChange cycle
+    int msel = (int)SendMessageW(hMethod, CB_GETCURSEL, 0, 0);
+    const wchar_t* methodId = (msel != CB_ERR) ? (const wchar_t*)SendMessageW(hMethod, CB_GETITEMDATA, msel, 0) : L"";
+    UpdateOutputExt(hwnd, fmtId, currentSfxId.c_str(), methodId);
 }
 
 void CompressDlg::OnBrowseOutput(HWND hwnd) {
