@@ -1,9 +1,9 @@
-﻿# AileEx Architecture
+# Aile Architecture
 
 ## Directory Structure
 
 ```
-AileEx/
+
 ├── CMakeLists.txt
 ├── CLAUDE.md
 ├── docs/
@@ -13,11 +13,11 @@ AileEx/
 │   ├── known-issues.md
 │   ├── roadmap.md
 │   ├── compress-extra-params.md  — 7z/ZIP ISetProperties key=value parameter reference
-│   └── rar-extra-params.md       — rar.exe switch reference for RAR compression
+│   └── rar-extra-params.md       — B2E scripts switch reference for RAR compression
 ├── src/
 │   ├── main.cpp                   — wWinMain, argument parsing, mode routing
 │   ├── App.h/.cpp                 — Singleton, DLL load management, message loop; Services() builds AppServices
-│   ├── AppServices.h              — Injected service bundle (Settings/SevenZip/UnrarDll + reloadDlls) for the GUI
+│   ├── AppServices.h              — Injected service bundle (Settings/SevenZip/B2eBridge + reloadDlls) for the GUI
 │   ├── MainWindow.h               — Browse window class (menu + toolbar + TreeView + ListView + status bar)
 │   ├── MainWindow.cpp             — window lifecycle, message routing, layout, menus, dialogs (core)
 │   ├── MainWindowView.cpp         — tree/list population, sorting, selection, navigation
@@ -29,7 +29,7 @@ AileEx/
 │   ├── CompressPolicy.h/.cpp      — Archive policy: settings persistence, format/method/SFX + extension rules (shared by dialog + CLI)
 │   ├── AdvancedCompressDlg.h/.cpp — 7z/ZIP advanced compression options (dict/word/solid/threads/extra)
 │   ├── RarAdvancedDlg.h/.cpp      — RAR advanced compression options (recovery/volume etc.)
-│   ├── CompressHelper.h/.cpp      — Single entry point for RAR compression (`RunRarCompressSync`)
+│   ├── CompressHelper.h/.cpp      — Single entry point for RAR compression (`RunB2eCompressSync`)
 │   ├── ProgressDlg.h/.cpp         — Modal progress dialog
 │   ├── SettingsDlg.h/.cpp         — Settings dialog
 │   ├── InfoDlg.h/.cpp             — Entry details display dialog
@@ -45,19 +45,19 @@ AileEx/
 │   ├── SevenZipStreams.h/.cpp     — COM stream wrappers (CInFileStream/COutFileStream/CTempOutStream/CMultiVolOutStream) + ConcatFiles/ParseVolumeSize
 │   ├── SevenZipCallbacks.h/.cpp   — COM callbacks (COpen*/CTar*/CExtract*/CTest*/CUpdate*/CDelete*/CAdd*) + SrcEntry/EnumeratePaths/CanonicalizePath
 │   ├── FormatRegistry.h/.cpp      — Format/codec registry (ext→CLSID, writable formats, encoders, filters); composed by SevenZip
-│   ├── UnrarDll.h/.cpp            — unrar.dll C API wrapper
-│   ├── RarProcess.h/.cpp          — WinRAR.exe (GUI) / Rar.exe (console) subprocess (Compress / Delete)
+│   ├── B2eBridge.h/.cpp            — B2E scripts C API wrapper
+│   ├── B2eProcess.h/.cpp          — B2E scripts subprocess (Compress / Delete)
 │   ├── IArchiveBackend.h          — Per-session archive backend interface (Open/Extract/Test/Add/Delete/comment + capabilities)
 │   ├── SevenZipBackend.h/.cpp     — IArchiveBackend adapter over 7z.dll
-│   ├── RarBackend.h/.cpp          — IArchiveBackend adapter over unrar.dll (read) + RarProcess (write)
+│   ├── B2eBackend.h/.cpp          — IArchiveBackend adapter over B2E scripts (read) + B2eProcess (write)
 │   ├── ArchiveOpener.h/.cpp       — Backend selection / open-time fallback / password retry
 │   ├── ArchiveItem.h              — Archive entry POD struct
 │   ├── I18n.h/.cpp                — Localized string loading (en-US / ja-JP via SetProcessPreferredUILanguages)
 │   ├── WorkerThread.h/.cpp        — Worker thread + IExtractProgressSink + ProgressPostSink
 │   └── resource.h                 — Resource IDs, WM_APP_* constants
 ├── res/
-│   ├── AileEx.rc            — Dialog templates, accelerators, embedded manifest
-│   ├── AileEx.ico           — Application icon
+│   ├── Aile.rc            — Dialog templates, accelerators, embedded manifest
+│   ├── Aile.ico           — Application icon
 │   └── manifest.xml         — Common Controls v6, dpiAware = PerMonitorV2
 └── sdk/
     └── 7zip/                — Minimal 7-Zip SDK headers
@@ -80,7 +80,7 @@ AileEx/
                   ┌────────▼─────────┐
                   │      App         │←─ Settings (INI read/write, MRU)
                   │ (Singleton)      │←─ SevenZip (7z.dll wrapper)
-                  │                  │←─ UnrarDll (unrar.dll wrapper)
+                  │                  │←─ B2eBridge (B2E scripts wrapper)
                   └────────┬─────────┘
                            │
               ┌────────────┴────────────┐
@@ -98,8 +98,8 @@ AileEx/
        ┌──────┼──────┬──────────┬────────┐  │
        ▼      ▼      ▼          ▼        ▼  ▼
   ┌─────────┐┌─────────┐┌────────┐┌───────────────────┐┌─────────────┐
-  │ProgressDlg│SettingsDlg││InfoDlg ││IDD_PASSWORD       ││ RarProcess   │
-  │ + Cancel │└─────────┘└────────┘│(PromptPassword())  ││ (WinRAR/Rar) │
+  │ProgressDlg│SettingsDlg││InfoDlg ││IDD_PASSWORD       ││ B2eProcess   │
+  │ + Cancel │└─────────┘└────────┘│(PromptPassword())  ││ (B2E) │
   └────┬─────┘                     └───────────────────┘│ Compress     │
        │                                                  │ Delete       │
        ▼                                                  └──────────────┘
@@ -144,11 +144,11 @@ User clicks Cancel:
 PostMessageW(hwnd, WM_APP_DONE, hr, 0) ──→
 ```
 
-- Worker executes archive operations (`SevenZip::Extract` / `Compress`, `UnrarDll::ExtractArchive`)
+- Worker executes archive operations (`SevenZip::Extract` / `Compress`, `B2eBridge::ExtractArchive`)
 - Callbacks like `IArchiveExtractCallback::SetCompleted` notify UI via `PostMessage` with progress
 - `WM_APP_PROGRESS` `lParam` is `_wcsdup`'d `wchar_t*` → UI side must `free()`
 - Cancel: UI thread sets `sink->SetCancelled(true)`, worker callback returns `E_ABORT` to abort
-- `RarProcess` cancel forcibly terminates rar.exe with `TerminateProcess`
+- `B2eProcess` cancel forcibly terminates B2E scripts with `TerminateProcess`
 
 ## Format Routing
 
@@ -156,16 +156,16 @@ PostMessageW(hwnd, WM_APP_DONE, hr, 0) ──→
 
 ```
 Is .rar file?
-  ├─ Yes → unrar.dll loaded?
-  │   ├─ Yes → Try unrar.ListArchive()   (binds the writable RarBackend)
+  ├─ Yes → B2E scripts loaded?
+  │   ├─ Yes → Try b2eBridge.ListArchive()   (binds the writable B2eBackend)
   │   │   └─ Fail → Fallback to 7z.OpenArchive() (read-only)
   │   └─ No  → Try 7z.OpenArchive() (read-only)
   └─ No  → Try 7z.OpenArchive() only
 ```
 
-For `.rar`, unrar is always preferred when loaded so the archive binds the
-writable `RarBackend` (read = unrar.dll, write = rar.exe); 7z is only a
-read-only fallback when unrar is unavailable.
+For `.rar`, b2e is always preferred when loaded so the archive binds the
+writable `B2eBackend` (read = B2E scripts, write = B2E scripts); 7z is only a
+read-only fallback when b2e is unavailable.
 
 `SevenZip::OpenArchive(path)`:
 - Determine CLSID from extension → get handler with `CreateInArchive`
@@ -193,10 +193,10 @@ After `Settings::Save()`, call `App::ReloadDlls()` to reload with new DLL paths.
 
 | API | Purpose |
 |---|---|
-| `CreateProcessW` | RAR compression (launch rar.exe) |
-| `CreatePipe` | Capture rar.exe stdout |
-| `LoadLibraryW` / `GetProcAddress` | Dynamic load 7z.dll / unrar.dll |
-| `RegOpenKeyExW` | Registry search for WinRAR install path |
+| `CreateProcessW` | RAR compression (launch B2E scripts) |
+| `CreatePipe` | Capture B2E scripts stdout |
+| `LoadLibraryW` / `GetProcAddress` | Dynamic load 7z.dll / B2E scripts |
+| `RegOpenKeyExW` | Registry search for B2E install path |
 | `WritePrivateProfileStringW` | Save INI settings |
 | `DragAcceptFiles` / `DragQueryFileW` | Drag & drop support |
 | `CreateAcceleratorTable` | Keyboard shortcuts |
@@ -223,14 +223,14 @@ be revisited without re-running the whole analysis.
    UI input and forwards to the controller, and *implements* `IArchiveUI` (`MainWindowOps.cpp`) —
    `RunOperation` (progress dialog + worker + message loop), prompts, folder picker, error/confirm
    boxes, and post-open view refresh. The repeated "progress + sink + worker + loop" scaffold is
-   unified in one place. (AileFlow keeps its synchronous, dialog-only integrity test in the window
+   unified in one place. (Aile keeps its synchronous, dialog-only integrity test in the window
    layer, and adds a second `RunBackgroundOp` seam for B2E ops that show their own dialog.)
 
 2. **`App` acts as a singleton service locator plus startup orchestrator.** *(Service-locator part resolved.)*
-   `App` still owns `Settings`/`SevenZip`/`UnrarDll` and the startup modes, but the GUI no longer
+   `App` still owns `Settings`/`SevenZip`/`B2eBridge` and the startup modes, but the GUI no longer
    reaches them through `App::Instance()`. Services are now injected as an `AppServices` bundle
    (`AppServices.h`): `App::Services()` builds it, `MainWindow` takes it at construction and forwards
-   it to `ArchiveController`, and the settings/about dialogs receive it too (AileEx's bundle also
+   it to `ArchiveController`, and the settings/about dialogs receive it too (Aile's bundle also
    carries a `reloadDlls` action so the settings dialog needn't reach the singleton). `App::Instance()`
    now appears only at the composition root (`main.cpp`/`App.cpp`) and for `GetInstance` (HINSTANCE
    identity), not service access. The startup-orchestration role of `App.cpp` (the `Run*Mode` methods)
@@ -249,14 +249,14 @@ be revisited without re-running the whole analysis.
    scope unless that contract is revisited.
 
 4. **Archive backend behavior is selected by flags instead of polymorphism.** *(Resolved.)*
-   `MainWindow` previously relied on flags such as `m_openedWithUnrar`. Backend/session state now lives
-   in a polymorphic `IArchiveBackend` with explicit capability queries; `m_openedWithUnrar` is gone and
+   `MainWindow` previously relied on flags such as `m_openedWithB2e`. Backend/session state now lives
+   in a polymorphic `IArchiveBackend` with explicit capability queries; `m_openedWithB2e` is gone and
    `ArchiveOpener` owns open-time backend selection. (`m_isReadOnly` and the display-vs-operative path
    distinction remain.)
 
 5. **RAR and 7z backends duplicate responsibilities without sharing a common interface.** *(Resolved.)*
-   `UnrarDll`/`RarProcess` and `SevenZip` are now consumed through the shared `IArchiveBackend` contract
-   (`SevenZipBackend`, `RarBackend`), removing the ad-hoc cross-backend branching in `MainWindow`.
+   `B2eBridge`/`B2eProcess` and `SevenZip` are now consumed through the shared `IArchiveBackend` contract
+   (`SevenZipBackend`, `B2eBackend`), removing the ad-hoc cross-backend branching in `MainWindow`.
    See `backend-interface-refactor.md` for the design and the completed incremental plan.
 
 6. **Dialogs contain business rules in addition to presentation.** *(Resolved.)*
@@ -264,7 +264,7 @@ be revisited without re-running the whole analysis.
    normalization, and output-extension rewriting — moved into a `CompressPolicy` unit. The dialog now
    only gathers input and calls the policy; the CLI override path (`App::ApplyOverrides`) and the
    drop/add compress flows call the same functions, so the normalization rule that was duplicated
-   between dialog and CLI is now single-sourced. (AileFlow's `CompressPolicy` carries persistence and
+   between dialog and CLI is now single-sourced. (Aile's `CompressPolicy` carries persistence and
    the extension rule only; its B2E methods are .b2e-driven indices with no normalization step.)
 
 ### Refactoring priority
@@ -301,4 +301,7 @@ contract allows). No further items from this review pass remain.
   files, then the per-session operations were split by direction — `SevenZip.cpp` core (~690 lines:
   lifecycle, cache, comment, properties), `SevenZipRead.cpp` (~500: open/test/extract) and
   `SevenZipWrite.cpp` (~490: compress/add/delete). The public `SevenZip.h` API is unchanged throughout,
-  so the cross-app contract and AileFlow are untouched.
+  so the cross-app contract and Aile are untouched.
+
+
+

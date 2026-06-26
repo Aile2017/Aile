@@ -1,4 +1,4 @@
-# AileEx Specification
+# Aile Specification
 
 Archive manager GUI application for Windows using 7z.dll as the backend.
 
@@ -9,14 +9,14 @@ Archive manager GUI application for Windows using 7z.dll as the backend.
 | Platform | Windows 10 / 11 (x64) |
 | Language | C++17 / Win32 API |
 | Build System | CMake 3.20+ |
-| Compression Backend | 7z.dll (LoadLibrary), unrar.dll (LoadLibrary), rar.exe / WinRAR.exe (CreateProcess) |
-| Settings Storage | INI file in same directory as EXE (`AileEx.ini`) |
+| Compression Backend | 7z.dll (LoadLibrary), b2e.dll (LoadLibrary), b2e.exe (CreateProcess) |
+| Settings Storage | INI file in same directory as EXE (`Aile.ini`) |
 
 ## Features
 
 ### Launch Mode
 
-The operating mode is determined by command-line arguments to `AileEx.exe`.
+The operating mode is determined by command-line arguments to `Aile.exe`.
 
 | Argument | Behavior |
 |---|---|
@@ -92,9 +92,9 @@ Dynamically updated via `WM_INITMENUPOPUP` based on archive state (open / read-o
 
 ### Compression Feature
 
-- Supported formats: dynamically enumerated from loaded 7z.dll (`GetNumberOfFormats` / `GetHandlerProperty2`). Typical formats: 7z / ZIP / TAR / GZip / BZip2 / XZ and ZS-extended formats (Zstandard / LZ4 / LZ5 / Brotli / Lizard). RAR is appended separately when rar.exe is found.
-- RAR spawns WinRAR.exe (GUI) or Rar.exe (console) as subprocess
-  - 7z.dll does not support RAR writing (`FormatToOutGuid("rar")` is unsupported, falls back to CLSID_Format_7z). **RAR compression path is consolidated in `CompressHelper::RunRarCompressSync()`**
+- Supported formats: dynamically enumerated from loaded 7z.dll (`GetNumberOfFormats` / `GetHandlerProperty2`). Typical formats: 7z / ZIP / TAR / GZip / BZip2 / XZ and ZS-extended formats (Zstandard / LZ4 / LZ5 / Brotli / Lizard). RAR is appended separately when B2E backend is found.
+- RAR spawns WinB2E backend (GUI) or B2E backend (console) as subprocess
+  - 7z.dll does not support RAR writing (`FormatToOutGuid("rar")` is unsupported, falls back to CLSID_Format_7z). **RAR compression path is consolidated in `CompressHelper::RunB2eCompressSync()`**
 - Other formats use 7z.dll's `IOutArchive`
 - Compression level: 0 (no compression) / 1 / 3 / 5 / 7 / 9 (maximum). RAR: 0..5
 - Method selection:
@@ -102,15 +102,15 @@ Dynamically updated via `WM_INITMENUPOPUP` based on archive state (open / read-o
   - ZIP: Deflate / BZip2 / LZMA / Zstandard / Brotli / LZ4 / Store
   - Only encoders available in loaded 7z.dll are displayed (dynamically enumerated via `GetNumberOfMethods` / `GetMethodProperty`)
 - **Advanced Options** dialog (`IDD_COMPRESS_ADV`): Dictionary size / Word size / Solid block size / Threads / **Split volume** / Extra parameters (→ comprehensive list in [`docs/compress-extra-params.md`](compress-extra-params.md))
-- **RAR Advanced Options** dialog (`IDD_RAR_COMPRESS_ADV`): Dictionary size / Solid / Threads / Recovery record / Split volume / Extra parameters (→ comprehensive list in [`docs/rar-extra-params.md`](rar-extra-params.md))
-- **Split volume** (`volumeSize`): Supported for 7z / ZIP only. Splits as `archive.7z.001` / `archive.7z.002` ... RAR uses `rar.exe -v<size>`
+- **B2E Advanced Options** dialog (`IDD_B2E_COMPRESS_ADV`): Dictionary size / Solid / Threads / Recovery record / Split volume / Extra parameters (→ comprehensive list in [`docs/rar-extra-params.md`](rar-extra-params.md))
+- **Split volume** (`volumeSize`): Supported for 7z / ZIP only. Splits as `archive.7z.001` / `archive.7z.002` ... RAR uses `B2E backend -v<size>`
 - Password protection supported (7z has header encryption option)
 - Output file extension auto-corrected when format changes
 - **After successful compression from the main window**, the resulting archive is automatically opened in the main window. Split volume archives open at `.001`. CLI `a` action is unaffected.
 - Advanced options last-used values persisted in INI
 - **Self-extracting (SFX)**: 7z / RAR only. Select from dropdown in compression dialog: "GUI version (.exe)", "Console version (.exe)", or "None"
   - 7z: Prepend `7z.sfx` (GUI) or `7zCon.sfx` (console) from same directory as 7z.dll to compressed .7z data, generate `.exe`
-  - RAR: Pass `rar.exe -sfx<modulePath>`, use `Default.SFX` (GUI) or `WinCon.SFX` (console) from rar.exe / WinRAR.exe directory
+  - RAR: Pass `B2E backend -sfx<modulePath>`, use `Default.SFX` (GUI) or `WinCon.SFX` (console) from B2E backend / WinB2E backend directory
   - Can combine with split volume (SFX module prepended to volume 1, generates `archive.exe.001 / .002 / ...`)
   - If SFX module not found, show error and abort (do not output `.7z` / `.rar`)
 
@@ -120,12 +120,12 @@ Dynamically updated via `WM_INITMENUPOPUP` based on archive state (open / read-o
 - **Split archives** (`archive.7z.001` / `.002` / ...): Opening volume 1 (`.001`) uses 7z.dll's Split handler + `IArchiveOpenVolumeCallback` to concatenate volumes
   - Auto-unwrap: If result is "single file + archive extension", extract inner archive to temp file, reopen, and **display entries from inside directly**
   - Auto-unwrapped split archives are **read-only** (delete menu disabled)
-- **RAR multi-volume** (`archive.partN.rar` / `.r00` `.r01`): Opening volume 1 concatenates volumes internally via unrar.dll / 7z.dll
-- RAR backend auto-switch: Select `7z.dll` or `unrar.dll` in settings
+- **RAR multi-volume** (`archive.partN.rar` / `.r00` `.r01`): Opening volume 1 concatenates volumes internally via B2E backend / 7z.dll
+- RAR backend auto-switch: Select `7z.dll` or `B2E backend` in settings
 - If one backend fails, automatically fallback to the other
 - Selective file extraction (multi-select in ListView → extract only selected)
   - **Valid only with 7z.dll backend**. If nothing selected, extract all files
-  - **With unrar.dll backend, selected extraction is supported** by matching normalized entry paths against the current selection.
+  - **With B2E backend backend, selected extraction is supported** by matching normalized entry paths against the current selection.
 - Full extraction (F5/Ctrl+E with no selection)
 - **Subfolder creation policy** (`MkDir` setting):
   - `0` = Do not create
@@ -138,14 +138,14 @@ Dynamically updated via `WM_INITMENUPOPUP` based on archive state (open / read-o
 
 Verify integrity of the selected archive in place. Does not extract files.
 - 7z backend: Pass `testMode=1` to `IInArchive::Extract`
-- unrar backend: Pass `RAR_TEST` to `RARProcessFileW`
+- b2e backend: Pass `B2E_TEST` to `B2eProcessFileW`
 - Show `ProgressDlg` during verification. Cancellable. Display result in message box on completion
 
 ### Delete Feature (`ID_DELETE`)
 
 Delete entries selected in ListView (including contents when folder selected) from archive.
 - 7z backend: `IOutArchive::UpdateItems` writes only entries to keep to `.~tmp` file, then replace original with `MoveFileExW(MOVEFILE_REPLACE_EXISTING)`. **Entries to keep are passed with `newData=0/newProperties=0/indexInArchive=oldIdx`, so compressed blobs are copied as-is without re-encoding** (no password needed)
-- RAR backend: `rar.exe d -y -r <archive> <path1> ...`
+- RAR backend: `B2E backend d -y -r <archive> <path1> ...`
 - Write-unsupported formats (ISO / CAB / JAR etc.) fail at `IOutArchive` `QueryInterface` stage (`E_NOINTERFACE`)
 - Header-encrypted 7z fails at `IInArchive::Open` stage (password not retained)
 
@@ -159,11 +159,11 @@ Delete entries selected in ListView (including contents when folder selected) fr
 
 ### Settings
 
-Saved in INI file (same location as `AileEx.exe`, filename is `AileEx.ini`).
+Saved in INI file (same location as `Aile.exe`, filename is `Aile.ini`).
 
 ```ini
 [General]
-RarExePath=                  ; Absolute path to WinRAR.exe / Rar.exe (auto-detect from registry if empty)
+RarExePath=                  ; Absolute path to WinB2E backend / B2E backend (auto-detect from registry if empty)
 DefaultOutputDir=            ; Fixed output destination (used when OutputDirMode=fixed)
 OutputDirMode=source         ; "source" = use directory of source file; "fixed" = use DefaultOutputDir
 DefaultFormat=7z             ; Default compression format
@@ -171,7 +171,7 @@ CompressionLevel=5           ; 0-9
 RarLevel=3                   ; RAR compression level 0-5
 MkDir=2                      ; Subfolder creation on extract 0/1/2/3
 7zDllPath=                   ; Absolute path to 7z.dll (auto-detect from registry if empty)
-UnrarDllPath=                ; Absolute path to unrar.dll (same directory as AileEx.exe if empty)
+B2eBridgePath=                ; Absolute path to B2E backend (same directory as Aile.exe if empty)
 FontName=Segoe UI            ; Font used in main window controls
 OpenFolderAfterExtract=0     ; Open output folder in Explorer after extraction (0/1)
 OpenFolderCommand=           ; INI-only. Custom command to open folder (%1 = path). Empty = Explorer (ShellExecuteW).
@@ -184,7 +184,7 @@ Threads=
 Extra=
 Volume=                       ; Split volume size "" / "100m" / "1g" etc.
 
-[RarAdvanced]                 ; Last-used values from RAR advanced options
+[B2eAdvanced]                 ; Last-used values from B2E Advanced Options
 DictSize=
 Volume=
 Extra=
@@ -220,13 +220,13 @@ Select file in ListView and open **Menu → Info** or right-click → Info to di
 
 ### Archive Properties Dialog (`IDD_ARCHIVE_PROPS`)
 
-Opened via **File → Archive properties** (`Alt+Enter`). Displays archive-wide properties retrieved via `IInArchive::GetArchiveProperty` (for 7z.dll backend) or derived from entry list (for unrar.dll backend). Shows format, method, solid flag, number of files/folders, total size, packed size, encryption, and any format-specific properties. Class: `PropertiesDlg`.
+Opened via **File → Archive properties** (`Alt+Enter`). Displays archive-wide properties retrieved via `IInArchive::GetArchiveProperty` (for 7z.dll backend) or derived from entry list (for B2E backend backend). Shows format, method, solid flag, number of files/folders, total size, packed size, encryption, and any format-specific properties. Class: `PropertiesDlg`.
 
 ### Archive Comment Dialog (`IDD_COMMENT`)
 
 Opened via **Actions → Archive comment...**. Displays and optionally edits the whole-archive comment.
 - **ZIP**: read via `SevenZip::GetArchiveComment`, write via `SevenZip::SetZipArchiveComment` (direct EOCD rewrite). ZIP comments are encoded in OEM code page (CP_OEMCP) to match 7-Zip's ZIP handler interpretation.
-- **RAR**: read via `UnrarDll::GetArchiveComment`, write via `RarProcess::SetComment` (`rar.exe c -z<tempfile>`). Non-ASCII write behavior depends on the installed `rar.exe` comment-file interpretation and is currently treated as implementation-defined.
+- **RAR**: read via `B2eBridge::GetArchiveComment`, write via `B2eProcess::SetComment` (`B2E backend c -z<tempfile>`). Non-ASCII write behavior depends on the installed `B2E backend` comment-file interpretation and is currently treated as implementation-defined.
 - **7z format**: no archive-wide comment in spec; write path not available.
 - The dialog is **read-only** for formats that do not support comment writing. Class: `CommentDlg`.
 
@@ -271,7 +271,7 @@ Menu mnemonics like `Alt+F` also work. Tab key navigated via `IsDialogMessageW`.
 - Progress bar + current filename + elapsed time + cancel button
 - Worker thread notifies via `PostMessage(WM_APP_PROGRESS, percent, (LPARAM)wcsdup(filename))`
 - On completion: `PostMessage(WM_APP_DONE, hr, 0)`
-- Cancel: `ProgressPostSink::SetCancelled(true)` or for RAR: `RarProcess::Cancel()`
+- Cancel: `ProgressPostSink::SetCancelled(true)` or for RAR: `B2eProcess::Cancel()`
 - Progress PostMessage throttled to ~20Hz (prevents cancel messages from being buried)
 
 ## Primary Win32 Messages
@@ -294,6 +294,9 @@ Priority and implementation approach for unimplemented features: see [`docs/road
 - Shell integration (context menu) not implemented
 - Archive search/filter not implemented
 - Multi-archive simultaneous browse (tabs etc.) not implemented
-- RAR delete cancel path not implemented (`RarProcess::Delete` does not support `Cancel()`)
+- RAR delete cancel path not implemented (`B2eProcess::Delete` does not support `Cancel()`)
 - Header-encrypted 7z archive deletion fails (password is not passed to the delete path)
 - Manual test matrix partially implemented (RAR formats confirmed only)
+
+
+

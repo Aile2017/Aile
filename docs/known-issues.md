@@ -78,7 +78,7 @@ Without normalization, TreeView/ListView folder routing logic breaks.
 
 ## Manifest Embedding
 
-CMakeLists.txt specifies `target_link_options(AileEx PRIVATE "/MANIFEST:NO")` to suppress linker auto-generation. Manifest embedded from `res/AileEx.rc` via `1 RT_MANIFEST "manifest.xml"`. Both would cause duplicate resource error.
+CMakeLists.txt specifies `target_link_options(Aile PRIVATE "/MANIFEST:NO")` to suppress linker auto-generation. Manifest embedded from `res/Aile.rc` via `1 RT_MANIFEST "manifest.xml"`. Both would cause duplicate resource error.
 
 ## DPI Support
 
@@ -127,7 +127,7 @@ Notes:
 
 7z.dll format handlers (`7zHandlerOut.cpp` etc.) simply **write directly to stream** passed to `UpdateItems(outStream, ...)`. Split logic (switch to next file every N MB) **not in DLL**. `IArchiveUpdateCallback2::GetVolumeSize/GetVolumeStream` interface exists, but it's called by 7-Zip CLI / 7zFM's **self-implemented split stream** (`COutMultiVolStream`), not by handler.
 
-So AileEx also self-implements `CMultiVolOutStream` (`SevenZip.cpp`) for split writing, passing it as `IOutStream` to `UpdateItems`. 7z.dll sees single seekable stream.
+So Aile also self-implements `CMultiVolOutStream` (`SevenZip.cpp`) for split writing, passing it as `IOutStream` to `UpdateItems`. 7z.dll sees single seekable stream.
 
 Notes:
 - `IOutStream::Seek` requires **global offset** ⇄ (volIdx, volOffset) mapping (7z.dll frequently seeks near start for header writing)
@@ -142,7 +142,7 @@ Volume 1 detection in `OpenArchive`: if extension is **all digits** (`001`, `002
 
 ## RAR 4 CJK Filename Encoding Limitation
 
-unrar.dll converts RAR 4 archive filenames (stored in local code page) to UTF-16 via `RARHeaderDataEx::FileNameW`. However, WinRAR 5.0+ no longer supports creation of RAR 4 archives, making testing with modern tools impossible. If legacy RAR 4 archives with CJK filenames are encountered and exhibit corruption/garbling, the root cause lies in unrar.dll's code page conversion, which is beyond AileEx control. Workaround: convert to RAR 5 (which uses full Unicode) or 7z format.
+unrar.dll converts RAR 4 archive filenames (stored in local code page) to UTF-16 via `RARHeaderDataEx::FileNameW`. However, WinRAR 5.0+ no longer supports creation of RAR 4 archives, making testing with modern tools impossible. If legacy RAR 4 archives with CJK filenames are encountered and exhibit corruption/garbling, the root cause lies in unrar.dll's code page conversion, which is beyond Aile control. Workaround: convert to RAR 5 (which uses full Unicode) or 7z format.
 
 ## 2026-05 Audit Follow-up
 
@@ -151,3 +151,4 @@ unrar.dll converts RAR 4 archive filenames (stored in local code page) to UTF-16
 - **Do not reuse cached item lists for auto-unwrapped temporary archives.** Wrapper formats such as `.tar.gz` may reopen an extracted temp `.tar`; caching the outer path without preserving that temp path causes later operations to target the wrong file and lose read-only state.
 - **Reuse the opened archive password for metadata commands.** Archive properties and archive comment retrieval should use the same stored password as extract/test once the user has already opened an encrypted archive successfully.
 - **RAR archive comment writing still needs charset validation.** Current save flow relies on `rar.exe c -z<file>` and should be treated as version/charset-sensitive until behavior is verified against real RAR4/RAR5 comment samples.
+

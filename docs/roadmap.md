@@ -1,6 +1,6 @@
-# AileEx Roadmap
+# Aile Roadmap
 
-Summary of features commonly found in archive managers but not yet implemented in AileEx,
+Summary of features commonly found in archive managers but not yet implemented in Aile,
 and features that would be nice to have. Includes implementation hints and effort estimates.
 
 Last updated: 2026-06-13
@@ -16,12 +16,12 @@ Effort estimates:
 
 ### 0. ~~CLI `t` action — integrity test from command line~~ — Implemented (2026-06-14)
 
-Applies to **both AileEx and AileFlow**.
+Applies to **Aile**.
 
 Implemented: `Action::Test` + `t` detection in both `main.cpp`; `App::RunTestMode` (mirrors
 `RunExtractDialogMode`, `SW_HIDE` create → `OpenArchive` → `TriggerTest`); `MainWindow::TriggerTest`
 (`OnTest` now returns `HRESULT`). Exit code: 0 = passed/cancelled, 1 = failed / unsupported /
-argument error. Non-archive argument → `IDS_ERR_OPEN_ARCHIVE` → exit(1). AileFlow evaluates
+argument error. Non-archive argument → `IDS_ERR_OPEN_ARCHIVE` → exit(1). Aile evaluates
 `CanTest()` after `OpenArchive` and shows the new `IDS_ERR_TEST_NOT_SUPPORTED` string when the
 format has no `test:` section. Modifiers (`-d`/`-t`/`-m`/`-l`/`-sfx`) are parsed but ignored.
 
@@ -29,8 +29,7 @@ Original spec retained below for reference.
 
 **Syntax:**
 ```
-AileEx.exe   t <archive> [modifiers]
-AileFlow.exe t <archive> [modifiers]
+Aile.exe t <archive> [modifiers]
 ```
 
 **Behavior by case:**
@@ -40,18 +39,18 @@ AileFlow.exe t <archive> [modifiers]
 | No arguments | Same as no-arg launch (`RunEmpty`) |
 | Single valid archive | Open main window hidden (`SW_HIDE`), auto-fire `OnTest()` |
 | Single non-archive file | Show `IDS_ERR_OPEN_ARCHIVE` error → exit(1) |
-| AileFlow only: format with no test support | Show new error string → exit(1) |
+| Format with no test support | Show new error string → exit(1) |
 | Multiple files | First file only; rest silently ignored (matches `x` behavior) |
 
 **Result display:**
-- AileEx: progress dialog → result MessageBox (same path as interactive Ctrl+T)
-- AileFlow: `TestResultDlg` with tool output (same path as interactive Ctrl+T)
+- Aile: progress dialog → result MessageBox (same path as interactive Ctrl+T)
+- Aile: `TestResultDlg` with tool output (same path as interactive Ctrl+T)
 
 **Modifiers:** `-d`, `-t`, `-m`, `-l`, `-sfx` are parsed but silently ignored.
 
 **Exit codes:** 0 = passed or cancelled; 1 = failed or argument error.
 
-**New string resource (AileFlow only):**
+**New string resource:**
 
 | ID (proposed) | EN | JA |
 |---|---|---|
@@ -64,7 +63,7 @@ AileFlow.exe t <archive> [modifiers]
 | `main.cpp` (both) | Add `Test` to `enum Action`; add `t` detection; add `case Action::Test` |
 | `App.h` / `App.cpp` (both) | Add `RunTestMode(archivePath, nCmdShow)` |
 | `MainWindow.h` / `MainWindow.cpp` (both) | Add `TriggerTest()` — thin wrapper that calls `OnTest()` directly |
-| AileFlow `.rc` + `resource.h` | Add `IDS_ERR_TEST_NOT_SUPPORTED` to EN/JA STRINGTABLE blocks |
+| Aile `.rc` + `resource.h` | Add `IDS_ERR_TEST_NOT_SUPPORTED` to EN/JA STRINGTABLE blocks |
 
 `RunTestMode` mirrors `RunExtractDialogMode`: `SW_HIDE` create → `OpenArchive` → `TriggerTest`.
 `CanTest()` is evaluated after `OpenArchive` (B2E script must be loaded first).
@@ -86,8 +85,8 @@ Implemented per the spec below. Shared COM core in `common/shell/`
 (`ShellExt.cpp/h` = `IShellExtInit`+`IContextMenu`, `DllMain.cpp` = class factory + 4 exports +
 HKCU register/unregister, `ShellConfig.h` = per-app constants interface, `ArchiveClassify.h` =
 static archive detection that mirrors `SevenZip::IsArchivePath` so 7z.dll is never loaded inside
-Explorer). Two separate DLLs `AileExShell.dll` (CLSID `{A50BB570-A951-4D73-A1B2-CA2B709FFD34}`) and
-`AileFlowShell.dll` (CLSID `{62EF5960-FE49-490D-BC9B-ADCCE789A7B3}`), each linking the shared core +
+Explorer). Two separate DLLs `AileShell.dll` (CLSID `{A50BB570-A951-4D73-A1B2-CA2B709FFD34}`) and
+`AileShell.dll` (CLSID `{62EF5960-FE49-490D-BC9B-ADCCE789A7B3}`), each linking the shared core +
 its own `*ShellConfig.cpp` + `.def` (built directly per target, not via an OBJECT library). Menu
 delegates to the app EXE (resolved as the DLL's sibling) via `ShellExecuteW` using the `a`/`x`/`t`
 subcommands. Registers per-user (HKCU, no elevation) via `regsvr32`; deploy as a sibling of the EXE.
@@ -95,8 +94,8 @@ subcommands. Registers per-user (HKCU, no elevation) via `regsvr32`; deploy as a
 First pass is the **legacy `IContextMenu`** handler only (Win11: "Show more options"); the new Win11
 top-level menu (`IExplorerCommand` + MSIX sparse package) is deferred. Original spec retained below.
 
-Applies to **both AileEx and AileFlow**. Each app ships its **own DLL with its own CLSID**
-(`AileExShell.dll` / `AileFlowShell.dll`); they cannot share a single DLL because each needs a
+Applies to **Aile**. Each app ships its **own DLL with its own CLSID**
+(`AileShell.dll` / `AileShell.dll`); they cannot share a single DLL because each needs a
 distinct CLSID, registers independently, delegates to a different EXE, and must install/uninstall
 separately (a user may install only one app). However, the **implementation code is shared** — only
 the per-app constants (CLSID, target EXE name, menu label/icon) differ.
@@ -109,14 +108,11 @@ common/
     ShellExt.cpp/h     ← IShellExtInit + IContextMenu implementation (shared, bulk of the code)
     DllMain.cpp        ← DllMain / DllGetClassObject / DllRegisterServer / DllUnregisterServer (shared)
     ShellConfig.h      ← per-app config interface (CLSID, exe name, label, icon) consumed by the above
-aileex/
+Aile/
   shell/
-    AileExShellConfig.cpp   ← AileEx-specific constants
-    AileExShell.def         ← COM exports
-aileflow/
-  shell/
-    AileFlowShellConfig.cpp
-    AileFlowShell.def
+    AileShellConfig.cpp   ← Aile-specific constants
+    AileShell.def         ← COM exports
+
 ```
 
 CMake builds `common/shell/` as an OBJECT library; the two DLL targets each link it together with
@@ -127,19 +123,19 @@ their own `*ShellConfig.cpp`, producing two distinct DLLs. A single shared DLL s
 
 Right-clicking an archive file:
 ```
-AileEx ▶
-├─ 開く / Open              ← AileEx.exe "file.zip"         (no action, browse mode)
-├─ ここに展開 / Extract     ← AileEx.exe x "file.zip"
-└─ 整合性テスト / Test      ← AileEx.exe t "file.zip"
+Aile ▶
+├─ 開く / Open              ← Aile.exe "file.zip"         (no action, browse mode)
+├─ ここに展開 / Extract     ← Aile.exe x "file.zip"
+└─ 整合性テスト / Test      ← Aile.exe t "file.zip"
 ```
 
 Right-clicking a non-archive file or folder:
 ```
-AileEx ▶
-└─ 圧縮 / Compress          ← AileEx.exe a "file.txt"
+Aile ▶
+└─ 圧縮 / Compress          ← Aile.exe a "file.txt"
 ```
 
-Same structure for AileFlow (replace `AileEx` with `AileFlow`).
+Same structure for Aile (replace `Aile` with `Aile`).
 
 **Registry registration strategy:**
 
@@ -147,12 +143,12 @@ Use `*` (all files) + `Directory` rather than per-extension keys.
 DLL decides menu content by inspecting the target file at runtime.
 
 ```
-HKCR\*\shellex\ContextMenuHandlers\AileEx          → {CLSID}
-HKCR\Directory\shellex\ContextMenuHandlers\AileEx  → {CLSID}
-HKCR\CLSID\{CLSID}\InprocServer32                 → path to AileExShell.dll
+HKCR\*\shellex\ContextMenuHandlers\Aile          → {CLSID}
+HKCR\Directory\shellex\ContextMenuHandlers\Aile  → {CLSID}
+HKCR\CLSID\{CLSID}\InprocServer32                 → path to AileShell.dll
 ```
 
-AileFlow uses its own distinct CLSID.
+
 
 `HKCR` is the merged view of `HKLM\Software\Classes` (machine-wide) and `HKCU\Software\Classes`
 (per-user). The DLL's `DllRegisterServer` can target either:
@@ -190,9 +186,9 @@ leaves a broken menu entry behind).
 
 ```powershell
 # Register (use the 64-bit regsvr32 — Win11 Explorer is x64)
-regsvr32 AileExShell.dll
+regsvr32 AileShell.dll
 # Unregister
-regsvr32 /u AileExShell.dll
+regsvr32 /u AileShell.dll
 ```
 
 - **Dev / manual**: `regsvr32` (HKLM, elevated) or a per-user HKCU registration path (no elevation).
@@ -214,7 +210,7 @@ regsvr32 /u AileExShell.dll
 - Win11 is effectively 64-bit only; a single x64 DLL suffices (and the matching x64 `regsvr32`).
 - `QueryContextMenu` is called synchronously; avoid any blocking I/O here.
 
-Related files: new `common/shell/` (shared core), `aileex/shell/` + `aileflow/shell/` (per-app
+Related files: new `common/shell/` (shared core), `Aile/shell/` + `Aile/shell/` (per-app
 config + `.def`), CMake DLL targets, optional installer script
 
 ### 3. ~~Display/edit archive comments~~ — Implemented (2026-05-09)
@@ -239,7 +235,7 @@ Related files: `MainWindow.cpp` (ListView related)
 
 ### 5. ~~Multi-language support (i18n)~~ — Implemented (2026-05-10)
 
-Embed English and Japanese in single EXE. In `res/AileEx.rc`, have two blocks with
+Embed English and Japanese in single EXE. In `res/Aile.rc`, have two blocks with
 `LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US` and
 `LANGUAGE LANG_JAPANESE, SUBLANG_JAPANESE_JAPAN`, duplicating dialogs/menus/STRINGTABLE.
 
@@ -252,7 +248,7 @@ Implement `Init()` / `Tr(IDS)` / `TrFmt(IDS, ...)` / `TrFilter(IDS)` in `src/I18
 `PropertiesDlg` "Format" / "Method" comparison also fixed to use current language labels.
 OFN filter restored with `TrFilter` using `|` as NUL sentinel.
 
-For testing, environment variable `AILEEX_LANG=en|ja` can override OS setting.
+For testing, environment variable `Aile_LANG=en|ja` can override OS setting.
 When adding 3rd+ languages, consider satellite DLL approach (current embedding is lightweight enough).
 
 ### 6. ~~CLI execution without UI~~ — Removed (2026-05-14)
@@ -327,13 +323,13 @@ Implementation hints:
 Customization beyond dark mode. Low priority.
 
 ### 14. Settings import/export — `S`
-Copying `AileEx.ini` works, but UI "Export / Import" commands would be nice.
+Copying `Aile.ini` works, but UI "Export / Import" commands would be nice.
 
 ### 15. Plugin system — `L`
 Custom format support or external compression engine calls. Total Commander WCX plugin compatibility has demand but large effort.
 
 ### 16. Logging — `S`
-Append history of all operations to `AileEx.log`. For diagnosis on trouble.
+Append history of all operations to `Aile.log`. For diagnosis on trouble.
 
 ### 17. Archive contents list export — `S`
 Save ListView contents as CSV / TSV / text.
@@ -357,3 +353,5 @@ These are **spec-level constraints**, no implementation planned for now:
 - **Individual extraction from solid archives** — 7z.dll limitation. Full extraction only is efficient way
 - **Split creation for gz / bz2 / xz / tar** — Format specs require non-seekable output, unsupported
 - **Multi-archive simultaneous browse (tabs)** — UI structure major redesign needed, low priority
+
+
