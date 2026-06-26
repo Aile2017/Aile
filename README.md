@@ -1,6 +1,6 @@
 # Aile
 
-Windows archive manager GUI application that supports native 7z/RAR operations and B2E scripts.
+Windows archive manager GUI application that supports native 7-Zip operations and B2E scripts.
 
 ## Building
 
@@ -50,8 +50,8 @@ To register the generated extensions, build and use the `AileSetup.exe` tool.
 
 [Paperplane - free Icon in PNG and SVG](https://icon-icons.com/icon/paperplane-dm-chat-fly-interaction-communication-message-send/195724) by [icon-icons.com](https://icon-icons.com/), used under free for commercial use license.
 
-### B2E Scripts (AileFlow)
+### B2E Scripts
 
-The `.b2e` archive handler scripts bundled with AileFlow are based on scripts from
+The `.b2e` archive handler scripts bundled with Aile are based on scripts from
 [Noah](https://www.kmonos.net/lib/noah.ja.html), a script-driven archive manager for Windows
 created by Kazuhiro Inaba.

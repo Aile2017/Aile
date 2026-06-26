@@ -13,7 +13,6 @@
 │   ├── known-issues.md
 │   ├── roadmap.md
 │   ├── compress-extra-params.md  — 7z/ZIP ISetProperties key=value parameter reference
-│   └── rar-extra-params.md       — B2E scripts switch reference for RAR compression
 ├── src/
 │   ├── main.cpp                   — wWinMain, argument parsing, mode routing
 │   ├── App.h/.cpp                 — Singleton, DLL load management, message loop; Services() builds AppServices
@@ -148,24 +147,22 @@ PostMessageW(hwnd, WM_APP_DONE, hr, 0) ──→
 - Callbacks like `IArchiveExtractCallback::SetCompleted` notify UI via `PostMessage` with progress
 - `WM_APP_PROGRESS` `lParam` is `_wcsdup`'d `wchar_t*` → UI side must `free()`
 - Cancel: UI thread sets `sink->SetCancelled(true)`, worker callback returns `E_ABORT` to abort
-- `B2eProcess` cancel forcibly terminates B2E scripts with `TerminateProcess`
+- `B2eProcess` cancel forcibly terminates external tools with `TerminateProcess`
 
 ## Format Routing
 
 `MainWindow::OpenArchive(path)`:
 
 ```
-Is .rar file?
-  ├─ Yes → B2E scripts loaded?
-  │   ├─ Yes → Try b2eBridge.ListArchive()   (binds the writable B2eBackend)
-  │   │   └─ Fail → Fallback to 7z.OpenArchive() (read-only)
-  │   └─ No  → Try 7z.OpenArchive() (read-only)
+Is format supported by B2E?
+  ├─ Yes → Try b2eBridge.ListArchive()   (binds the writable B2eBackend)
+  │   └─ Fail → Fallback to 7z.OpenArchive() (read-only)
   └─ No  → Try 7z.OpenArchive() only
 ```
 
-For `.rar`, b2e is always preferred when loaded so the archive binds the
+For formats like `.lzh` or other B2E formats, B2E is preferred when loaded so the archive binds the
 writable `B2eBackend` (read = B2E scripts, write = B2E scripts); 7z is only a
-read-only fallback when b2e is unavailable.
+read-only fallback when B2E is unavailable.
 
 `SevenZip::OpenArchive(path)`:
 - Determine CLSID from extension → get handler with `CreateInArchive`
@@ -193,9 +190,9 @@ After `Settings::Save()`, call `App::ReloadDlls()` to reload with new DLL paths.
 
 | API | Purpose |
 |---|---|
-| `CreateProcessW` | RAR compression (launch B2E scripts) |
+| `CreateProcessW` | B2E scripts execution |
 | `CreatePipe` | Capture B2E scripts stdout |
-| `LoadLibraryW` / `GetProcAddress` | Dynamic load 7z.dll / B2E scripts |
+| `LoadLibraryW` / `GetProcAddress` | Dynamic load 7z.dll |
 | `RegOpenKeyExW` | Registry search for B2E install path |
 | `WritePrivateProfileStringW` | Save INI settings |
 | `DragAcceptFiles` / `DragQueryFileW` | Drag & drop support |
@@ -254,7 +251,7 @@ be revisited without re-running the whole analysis.
    `ArchiveOpener` owns open-time backend selection. (`m_isReadOnly` and the display-vs-operative path
    distinction remain.)
 
-5. **RAR and 7z backends duplicate responsibilities without sharing a common interface.** *(Resolved.)*
+5. **B2E and 7z backends duplicate responsibilities without sharing a common interface.** *(Resolved.)*
    `B2eBridge`/`B2eProcess` and `SevenZip` are now consumed through the shared `IArchiveBackend` contract
    (`SevenZipBackend`, `B2eBackend`), removing the ad-hoc cross-backend branching in `MainWindow`.
    See `backend-interface-refactor.md` for the design and the completed incremental plan.

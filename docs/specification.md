@@ -9,7 +9,7 @@ Archive manager GUI application for Windows using 7z.dll as the backend.
 | Platform | Windows 10 / 11 (x64) |
 | Language | C++17 / Win32 API |
 | Build System | CMake 3.20+ |
-| Compression Backend | 7z.dll (LoadLibrary), b2e.dll (LoadLibrary), b2e.exe (CreateProcess) |
+| Compression Backend | 7z.dll (LoadLibrary), B2E scripts (via `CreateProcessW` execution of external tools) |
 | Settings Storage | INI file in same directory as EXE (`Aile.ini`) |
 
 ## Features
@@ -92,27 +92,27 @@ Dynamically updated via `WM_INITMENUPOPUP` based on archive state (open / read-o
 
 ### Compression Feature
 
-- Supported formats: dynamically enumerated from loaded 7z.dll (`GetNumberOfFormats` / `GetHandlerProperty2`). Typical formats: 7z / ZIP / TAR / GZip / BZip2 / XZ and ZS-extended formats (Zstandard / LZ4 / LZ5 / Brotli / Lizard). RAR is appended separately when B2E backend is found.
-- RAR spawns WinB2E backend (GUI) or B2E backend (console) as subprocess
-  - 7z.dll does not support RAR writing (`FormatToOutGuid("rar")` is unsupported, falls back to CLSID_Format_7z). **RAR compression path is consolidated in `CompressHelper::RunB2eCompressSync()`**
+- Supported formats: dynamically enumerated from loaded 7z.dll (`GetNumberOfFormats` / `GetHandlerProperty2`). Typical formats: 7z / ZIP / TAR / GZip / BZip2 / XZ and ZS-extended formats (Zstandard / LZ4 / LZ5 / Brotli / Lizard). B2E formats are appended separately when B2E scripts are loaded.
+- B2E formats spawn external archiver processes as defined in their `.b2e` scripts.
+  - 7z.dll does not support RAR writing. **B2E format compression is consolidated via `B2eProcess`**
 - Other formats use 7z.dll's `IOutArchive`
-- Compression level: 0 (no compression) / 1 / 3 / 5 / 7 / 9 (maximum). RAR: 0..5
+- Compression level: 0 (no compression) / 1 / 3 / 5 / 7 / 9 (maximum). Zstd: 1..22. Lizard: 10..49.
 - Method selection:
   - 7z: LZMA2 / LZMA / PPMd / BZip2 / Deflate / Zstandard / Brotli / LZ4 / LZ5 / Lizard / FastLZMA2
   - ZIP: Deflate / BZip2 / LZMA / Zstandard / Brotli / LZ4 / Store
+  - TAR: Store / GZip / BZip2 / XZ / Zstandard / Brotli / LZ4 / LZ5 / Lizard (automatically wraps stream formats in tar)
   - Only encoders available in loaded 7z.dll are displayed (dynamically enumerated via `GetNumberOfMethods` / `GetMethodProperty`)
 - **Advanced Options** dialog (`IDD_COMPRESS_ADV`): Dictionary size / Word size / Solid block size / Threads / **Split volume** / Extra parameters (→ comprehensive list in [`docs/compress-extra-params.md`](compress-extra-params.md))
-- **B2E Advanced Options** dialog (`IDD_B2E_COMPRESS_ADV`): Dictionary size / Solid / Threads / Recovery record / Split volume / Extra parameters (→ comprehensive list in [`docs/rar-extra-params.md`](rar-extra-params.md))
-- **Split volume** (`volumeSize`): Supported for 7z / ZIP only. Splits as `archive.7z.001` / `archive.7z.002` ... RAR uses `B2E backend -v<size>`
+- **Split volume** (`volumeSize`): Supported for 7z / ZIP only. Splits as `archive.7z.001` / `archive.7z.002` ...
 - Password protection supported (7z has header encryption option)
 - Output file extension auto-corrected when format changes
 - **After successful compression from the main window**, the resulting archive is automatically opened in the main window. Split volume archives open at `.001`. CLI `a` action is unaffected.
 - Advanced options last-used values persisted in INI
-- **Self-extracting (SFX)**: 7z / RAR only. Select from dropdown in compression dialog: "GUI version (.exe)", "Console version (.exe)", or "None"
+- **Self-extracting (SFX)**: 7z / B2E (if supported by script) only. Select from dropdown in compression dialog: "GUI version (.exe)", "Console version (.exe)", or "None"
   - 7z: Prepend `7z.sfx` (GUI) or `7zCon.sfx` (console) from same directory as 7z.dll to compressed .7z data, generate `.exe`
-  - RAR: Pass `B2E backend -sfx<modulePath>`, use `Default.SFX` (GUI) or `WinCon.SFX` (console) from B2E backend / WinB2E backend directory
+  - B2E: `sfx:` / `sfxd:` block in script is executed to generate `.exe`.
   - Can combine with split volume (SFX module prepended to volume 1, generates `archive.exe.001 / .002 / ...`)
-  - If SFX module not found, show error and abort (do not output `.7z` / `.rar`)
+  - If SFX module not found, show error and abort (do not output `.7z`)
 
 ### Extract Feature
 
@@ -120,12 +120,12 @@ Dynamically updated via `WM_INITMENUPOPUP` based on archive state (open / read-o
 - **Split archives** (`archive.7z.001` / `.002` / ...): Opening volume 1 (`.001`) uses 7z.dll's Split handler + `IArchiveOpenVolumeCallback` to concatenate volumes
   - Auto-unwrap: If result is "single file + archive extension", extract inner archive to temp file, reopen, and **display entries from inside directly**
   - Auto-unwrapped split archives are **read-only** (delete menu disabled)
-- **RAR multi-volume** (`archive.partN.rar` / `.r00` `.r01`): Opening volume 1 concatenates volumes internally via B2E backend / 7z.dll
-- RAR backend auto-switch: Select `7z.dll` or `B2E backend` in settings
+- **Multi-volume archives** (`archive.partN.ext` / `.r00` `.r01` / etc): Opening volume 1 concatenates volumes if supported by backend.
+- B2E backend auto-switch: Select `7z.dll` or `B2E backend` in settings (if format is supported by both).
 - If one backend fails, automatically fallback to the other
 - Selective file extraction (multi-select in ListView → extract only selected)
-  - **Valid only with 7z.dll backend**. If nothing selected, extract all files
-  - **With B2E backend backend, selected extraction is supported** by matching normalized entry paths against the current selection.
+  - **Valid with 7z.dll backend**. If nothing selected, extract all files
+  - **With B2E backend, selected extraction is supported** by matching normalized entry paths against the current selection.
 - Full extraction (F5/Ctrl+E with no selection)
 - **Subfolder creation policy** (`MkDir` setting):
   - `0` = Do not create
@@ -145,7 +145,7 @@ Verify integrity of the selected archive in place. Does not extract files.
 
 Delete entries selected in ListView (including contents when folder selected) from archive.
 - 7z backend: `IOutArchive::UpdateItems` writes only entries to keep to `.~tmp` file, then replace original with `MoveFileExW(MOVEFILE_REPLACE_EXISTING)`. **Entries to keep are passed with `newData=0/newProperties=0/indexInArchive=oldIdx`, so compressed blobs are copied as-is without re-encoding** (no password needed)
-- RAR backend: `B2E backend d -y -r <archive> <path1> ...`
+- B2E backend: execute `delete:` section of the `.b2e` script.
 - Write-unsupported formats (ISO / CAB / JAR etc.) fail at `IOutArchive` `QueryInterface` stage (`E_NOINTERFACE`)
 - Header-encrypted 7z fails at `IInArchive::Open` stage (password not retained)
 
@@ -226,7 +226,7 @@ Opened via **File → Archive properties** (`Alt+Enter`). Displays archive-wide 
 
 Opened via **Actions → Archive comment...**. Displays and optionally edits the whole-archive comment.
 - **ZIP**: read via `SevenZip::GetArchiveComment`, write via `SevenZip::SetZipArchiveComment` (direct EOCD rewrite). ZIP comments are encoded in OEM code page (CP_OEMCP) to match 7-Zip's ZIP handler interpretation.
-- **RAR**: read via `B2eBridge::GetArchiveComment`, write via `B2eProcess::SetComment` (`B2E backend c -z<tempfile>`). Non-ASCII write behavior depends on the installed `B2E backend` comment-file interpretation and is currently treated as implementation-defined.
+- **B2E**: read/write behavior depends on the installed B2E script's `comment:` implementation, if present.
 - **7z format**: no archive-wide comment in spec; write path not available.
 - The dialog is **read-only** for formats that do not support comment writing. Class: `CommentDlg`.
 
@@ -291,12 +291,10 @@ Priority and implementation approach for unimplemented features: see [`docs/road
   - 7z / ZIP split creation and reading supported (implemented 2026-05-08, uses `CMultiVolOutStream` + `IArchiveOpenVolumeCallback`)
   - GZ / BZ2 / XZ / TAR do not support splitting (format specifications require non-seekable output)
 - Individual extraction from solid archives not possible (7z.dll limitation)
-- Shell integration (context menu) not implemented
 - Archive search/filter not implemented
 - Multi-archive simultaneous browse (tabs etc.) not implemented
-- RAR delete cancel path not implemented (`B2eProcess::Delete` does not support `Cancel()`)
+- B2E delete cancel path not implemented (`B2eProcess::Delete` does not support `Cancel()`)
 - Header-encrypted 7z archive deletion fails (password is not passed to the delete path)
-- Manual test matrix partially implemented (RAR formats confirmed only)
 
 
 
