@@ -145,13 +145,14 @@ LRESULT MainWindow::HandleMsg(UINT msg, WPARAM wp, LPARAM lp) {
             auto* nm = reinterpret_cast<NMLISTVIEW*>(lp);
             OnColumnClick(nm->iSubItem);
         }
-        if (hdr->code == TTN_GETDISPINFOW) {
+            if (hdr->code == TTN_GETDISPINFOW) {
             auto* pdi = reinterpret_cast<NMTTDISPINFOW*>(lp);
             UINT id = 0;
             switch (pdi->hdr.idFrom) {
             case ID_EXTRACT_SMART: id = IDS_TIP_EXTRACT; break;
             case ID_OPEN_ASSOC:   id = IDS_TIP_VIEW;     break;
             case ID_ADD:          id = IDS_TIP_ADD;      break;
+            case ID_DELETE:       id = IDS_TIP_DELETE;   break;
             case ID_INFO:         id = IDS_TIP_INFO;     break;
             case ID_TEST:         id = IDS_TIP_TEST;     break;
             case ID_SETTINGS_DLG: id = IDS_TIP_SETTINGS; break;
@@ -337,8 +338,9 @@ void MainWindow::CreateControls(HWND hwnd) {
     SendMessageW(m_hToolbar, TB_SETPADDING,    0, MAKELPARAM(4, 10));
 
     const UINT bmpIds[] = {
-        IDB_TOOLBAR_EXTRACT, IDB_TOOLBAR_ADD, IDB_TOOLBAR_DELETE,
-        IDB_TOOLBAR_INFO,    IDB_TOOLBAR_TEST, IDB_TOOLBAR_SETTINGS,
+        IDB_TOOLBAR_EXTRACT, IDB_TOOLBAR_VIEW, IDB_TOOLBAR_ADD,
+        IDB_TOOLBAR_DELETE,  IDB_TOOLBAR_INFO, IDB_TOOLBAR_TEST,
+        IDB_TOOLBAR_SETTINGS,
     };
     
     // The new 24x24 bitmaps are fully 32-bit with proper alpha channels (anti-aliasing).
@@ -356,12 +358,13 @@ void MainWindow::CreateControls(HWND hwnd) {
 
     TBBUTTON btns[] = {
         {0, ID_EXTRACT_SMART, TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
-        {1, ID_ADD,           TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
-        {2, ID_DELETE,        TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
-        {3, ID_INFO,          TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
-        {4, ID_TEST,          TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
+        {1, ID_OPEN_ASSOC,    TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
+        {2, ID_ADD,           TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
+        {3, ID_DELETE,        TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
+        {4, ID_INFO,          TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
+        {5, ID_TEST,          TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
         {0, 0,                0,               BTNS_SEP,    {}, 0, 0},
-        {5, ID_SETTINGS_DLG,  TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
+        {6, ID_SETTINGS_DLG,  TBSTATE_ENABLED, BTNS_BUTTON, {}, 0, 0},
         {0, 0,                0,               BTNS_SEP,    {}, 0, 0},  // separator before Extract to:
     };
     SendMessageW(m_hToolbar, TB_ADDBUTTONS, _countof(btns), (LPARAM)btns);

@@ -15,6 +15,7 @@ IDB_TOOLBAR_ADD     BITMAP "Add.bmp"
 IDB_TOOLBAR_INFO    BITMAP "Info.bmp"
 IDB_TOOLBAR_SETTINGS BITMAP "Settings.bmp"
 IDB_TOOLBAR_TEST     BITMAP "Test.bmp"
+IDB_TOOLBAR_VIEW     BITMAP "View.bmp"
 
 1 RT_MANIFEST "manifest.xml"
 
@@ -306,6 +307,7 @@ BEGIN
     IDS_TIP_INFO                    "Info"
     IDS_TIP_TEST                    "Test"
     IDS_TIP_SETTINGS                "Settings"
+    IDS_TIP_DELETE                  "Delete"
 
     IDS_CTX_EXTRACT                 "E&xtract..."
     IDS_CTX_EXTRACT_SELECTED        "&Extract selected"
@@ -771,6 +773,7 @@ BEGIN
     IDS_TIP_INFO                    "情報"
     IDS_TIP_TEST                    "テスト"
     IDS_TIP_SETTINGS                "設定"
+    IDS_TIP_DELETE                  "削除"
 
     IDS_CTX_EXTRACT                 "展開(&X)..."
     IDS_CTX_EXTRACT_SELECTED        "選択ファイルを展開(&E)"
@@ -946,4 +949,6 @@ BEGIN
     IDS_ADV_DEFAULT                 "既定"
     IDS_ADV_NOT_SOLID               "非ソリッド"
 END
+
+
 

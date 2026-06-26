@@ -14,6 +14,7 @@
 #define IDB_TOOLBAR_INFO    114
 #define IDB_TOOLBAR_SETTINGS 115
 #define IDB_TOOLBAR_TEST     116
+#define IDB_TOOLBAR_VIEW     117
 
 // Dialogs
 #define IDD_COMPRESS        201
@@ -187,6 +188,7 @@
 #define IDS_TIP_INFO                    11043
 #define IDS_TIP_TEST                    11044
 #define IDS_TIP_SETTINGS                11045
+#define IDS_TIP_DELETE                  11046
 
 // --- Context menu ---
 #define IDS_CTX_EXTRACT_SELECTED        11050
