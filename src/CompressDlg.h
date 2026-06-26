@@ -46,13 +46,16 @@ private:
 
     void OnInit(HWND hwnd);
     void OnFormatChange(HWND hwnd);
+    void OnMethodChange(HWND hwnd);
     void OnSfxChange(HWND hwnd);
     void OnBrowseOutput(HWND hwnd);
     void OnAdvanced(HWND hwnd);
     bool OnOK(HWND hwnd);
 
     // Recompute the output filename extension based on format and SFX selection.
-    void UpdateOutputExt(HWND hwnd, const wchar_t* fmtId, const wchar_t* sfxMode);
+    void UpdateOutputExt(HWND hwnd, const wchar_t* fmtId, const wchar_t* sfxMode, const wchar_t* methodId);
+    // Update the level combobox based on the currently selected method
+    void UpdateLevelList(HWND hwnd);
 
     HWND   m_hwnd = nullptr;
     Params m_params;

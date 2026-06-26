@@ -35,15 +35,19 @@ void Save(const CompressDlg::Params& p, Settings& s) {
 }
 
 void NormalizeForFormat(CompressDlg::Params& p) {
-    if (p.format != L"7z" && p.format != L"zip") {
-        // tar/gz/bz2/xz/... take no method.
+    if (p.format != L"7z" && p.format != L"zip" && p.format != L"tar") {
+        // gz/bz2/xz/... take no method.
         p.method.clear();
     } else if (p.level == 0 ||
                (p.format == L"7z"  && p.method == L"lzma2") ||
-               (p.format == L"zip" && p.method == L"deflate")) {
+               (p.format == L"zip" && p.method == L"deflate") ||
+               (p.format == L"tar" && p.method == L"")) {
         // Drop a method that only restates the level preset's codec: level 0 must
         // Store regardless, and the format default is byte-identical with/without it.
-        p.method.clear();
+        // For tar, level 0 (Store) or empty method means raw tar without stream compression.
+        if (p.format != L"tar") {
+            p.method.clear();
+        }
     }
     // SFX is valid only for 7z and b2e.
     if (p.format != L"7z" && p.sfxMode != L"") {
@@ -55,8 +59,48 @@ void NormalizeForFormat(CompressDlg::Params& p) {
     }
 }
 
-bool NeedsTarWrapper(const std::wstring& format,
-                     const std::vector<std::wstring>& inputFiles) {
+bool GetLevelRangeForMethod(const std::wstring& method, int& minLevel, int& maxLevel, int& defaultLevel) {
+    std::wstring m = method;
+    for (auto& c : m) c = (wchar_t)towlower(c);
+
+    // Default standard 7-Zip ranges
+    minLevel = 0;
+    maxLevel = 9;
+    defaultLevel = 5;
+
+    if (m == L"zstd" || m == L"zstandard") {
+        minLevel = 1;
+        maxLevel = 22;
+        defaultLevel = 3;
+        return true;
+    }
+    if (m == L"lizard" || m == L"liz") {
+        minLevel = 10;
+        maxLevel = 49;
+        defaultLevel = 17; // Equivalent to 'fast' usually
+        return true;
+    }
+    if (m == L"brotli" || m == L"br") {
+        minLevel = 0;
+        maxLevel = 11;
+        defaultLevel = 4;
+        return true;
+    }
+    if (m == L"lz4" || m == L"lz5") {
+        minLevel = 1;
+        maxLevel = 12;
+        defaultLevel = 1;
+        return true;
+    }
+    
+    // Everything else (lzma, lzma2, deflate, bzip2, etc) defaults to 0-9
+    return false;
+}
+
+// True when a stream format (gz/bz2/xz/zst/...) has multiple inputs or a single directory.
+// In the new design, this indicates an error state for the 'a' command (must use tar or 'w' command).
+bool IsInvalidStreamInput(const std::wstring& format,
+                          const std::vector<std::wstring>& inputFiles) {
     if (!SevenZip::IsStreamExt(format.c_str())) return false;
     if (inputFiles.size() > 1) return true;
     if (inputFiles.size() == 1) {
@@ -67,7 +111,9 @@ bool NeedsTarWrapper(const std::wstring& format,
 }
 
 std::wstring OutputExtension(const std::wstring& format,
-                             const std::wstring& sfxMode, bool needsTar) {
+                             const std::wstring& sfxMode,
+                             const std::wstring& method,
+                             bool needsTar) {
     // SFX can be 7z or B2E
     bool sfxOn = !sfxMode.empty();
     if (sfxOn) {
@@ -80,8 +126,27 @@ std::wstring OutputExtension(const std::wstring& format,
             return L".exe";
         }
     }
-    if (needsTar) return L".tar." + format;
-    return L"." + format;
+
+    std::wstring fmt = format;
+    if (fmt == L"gzip") fmt = L"gz";
+    if (fmt == L"bzip2") fmt = L"bz2";
+    if (fmt == L"brotli") fmt = L"br";
+    if (fmt == L"lizard") fmt = L"liz";
+    if (fmt == L"zstandard" || fmt == L"zstd") fmt = L"zst";
+
+    if (_wcsicmp(fmt.c_str(), L"tar") == 0 && !method.empty()) {
+        std::wstring m = method;
+        for (auto& c : m) c = (wchar_t)towlower(c);
+        if (m == L"gzip") m = L"gz";
+        if (m == L"bzip2") m = L"bz2";
+        if (m == L"zstandard" || m == L"zstd") m = L"zst";
+        if (m == L"brotli") m = L"br";
+        if (m == L"lizard") m = L"liz";
+        
+        return L".tar." + m;
+    }
+
+    return L"." + fmt;
 }
 
 void ApplyOutputExtension(std::wstring& path, const std::wstring& ext,

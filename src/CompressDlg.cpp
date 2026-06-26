@@ -35,6 +35,18 @@ static const MethodEntry kMethodsZip[] = {
     // 7-Zip Zstandard extension (shown only when DLL supports it)
     {L"Zstandard",      L"zstd"},
 };
+static const MethodEntry kMethodsTar[] = {
+    {L"Store",         L""},       // default (no compression)
+    {L"GZip",          L"gzip"},
+    {L"BZip2",         L"bzip2"},
+    {L"XZ",            L"xz"},
+    // 7-Zip Zstandard extended codecs
+    {L"Zstandard",     L"zstd"},
+    {L"Brotli",        L"brotli"},
+    {L"LZ4",           L"lz4"},
+    {L"LZ5",           L"lz5"},
+    {L"Lizard",        L"lizard"},
+};
 
 bool CompressDlg::Show(HWND hwndParent, Params& params,
                        const std::vector<std::wstring>* encoderNames,
@@ -82,6 +94,9 @@ INT_PTR CompressDlg::HandleMsg(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         switch (LOWORD(wp)) {
         case IDC_FORMAT:
             if (HIWORD(wp) == CBN_SELCHANGE) OnFormatChange(hwnd);
+            break;
+        case IDC_METHOD:
+            if (HIWORD(wp) == CBN_SELCHANGE) OnMethodChange(hwnd);
             break;
         case IDC_SFX_MODE:
             if (HIWORD(wp) == CBN_SELCHANGE) OnSfxChange(hwnd);
@@ -148,28 +163,134 @@ void CompressDlg::OnInit(HWND hwnd) {
     OnFormatChange(hwnd);
 }
 
-void CompressDlg::UpdateOutputExt(HWND hwnd, const wchar_t* fmtId, const wchar_t* sfxMode) {
+void CompressDlg::UpdateOutputExt(HWND hwnd, const wchar_t* fmtId, const wchar_t* sfxMode, const wchar_t* methodId) {
     wchar_t outPath[MAX_PATH] = {};
     GetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, outPath, MAX_PATH);
     if (!outPath[0] || !fmtId) return;
 
-    bool needsTar = CompressPolicy::NeedsTarWrapper(fmtId, m_params.inputFiles);
-    std::wstring ext = CompressPolicy::OutputExtension(fmtId, sfxMode ? sfxMode : L"", needsTar);
+    bool isInvalid = CompressPolicy::IsInvalidStreamInput(fmtId, m_params.inputFiles);
+    // GUI still updates extension if they select tar, but doesn't auto-tar wrap streams
+    std::wstring ext = CompressPolicy::OutputExtension(fmtId, sfxMode ? sfxMode : L"", methodId ? methodId : L"", false);
 
     std::wstring path(outPath);
     CompressPolicy::ApplyOutputExtension(path, ext, m_writableFormats);
     SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, path.c_str());
 }
 
+void CompressDlg::UpdateLevelList(HWND hwnd) {
+    HWND hMethod = GetDlgItem(hwnd, IDC_METHOD);
+    HWND hLevel  = GetDlgItem(hwnd, IDC_LEVEL);
+    
+    // Check if it's B2E format
+    HWND hFmt = GetDlgItem(hwnd, IDC_FORMAT);
+    int fsel = (int)SendMessageW(hFmt, CB_GETCURSEL, 0, 0);
+    const wchar_t* fmtId = nullptr;
+    if (fsel != CB_ERR) {
+        fmtId = (const wchar_t*)SendMessageW(hFmt, CB_GETITEMDATA, fsel, 0);
+    }
+    
+    if (fmtId) {
+        for (const auto& bf : m_b2eFormats) {
+            if (_wcsicmp(fmtId, bf.ext.c_str()) == 0) {
+                // B2E formats don't use the level combobox
+                SendMessageW(hLevel, CB_RESETCONTENT, 0, 0);
+                EnableWindow(hLevel, FALSE);
+                return;
+            }
+        }
+    }
+
+    // Get currently selected method
+    int msel = (int)SendMessageW(hMethod, CB_GETCURSEL, 0, 0);
+    std::wstring method;
+    if (msel != CB_ERR) {
+        const wchar_t* pMethodId = (const wchar_t*)SendMessageW(hMethod, CB_GETITEMDATA, msel, 0);
+        if (pMethodId) method = pMethodId;
+    }
+
+    // Remember the current level value to try and re-select it
+    int currentLevel = m_params.level;
+    int lsel = (int)SendMessageW(hLevel, CB_GETCURSEL, 0, 0);
+    if (lsel != CB_ERR) {
+        currentLevel = (int)SendMessageW(hLevel, CB_GETITEMDATA, lsel, 0);
+    }
+
+    SendMessageW(hLevel, CB_RESETCONTENT, 0, 0);
+
+    int minL, maxL, defL;
+    bool customRange = CompressPolicy::GetLevelRangeForMethod(method, minL, maxL, defL);
+
+    if (customRange) {
+        // Special format like zstd or lizard
+        int targetIdx = -1;
+        for (int i = minL; i <= maxL; ++i) {
+            std::wstring label = std::to_wstring(i);
+            if (i == defL) label += L" (" + I18n::Tr(IDS_DEFAULT_SUFFIX) + L")";
+            
+            int idx = (int)SendMessageW(hLevel, CB_ADDSTRING, 0, (LPARAM)label.c_str());
+            SendMessageW(hLevel, CB_SETITEMDATA, idx, i);
+            if (i == currentLevel) targetIdx = idx;
+            else if (i == defL && targetIdx == -1) targetIdx = idx; // Fallback to default
+        }
+        if (targetIdx != -1) {
+            SendMessageW(hLevel, CB_SETCURSEL, targetIdx, 0);
+        } else {
+            SendMessageW(hLevel, CB_SETCURSEL, 0, 0);
+        }
+    } else {
+        // Standard 7z/zip levels (0-9 scale)
+        const UINT levelIds[]  = { IDS_LEVEL_0, IDS_LEVEL_1, IDS_LEVEL_3,
+                                   IDS_LEVEL_5, IDS_LEVEL_7, IDS_LEVEL_9 };
+        const int  levelVals[] = {0, 1, 3, 5, 7, 9};
+        
+        int targetIdx = -1;
+        for (int i = 0; i < 6; ++i) {
+            std::wstring label = I18n::Tr(levelIds[i]);
+            int idx = (int)SendMessageW(hLevel, CB_ADDSTRING, 0, (LPARAM)label.c_str());
+            SendMessageW(hLevel, CB_SETITEMDATA, idx, levelVals[i]);
+            
+            if (levelVals[i] == currentLevel) targetIdx = idx;
+        }
+        
+        if (targetIdx != -1) {
+            SendMessageW(hLevel, CB_SETCURSEL, targetIdx, 0);
+        } else {
+            // Find closest match or default to 5
+            SendMessageW(hLevel, CB_SETCURSEL, 3, 0); // index 3 is level 5
+        }
+    }
+    EnableWindow(hLevel, TRUE);
+}
+
+void CompressDlg::OnMethodChange(HWND hwnd) {
+    HWND hFmt = GetDlgItem(hwnd, IDC_FORMAT);
+    HWND hSfx = GetDlgItem(hwnd, IDC_SFX_MODE);
+    HWND hMethod = GetDlgItem(hwnd, IDC_METHOD);
+    int fsel = (int)SendMessageW(hFmt, CB_GETCURSEL, 0, 0);
+    int ssel = (int)SendMessageW(hSfx, CB_GETCURSEL, 0, 0);
+    int msel = (int)SendMessageW(hMethod, CB_GETCURSEL, 0, 0);
+    
+    if (fsel == CB_ERR) return;
+    const wchar_t* fmtId = (const wchar_t*)SendMessageW(hFmt, CB_GETITEMDATA, fsel, 0);
+    const wchar_t* sfxId = (ssel != CB_ERR) ? (const wchar_t*)SendMessageW(hSfx, CB_GETITEMDATA, ssel, 0) : L"";
+    const wchar_t* methodId = (msel != CB_ERR) ? (const wchar_t*)SendMessageW(hMethod, CB_GETITEMDATA, msel, 0) : L"";
+    
+    UpdateOutputExt(hwnd, fmtId, sfxId, methodId);
+    UpdateLevelList(hwnd);
+}
+
 void CompressDlg::OnSfxChange(HWND hwnd) {
     HWND hFmt = GetDlgItem(hwnd, IDC_FORMAT);
     HWND hSfx = GetDlgItem(hwnd, IDC_SFX_MODE);
+    HWND hMethod = GetDlgItem(hwnd, IDC_METHOD);
     int  fsel = (int)SendMessageW(hFmt, CB_GETCURSEL, 0, 0);
     int  ssel = (int)SendMessageW(hSfx, CB_GETCURSEL, 0, 0);
+    int  msel = (int)SendMessageW(hMethod, CB_GETCURSEL, 0, 0);
     if (fsel == CB_ERR || ssel == CB_ERR) return;
     const wchar_t* fmtId = (const wchar_t*)SendMessageW(hFmt, CB_GETITEMDATA, fsel, 0);
     const wchar_t* sfxId = (const wchar_t*)SendMessageW(hSfx, CB_GETITEMDATA, ssel, 0);
-    UpdateOutputExt(hwnd, fmtId, sfxId);
+    const wchar_t* methodId = (msel != CB_ERR) ? (const wchar_t*)SendMessageW(hMethod, CB_GETITEMDATA, msel, 0) : L"";
+    UpdateOutputExt(hwnd, fmtId, sfxId, methodId);
 }
 
 void CompressDlg::OnFormatChange(HWND hwnd) {
@@ -182,6 +303,7 @@ void CompressDlg::OnFormatChange(HWND hwnd) {
     const wchar_t* fmtId = (const wchar_t*)SendMessageW(hFmt, CB_GETITEMDATA, sel, 0);
     bool is7z  = (fmtId && wcscmp(fmtId, L"7z")  == 0);
     bool isZip = (fmtId && wcscmp(fmtId, L"zip") == 0);
+    bool isTar = (fmtId && wcscmp(fmtId, L"tar") == 0);
 
     const B2eFormatInfo* b2eInfo = nullptr;
     if (fmtId) {
@@ -235,13 +357,13 @@ void CompressDlg::OnFormatChange(HWND hwnd) {
     if (!sfxAvailable) SendMessageW(hSfx, CB_SETCURSEL, 0, 0);  // index 0 = "none"
 
     // Update output path extension to match the selected format.
-    // For gz/bz2/xz, use .tar.X when multiple inputs or a directory are selected
-    // (SevenZip::Compress will auto-wrap in tar at compression time).
     ssel = (int)SendMessageW(hSfx, CB_GETCURSEL, 0, 0);
     const wchar_t* sfxId = (ssel != CB_ERR)
         ? (const wchar_t*)SendMessageW(hSfx, CB_GETITEMDATA, ssel, 0)
         : L"";
-    UpdateOutputExt(hwnd, fmtId, sfxId);
+    
+    // Initial update for the format (vital for formats that return early like gz/b2e)
+    UpdateOutputExt(hwnd, fmtId, sfxId, L"");
 
     SendMessageW(hMethod, CB_RESETCONTENT, 0, 0);
 
@@ -268,54 +390,53 @@ void CompressDlg::OnFormatChange(HWND hwnd) {
             // B2e formats aren't persisted right now, so we just use defaultIdx.
         }
         SendMessageW(hMethod, CB_SETCURSEL, defaultIdx, 0);
+        
+        // Update level combo and output extension based on the final determined method
+        UpdateLevelList(hwnd);
+        OnMethodChange(hwnd);
         return;
     }
 
-    // Non-RAR: populate level combo with 7z/zip levels (0-9 scale)
-    const UINT levelIds[]  = { IDS_LEVEL_0, IDS_LEVEL_1, IDS_LEVEL_3,
-                               IDS_LEVEL_5, IDS_LEVEL_7, IDS_LEVEL_9 };
-    const int  levelVals[] = {0, 1, 3, 5, 7, 9};
-    for (int i = 0; i < 6; ++i) {
-        std::wstring label = I18n::Tr(levelIds[i]);
-        int idx = (int)SendMessageW(hLevel, CB_ADDSTRING, 0, (LPARAM)label.c_str());
-        SendMessageW(hLevel, CB_SETITEMDATA, idx, levelVals[i]);
-        if (m_params.level == levelVals[i]) SendMessageW(hLevel, CB_SETCURSEL, idx, 0);
-    }
-    if (SendMessageW(hLevel, CB_GETCURSEL, 0, 0) == CB_ERR)
-        SendMessageW(hLevel, CB_SETCURSEL, 3, 0);  // default = 5 (index 3)
-    EnableWindow(hLevel, TRUE);
     // Password is only supported for 7z and zip (tar/gz/bz2/xz have no encryption)
     EnableWindow(GetDlgItem(hwnd, IDC_PASSWORD), is7z || isZip);
     EnableWindow(GetDlgItem(hwnd, IDC_ENCRYPT_HDR), is7z);
     EnableWindow(GetDlgItem(hwnd, IDC_ADV_BUTTON), TRUE);
 
-    if (!is7z && !isZip) {
+    if (!is7z && !isZip && !isTar) {
         EnableWindow(hMethod, FALSE);
         return;
     }
     EnableWindow(hMethod, TRUE);
 
-    const MethodEntry* methods = is7z ? kMethods7z : kMethodsZip;
-    int count = is7z ? (int)_countof(kMethods7z) : (int)_countof(kMethodsZip);
+    const MethodEntry* methods = is7z ? kMethods7z : (isZip ? kMethodsZip : kMethodsTar);
+    int count = is7z ? (int)_countof(kMethods7z) : (isZip ? (int)_countof(kMethodsZip) : (int)_countof(kMethodsTar));
 
     // When encoderNames is non-empty, show only encoders supported by the DLL.
     // Empty or null means no filter (show all codecs).
     auto supportsEncoder = [&](const wchar_t* id) -> bool {
-        if (!m_encoderNames || m_encoderNames->empty()) return true;
+        if (!id || !id[0]) return true; // Empty id means "Store" (always supported)
         std::wstring lower = id;
         for (auto& c : lower) c = (wchar_t)towlower((wchar_t)c);
+        // Standard tar stream formats are always supported by 7-Zip
+        if (isTar && (lower == L"gzip" || lower == L"bzip2" || lower == L"xz")) return true;
+
+        if (!m_encoderNames || m_encoderNames->empty()) return true;
         for (const auto& name : *m_encoderNames) {
             if (name == lower) return true;
             // Safety: "zstd" ↔ "zstandard" (variant spelling may differ across DLL versions)
             if ((lower == L"zstd" || lower == L"zstandard") &&
                 (name == L"zstd" || name == L"zstandard")) return true;
+            // Safety for stream formats which might expose the format name instead of encoder name
+            if ((lower == L"gzip" || lower == L"gz") && (name == L"gzip" || name == L"gz")) return true;
+            if ((lower == L"bzip2" || lower == L"bz2") && (name == L"bzip2" || name == L"bz2")) return true;
+            if ((lower == L"xz" || lower == L"lzma2") && (name == L"xz" || name == L"lzma2")) return true;
         }
         return false;
     };
 
     // Append "(default)" suffix only to the default method.
-    // LZMA2 is the default for 7z; Deflate is the default for ZIP.
-    const wchar_t* defaultId = is7z ? L"lzma2" : L"deflate";
+    // LZMA2 is the default for 7z; Deflate is the default for ZIP; Store (empty) is default for Tar.
+    const wchar_t* defaultId = is7z ? L"lzma2" : (isZip ? L"deflate" : L"");
     std::wstring defaultSuffix = I18n::Tr(IDS_DEFAULT_SUFFIX);
     for (int i = 0; i < count; ++i) {
         if (!supportsEncoder(methods[i].id)) continue;
@@ -327,6 +448,10 @@ void CompressDlg::OnFormatChange(HWND hwnd) {
     }
     if (SendMessageW(hMethod, CB_GETCURSEL, 0, 0) == CB_ERR)
         SendMessageW(hMethod, CB_SETCURSEL, 0, 0);
+        
+    // Update level combo and output extension based on the final determined method
+    UpdateLevelList(hwnd);
+    OnMethodChange(hwnd);
 }
 
 void CompressDlg::OnBrowseOutput(HWND hwnd) {
@@ -432,6 +557,13 @@ bool CompressDlg::OnOK(HWND hwnd) {
 
     // Apply the format/method/SFX policy in one place (shared with the CLI path).
     CompressPolicy::NormalizeForFormat(m_params);
+
+    if (CompressPolicy::IsInvalidStreamInput(m_params.format, m_params.inputFiles)) {
+        MessageBoxW(hwnd, 
+            L"ストリーム形式（gzip, bzip2 など）は単一ファイル専用です。\n複数ファイルをまとめる場合はtar形式を使用してください。",
+            I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
+        return false;
+    }
 
     return true;
 }

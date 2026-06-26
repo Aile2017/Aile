@@ -108,7 +108,13 @@ static void ApplyOverrides(CompressDlg::Params& params,
                             const std::wstring& levelOverride,
                             const std::wstring& sfxOverride) {
     if (!typeOverride.empty()) {
-        params.format = typeOverride;
+        std::wstring fmt = typeOverride;
+        if (fmt == L"gzip") fmt = L"gz";
+        else if (fmt == L"bzip2") fmt = L"bz2";
+        else if (fmt == L"brotli") fmt = L"br";
+        else if (fmt == L"lizard") fmt = L"liz";
+        else if (fmt == L"zstd") fmt = L"zst";
+        params.format = fmt;
         // When format is overridden, clear the default method so 7-Zip picks the
         // format's own default. LZMA2 (the Params default) is invalid for zip/tar/etc.
         if (methodOverride.empty())
@@ -119,8 +125,19 @@ static void ApplyOverrides(CompressDlg::Params& params,
         params.method = methodOverride;
 
     if (!levelOverride.empty()) {
-        if (levelOverride.size() == 1 && iswdigit(levelOverride[0])) {
-            params.level = levelOverride[0] - L'0';
+        try {
+            int val = std::stoi(levelOverride);
+            int minL, maxL, defL;
+            if (CompressPolicy::GetLevelRangeForMethod(params.method, minL, maxL, defL)) {
+                if (val < minL) val = minL;
+                if (val > maxL) val = maxL;
+            } else {
+                if (val < 0) val = 0;
+                if (val > 9) val = 9;
+            }
+            params.level = val;
+        } catch (...) {
+            // invalid level string, ignore
         }
     }
 
@@ -145,8 +162,39 @@ static void ApplyOverrides(CompressDlg::Params& params,
 // "v-internalGW.log.ERROR" yields a stem "v-internalGW.log", which already
 // contains a dot, so the archive would be written without its ".7z" extension.
 // Match strictly on the trailing extension instead.
-static void EnsureArchiveExt(std::wstring& path, const std::wstring& format) {
-    const std::wstring suffix = L"." + format;
+static void EnsureArchiveExt(std::wstring& path, const std::wstring& format, const std::wstring& method = L"") {
+    std::wstring fmt = format;
+    if (fmt == L"gzip") fmt = L"gz";
+    if (fmt == L"bzip2") fmt = L"bz2";
+    if (fmt == L"brotli") fmt = L"br";
+    if (fmt == L"lizard") fmt = L"liz";
+    if (fmt == L"zstd") fmt = L"zst";
+
+    std::wstring suffix = L"." + fmt;
+    if (_wcsicmp(fmt.c_str(), L"tar") == 0 && !method.empty()) {
+        std::wstring m = method;
+        for (auto& c : m) c = (wchar_t)towlower(c);
+        if (m == L"gz" || m == L"gzip" ||
+            m == L"bz2" || m == L"bzip2" ||
+            m == L"xz" || 
+            m == L"zst" || m == L"zstd" ||
+            m == L"lz4" || m == L"lz5" ||
+            m == L"br" || m == L"brotli" ||
+            m == L"liz" || m == L"lizard") {
+            
+            // Map common aliases to canonical 7-Zip stream extensions manually
+            // since FormatRegistry::NormalizeFormatAlias is not static/public.
+            std::wstring can = m;
+            if (m == L"gzip" || m == L"gz") can = L"gz";
+            else if (m == L"bzip2" || m == L"bz2") can = L"bz2";
+            else if (m == L"brotli" || m == L"br") can = L"br";
+            else if (m == L"lizard" || m == L"liz") can = L"liz";
+            else if (m == L"zstd" || m == L"zst") can = L"zst";
+
+            suffix += L"." + can;
+        }
+    }
+
     if (path.size() < suffix.size() ||
         _wcsicmp(path.c_str() + path.size() - suffix.size(), suffix.c_str()) != 0)
         path += suffix;
@@ -180,10 +228,17 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
     // In auto-detect mode (nCmdShow != SW_HIDE) always show dialog with presets.
     const bool skipDialog = (!typeOverride.empty() || !sfxOverride.empty()) && (nCmdShow == SW_HIDE);
     if (skipDialog) {
+        if (CompressPolicy::IsInvalidStreamInput(params.format, params.inputFiles)) {
+            MessageBoxW(wnd.Hwnd(), 
+                L"ストリーム形式（gzip, bzip2 など）は単一ファイル専用です。\n複数ファイルをまとめる場合はtar形式を使用し、メソッド（-m）にストリーム形式を指定するか、\n個別圧縮（w コマンド）を使用してください。",
+                I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
+            return 0;
+        }
+
         if (params.sfxMode.empty() || B2e_IsArchiveExt(params.format.c_str())) {
             // For B2E SFX, we leave the extension as the original format (e.g. .lzh).
             // The B2E script's sfx: section will create the .exe file.
-            EnsureArchiveExt(params.outputPath, params.format);
+            EnsureArchiveExt(params.outputPath, params.format, params.method);
         } else {
             EnsureArchiveExt(params.outputPath, L"exe");
         }
@@ -316,12 +371,36 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
         bool isB2e = B2e_IsArchiveExt(params.format.c_str());
 
         std::wstring baseOutput = pair.first;
-        std::wstring ext = (!params.sfxMode.empty() && !isB2e) ? L".exe" : (L"." + params.format);
-        params.outputPath = baseOutput + ext;
+        params.outputPath = baseOutput;
+        if (!params.sfxMode.empty() && !isB2e) {
+            EnsureArchiveExt(params.outputPath, L"exe");
+        } else {
+            EnsureArchiveExt(params.outputPath, params.format, params.method);
+        }
 
         int counter = 1;
+        std::wstring originalOutputPath = params.outputPath;
+        
+        // Find the extension part to preserve it while inserting the counter
+        std::wstring stem = originalOutputPath;
+        std::wstring ext;
+        size_t dotPos = originalOutputPath.find_last_of(L'.');
+        size_t slashPos = originalOutputPath.find_last_of(L"\\/");
+        if (dotPos != std::wstring::npos && (slashPos == std::wstring::npos || dotPos > slashPos)) {
+            // Check for compound extension like .tar.gz
+            size_t dot2Pos = originalOutputPath.find_last_of(L'.', dotPos - 1);
+            if (dot2Pos != std::wstring::npos && (slashPos == std::wstring::npos || dot2Pos > slashPos)) {
+                std::wstring prefix = originalOutputPath.substr(dot2Pos, dotPos - dot2Pos);
+                if (_wcsicmp(prefix.c_str(), L".tar") == 0) {
+                    dotPos = dot2Pos;
+                }
+            }
+            stem = originalOutputPath.substr(0, dotPos);
+            ext = originalOutputPath.substr(dotPos);
+        }
+
         while (PathFileExistsW(params.outputPath.c_str())) {
-            params.outputPath = baseOutput + L"_" + std::to_wstring(counter) + ext;
+            params.outputPath = stem + L"_" + std::to_wstring(counter) + ext;
             counter++;
         }
 

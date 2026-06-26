@@ -29,45 +29,54 @@ HRESULT SevenZip::Compress(const std::vector<std::wstring>& srcPaths,
                             bool encryptHeaders) {
     if (!IsLoaded()) return E_FAIL;
 
-    // For stream formats (gz/bz2/xz/zst/...) with multiple files or a single directory,
-    // automatically wrap contents in a tar first, then apply the stream format.
-    bool isStream = format && IsStreamFormat(format);
-    if (isStream) {
-        bool needsTar = srcPaths.size() > 1;
-        if (!needsTar && srcPaths.size() == 1) {
-            DWORD attrs = GetFileAttributesW(srcPaths[0].c_str());
-            needsTar = (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY));
+    // For stream formats (gz/bz2/xz/zst/...), we no longer implicitly wrap in tar.
+    // However, if the user explicitly requests format=tar with a stream method (e.g., -ttar -mgz),
+    // we must execute the two-step tar+stream process here.
+    bool isStreamMethodForTar = false;
+    if (format && _wcsicmp(format, L"tar") == 0 && method && method[0]) {
+        // Only if the method is a known stream format extension/alias
+        std::wstring m(method);
+        for (auto& c : m) c = (wchar_t)towlower(c);
+        if (m == L"gz" || m == L"gzip" ||
+            m == L"bz2" || m == L"bzip2" ||
+            m == L"xz" || 
+            m == L"zst" || m == L"zstd" ||
+            m == L"lz4" || m == L"lz5" ||
+            m == L"br" || m == L"brotli" ||
+            m == L"liz" || m == L"lizard") {
+            isStreamMethodForTar = true;
         }
-        if (needsTar) {
-            // Build a unique temp tar path
-            wchar_t tempDir[MAX_PATH] = {};
-            GetTempPathW(MAX_PATH, tempDir);
-            std::wstring tempTar = std::wstring(tempDir) +
-                                   L"aileex_" + std::to_wstring(GetTickCount64()) + L".tar";
+    }
 
-            // Step 1: pack everything into a tar (internal; no progress reporting)
-            HRESULT hr = Compress(srcPaths, tempTar.c_str(), L"tar", 0, nullptr, nullptr, nullptr);
-            if (FAILED(hr)) { DeleteFileW(tempTar.c_str()); return hr; }
+    if (isStreamMethodForTar) {
+        // Build a unique temp tar path
+        wchar_t tempDir[MAX_PATH] = {};
+        GetTempPathW(MAX_PATH, tempDir);
+        std::wstring tempTar = std::wstring(tempDir) +
+                               L"aileex_" + std::to_wstring(GetTickCount64()) + L".tar";
 
-            // Step 2: compress the tar with the stream format.
-            // Ensure the output path uses .tar.X extension.
-            std::wstring finalOut(outPath);
-            auto dot = finalOut.rfind(L'.');
-            if (dot != std::wstring::npos) {
-                std::wstring before = finalOut.substr(0, dot);
-                bool alreadyTar = (before.size() >= 4 &&
-                                   _wcsicmp(before.c_str() + before.size() - 4, L".tar") == 0);
-                if (!alreadyTar)
-                    finalOut = before + L".tar." + format;
-            } else {
-                finalOut += std::wstring(L".tar.") + format;
-            }
+        // Step 1: pack everything into a tar (internal; no progress reporting; no compression method)
+        HRESULT hr = Compress(srcPaths, tempTar.c_str(), L"tar", 0, nullptr, nullptr, nullptr);
+        if (FAILED(hr)) { DeleteFileW(tempTar.c_str()); return hr; }
 
-            std::vector<std::wstring> tarList = { tempTar };
-            hr = Compress(tarList, finalOut.c_str(), format, level, method, password, sink);
-            DeleteFileW(tempTar.c_str());
-            return hr;
-        }
+        // Step 2: compress the tar with the stream format specified in method.
+        // We temporarily treat 'method' as 'format' for the stream pass.
+        std::wstring streamFormat = method;
+        
+        // Normalize the alias for OutGuidForFormat compatibility in the recursive call
+        std::wstring can = streamFormat;
+        for (auto& c : can) c = (wchar_t)towlower(c);
+        if (can == L"gzip") streamFormat = L"gz";
+        else if (can == L"bzip2") streamFormat = L"bz2";
+        else if (can == L"brotli") streamFormat = L"br";
+        else if (can == L"lizard") streamFormat = L"liz";
+        else if (can == L"zstd") streamFormat = L"zst";
+
+        // The finalOut is assumed to be outPath (which should already be .tar.gz etc based on CompressPolicy).
+        std::vector<std::wstring> tarList = { tempTar };
+        hr = Compress(tarList, outPath, streamFormat.c_str(), level, nullptr, password, sink);
+        DeleteFileW(tempTar.c_str());
+        return hr;
     }
 
     GUID clsid = FormatToOutGuid(format);
@@ -83,10 +92,12 @@ HRESULT SevenZip::Compress(const std::vector<std::wstring>& srcPaths,
         std::vector<PROPVARIANT>    vals;
         std::vector<std::wstring>   extraKeyStore; // stable storage for extra key strings
 
-        PROPVARIANT pvLevel; PropVariantInit(&pvLevel);
-        pvLevel.vt = VT_UI4;
-        pvLevel.ulVal = (level >= 0 && level <= 9) ? (ULONG)level : 5;
-        names.push_back(L"x"); vals.push_back(pvLevel);
+        if (level >= 0 && level <= 9 && (!format || _wcsicmp(format, L"liz") != 0)) {
+            PROPVARIANT pvLevel; PropVariantInit(&pvLevel);
+            pvLevel.vt = VT_UI4;
+            pvLevel.ulVal = (ULONG)level;
+            names.push_back(L"x"); vals.push_back(pvLevel);
+        }
 
         if (method && method[0]) {
             PROPVARIANT pvMethod; PropVariantInit(&pvMethod);
@@ -157,7 +168,8 @@ HRESULT SevenZip::Compress(const std::vector<std::wstring>& srcPaths,
 
     // Use CMultiVolOutStream if a split volume is specified and the format is not stream-wrapped.
     // gz/bz2/xz are single-entry formats where splitting is complex, so they are not supported.
-    UInt64 volBytes = (adv && !isStream) ? ParseVolumeSize(adv->volumeSize) : 0;
+    bool isStreamExt = format && IsStreamFormat(format);
+    UInt64 volBytes = (adv && !isStreamExt) ? ParseVolumeSize(adv->volumeSize) : 0;
 
     // SFX (.exe) is only supported for 7z format; outPath is assumed to already have .exe extension (set by caller).
     bool isSfx = (adv && !adv->sfxModulePath.empty() &&
@@ -380,10 +392,15 @@ HRESULT SevenZip::AddToArchive(const wchar_t* archivePath,
         std::vector<PROPVARIANT>    vals;
         std::vector<std::wstring>   extraKeyStore;
 
-        PROPVARIANT pvLevel; PropVariantInit(&pvLevel);
-        pvLevel.vt = VT_UI4;
-        pvLevel.ulVal = (level >= 0 && level <= 9) ? (ULONG)level : 5;
-        names.push_back(L"x"); vals.push_back(pvLevel);
+        // Skip "x" property for Lizard as it expects levels 10..49, not 0..9.
+        // Failing to skip it makes SetProperties return an error, yielding an empty archive.
+        std::wstring currentFmt = ExtOfPath(archivePath);
+        if (level >= 0 && level <= 9 && _wcsicmp(currentFmt.c_str(), L"liz") != 0) {
+            PROPVARIANT pvLevel; PropVariantInit(&pvLevel);
+            pvLevel.vt = VT_UI4;
+            pvLevel.ulVal = (ULONG)level;
+            names.push_back(L"x"); vals.push_back(pvLevel);
+        }
 
         if (method && method[0]) {
             PROPVARIANT pvMethod; PropVariantInit(&pvMethod);

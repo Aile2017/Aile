@@ -328,6 +328,21 @@ HRESULT SevenZip::OpenArchive(const wchar_t* path, std::vector<ArchiveItem>& ite
         items.push_back(std::move(it));
     }
 
+    // Synthesize a name for single-file stream formats that do not store a filename (like .bz2, .xz, .liz)
+    if (items.size() == 1 && items[0].path.empty() && items[0].name.empty()) {
+        std::wstring base(path);
+        auto slash = base.find_last_of(L"\\/");
+        if (slash != std::wstring::npos) base = base.substr(slash + 1);
+        auto dot = base.rfind(L'.');
+        if (dot != std::wstring::npos && IsStreamExt(base.substr(dot + 1).c_str())) {
+            base = base.substr(0, dot);
+        } else {
+            base += L"_extracted";
+        }
+        items[0].path = base;
+        items[0].name = base;
+    }
+
     // Transparent unwrap of tar-in-stream wrappers (.tar.gz / .tar.bz2 / ...).
     UnwrapTarStream(path, password, archive, items, resolvedPath, effectivePath);
 

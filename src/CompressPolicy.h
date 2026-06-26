@@ -25,15 +25,21 @@ void Save(const CompressDlg::Params& p, Settings& s);
 // format default or the level is 0 (Store). SFX is valid only for 7z.
 void NormalizeForFormat(CompressDlg::Params& p);
 
-// True when a stream format (gz/bz2/xz/zst/...) must wrap its inputs in a tar
-// first: more than one input, or a single directory.
-bool NeedsTarWrapper(const std::wstring& format,
-                     const std::vector<std::wstring>& inputFiles);
+// Retrieve the allowed compression level range for a specific method.
+// Returns false if the method is unknown (defaults to 0-9).
+bool GetLevelRangeForMethod(const std::wstring& method, int& minLevel, int& maxLevel, int& defaultLevel);
+
+// True when a stream format (gz/bz2/xz/zst/...) has multiple inputs or a single directory.
+// In the new design, this indicates an error state for the 'a' command (must use tar or 'w' command).
+bool IsInvalidStreamInput(const std::wstring& format,
+                          const std::vector<std::wstring>& inputFiles);
 
 // The output extension for a format + SFX + tar-wrap decision: ".exe" for SFX
 // (7z only), ".tar.<fmt>" for a tar-wrapped stream, otherwise ".<fmt>".
 std::wstring OutputExtension(const std::wstring& format,
-                             const std::wstring& sfxMode, bool needsTar);
+                             const std::wstring& sfxMode,
+                             const std::wstring& method,
+                             bool needsTar);
 
 // Replace a trailing recognized archive extension on `path` with `ext`, leaving
 // any dotted base name intact (also strips a preceding ".tar"). `writableFormats`

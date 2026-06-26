@@ -118,6 +118,19 @@ void FormatRegistry::EnumerateFormats() {
             m_writableFormats.push_back(std::move(wf));
         }
     }
+    
+    // Inject common short aliases if they aren't explicitly registered by the DLL
+    auto ensureAlias = [&](const wchar_t* alias, const wchar_t* target) {
+        if (m_extToClsid.count(target) && !m_extToClsid.count(alias)) {
+            m_extToClsid[alias] = m_extToClsid[target];
+        }
+    };
+    ensureAlias(L"gz", L"gzip");
+    ensureAlias(L"bz2", L"bzip2");
+    ensureAlias(L"zst", L"zstandard");
+    ensureAlias(L"zst", L"zstd");
+    ensureAlias(L"br", L"brotli");
+    ensureAlias(L"liz", L"lizard");
 }
 
 std::wstring FormatRegistry::GetExtensionFilterPattern() const {

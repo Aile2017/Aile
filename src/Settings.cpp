@@ -156,6 +156,9 @@ void Settings::WriteStr(const wchar_t* section, const wchar_t* key, const wchar_
     WritePrivateProfileStringW(section, key, val, m_iniPath);
 }
 
+// When auto-detecting the output path, we want to strip the original extension.
+// However, if we're wrapping a single file into a stream format (like .gz),
+// it's conventional to append the extension rather than replace it.
 std::wstring Settings::ComputeDefaultOutputPath(const Settings& s,
                                                const std::vector<std::wstring>& srcFiles,
                                                const std::wstring& overrideDir) {
@@ -172,13 +175,24 @@ std::wstring Settings::ComputeDefaultOutputPath(const Settings& s,
         dir = s.GetDefaultOutputDir();
     }
 
-    // Extract stem of first input file (without extension)
+    // Extract stem of first input file
     if (srcFiles.empty()) return dir;
 
     auto sl = srcFiles[0].find_last_of(L"\\/");
     std::wstring name = (sl != std::wstring::npos) ? srcFiles[0].substr(sl + 1) : srcFiles[0];
-    auto dot = name.rfind(L'.');
-    std::wstring stem = (dot != std::wstring::npos) ? name.substr(0, dot) : name;
+    
+    DWORD attrs = GetFileAttributesW(srcFiles[0].c_str());
+    bool isDir = (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY));
+
+    std::wstring stem;
+    if (srcFiles.size() == 1 && !isDir) {
+        // Single file: keep full name so we get file.txt.gz
+        stem = name;
+    } else {
+        // Directory or multiple files (we use the first item's name as a base)
+        auto dot = name.rfind(L'.');
+        stem = (dot != std::wstring::npos) ? name.substr(0, dot) : name;
+    }
 
     return dir.empty() ? stem : dir + L"\\" + stem;
 }
