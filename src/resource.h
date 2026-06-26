@@ -250,6 +250,7 @@
 #define IDS_SFX_NONE                    11122
 #define IDS_SFX_GUI                     11123
 #define IDS_SFX_CONSOLE                 11124
+#define IDS_SFX_CREATE                  11120
 #define IDS_LEVEL_0                     11125
 #define IDS_LEVEL_1                     11126
 #define IDS_LEVEL_3                     11127

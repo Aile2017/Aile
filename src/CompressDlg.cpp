@@ -194,6 +194,41 @@ void CompressDlg::OnFormatChange(HWND hwnd) {
     }
     bool isB2e = (b2eInfo != nullptr);
 
+    // Remember the currently selected SFX mode id
+    int ssel = (int)SendMessageW(hSfx, CB_GETCURSEL, 0, 0);
+    std::wstring currentSfxId;
+    if (ssel != CB_ERR) {
+        const wchar_t* pId = (const wchar_t*)SendMessageW(hSfx, CB_GETITEMDATA, ssel, 0);
+        if (pId) currentSfxId = pId;
+    }
+
+    SendMessageW(hSfx, CB_RESETCONTENT, 0, 0);
+
+    if (isB2e) {
+        static const SfxEntry b2eSfxModes[] = {
+            {IDS_SFX_NONE,   L""},
+            {IDS_SFX_CREATE, L"gui"}
+        };
+        for (const auto& m : b2eSfxModes) {
+            std::wstring label = I18n::Tr(m.labelId);
+            int idx = (int)SendMessageW(hSfx, CB_ADDSTRING, 0, (LPARAM)label.c_str());
+            SendMessageW(hSfx, CB_SETITEMDATA, idx, (LPARAM)m.id);
+            if (currentSfxId == m.id || (currentSfxId == L"console" && wcscmp(m.id, L"gui") == 0)) {
+                SendMessageW(hSfx, CB_SETCURSEL, idx, 0);
+            }
+        }
+    } else {
+        for (const auto& m : kSfxModes) {
+            std::wstring label = I18n::Tr(m.labelId);
+            int idx = (int)SendMessageW(hSfx, CB_ADDSTRING, 0, (LPARAM)label.c_str());
+            SendMessageW(hSfx, CB_SETITEMDATA, idx, (LPARAM)m.id);
+            if (currentSfxId == m.id) SendMessageW(hSfx, CB_SETCURSEL, idx, 0);
+        }
+    }
+
+    if (SendMessageW(hSfx, CB_GETCURSEL, 0, 0) == CB_ERR)
+        SendMessageW(hSfx, CB_SETCURSEL, 0, 0);
+
     // SFX is supported only for 7z and capable B2E formats; reset to "none" for other formats.
     bool sfxAvailable = is7z || (b2eInfo && b2eInfo->canSfx);
     EnableWindow(hSfx, sfxAvailable);
@@ -202,7 +237,7 @@ void CompressDlg::OnFormatChange(HWND hwnd) {
     // Update output path extension to match the selected format.
     // For gz/bz2/xz, use .tar.X when multiple inputs or a directory are selected
     // (SevenZip::Compress will auto-wrap in tar at compression time).
-    int  ssel = (int)SendMessageW(hSfx, CB_GETCURSEL, 0, 0);
+    ssel = (int)SendMessageW(hSfx, CB_GETCURSEL, 0, 0);
     const wchar_t* sfxId = (ssel != CB_ERR)
         ? (const wchar_t*)SendMessageW(hSfx, CB_GETITEMDATA, ssel, 0)
         : L"";
@@ -217,6 +252,7 @@ void CompressDlg::OnFormatChange(HWND hwnd) {
         EnableWindow(hLevel, FALSE);
         EnableWindow(GetDlgItem(hwnd, IDC_PASSWORD), FALSE);
         EnableWindow(GetDlgItem(hwnd, IDC_ENCRYPT_HDR), FALSE);
+        EnableWindow(GetDlgItem(hwnd, IDC_ADV_BUTTON), FALSE);
         
         EnableWindow(hMethod, !b2eInfo->methods.empty());
         int defaultIdx = 0;
@@ -251,6 +287,7 @@ void CompressDlg::OnFormatChange(HWND hwnd) {
     // Password is only supported for 7z and zip (tar/gz/bz2/xz have no encryption)
     EnableWindow(GetDlgItem(hwnd, IDC_PASSWORD), is7z || isZip);
     EnableWindow(GetDlgItem(hwnd, IDC_ENCRYPT_HDR), is7z);
+    EnableWindow(GetDlgItem(hwnd, IDC_ADV_BUTTON), TRUE);
 
     if (!is7z && !isZip) {
         EnableWindow(hMethod, FALSE);
