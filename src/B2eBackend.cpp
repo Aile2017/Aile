@@ -5,8 +5,7 @@ HRESULT B2eBackend::Open(const wchar_t* path, std::vector<ArchiveItem>& items,
     m_effectivePath = path ? path : L"";
     if (effectivePath) *effectivePath = m_effectivePath;
     
-    std::wstring columnHeader;
-    HRESULT hr = B2e_List(path, items, &columnHeader, &m_toolName, &m_canTest, &m_canDelete, &m_canAdd);
+    HRESULT hr = B2e_List(path, items, &m_columnHeader, &m_toolName, &m_canTest, &m_canDelete, &m_canAdd);
     if (SUCCEEDED(hr)) {
         m_allItems = items;
     }

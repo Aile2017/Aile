@@ -87,4 +87,8 @@ public:
     // Human-readable name of the active backend module (e.g. the loaded DLL or
     // executable). Used for status/title display in place of per-backend lookups.
     virtual const std::wstring& BackendName() const = 0;
+
+    // Optional B2E-specific info
+    virtual bool IsB2e() const { return false; }
+    virtual std::wstring B2eColumnHeader() const { return L""; }
 };

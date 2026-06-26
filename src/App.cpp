@@ -1,4 +1,5 @@
 ﻿#include "App.h"
+#include "B2eBridge.h"
 #include "MainWindow.h"
 #include "CompressDlg.h"
 #include "CompressPolicy.h"
@@ -195,9 +196,10 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
     ProgressDlg progDlg;
     progDlg.Show(wnd.Hwnd(), I18n::Tr(IDS_PROGRESS_COMPRESSING).c_str());
 
-    // Resolve 7z SFX module (search same folder as 7z.dll if specified)
+    // Resolve 7z SFX module (search same folder as 7z.dll if specified) - skip for B2E
     std::wstring sfxModulePath;
-    if (!params.sfxMode.empty()) {
+    bool isB2e = B2e_IsArchiveExt(params.format.c_str());
+    if (!params.sfxMode.empty() && !isB2e) {
         sfxModulePath = Resolve7zSfxModulePath(
             m_sevenZip.GetLoadedPath().c_str(), params.sfxMode.c_str());
         if (sfxModulePath.empty()) {
@@ -214,7 +216,12 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
     progDlg.SetSink(sink);
 
     WorkerThread worker;
-    worker.Start([&sz, params, sink, sfxModulePath]() -> HRESULT {
+    worker.Start([&sz, params, sink, sfxModulePath, isB2e]() -> HRESULT {
+        if (isB2e) {
+            bool sfxReq = !params.sfxMode.empty();
+            return B2e_Compress(params.inputFiles, params.outputPath.c_str(),
+                                params.level, sink, sfxReq, params.format.c_str());
+        }
         const wchar_t* pw = params.password.empty() ? nullptr : params.password.c_str();
         CompressAdvanced adv;
         adv.dictSize      = params.dictSize;
@@ -280,9 +287,10 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
         m_settings.Save();
     }
 
-    // Resolve 7z SFX module once (reused for all files).
+    // Resolve 7z SFX module once (reused for all files) - skip for B2E formats.
     std::wstring sfxModulePath;
-    if (!baseParams.sfxMode.empty()) {
+    bool isB2e = B2e_IsArchiveExt(baseParams.format.c_str());
+    if (!baseParams.sfxMode.empty() && !isB2e) {
         sfxModulePath = Resolve7zSfxModulePath(
             m_sevenZip.GetLoadedPath().c_str(), baseParams.sfxMode.c_str());
         if (sfxModulePath.empty()) {
@@ -303,8 +311,10 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
         CompressDlg::Params params = baseParams;
         params.inputFiles = pair.second;
         
+        bool isB2e = B2e_IsArchiveExt(params.format.c_str());
+
         std::wstring baseOutput = pair.first;
-        std::wstring ext = (!params.sfxMode.empty()) ? L".exe" : (L"." + params.format);
+        std::wstring ext = (!params.sfxMode.empty() && !isB2e) ? L".exe" : (L"." + params.format);
         params.outputPath = baseOutput + ext;
 
         int counter = 1;
@@ -321,7 +331,12 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
         progDlg.SetSink(sink);
 
         WorkerThread worker;
-        worker.Start([&sz, params, sink, sfxModulePath]() -> HRESULT {
+        worker.Start([&sz, params, sink, sfxModulePath, isB2e]() -> HRESULT {
+            if (isB2e) {
+                bool sfxReq = !params.sfxMode.empty();
+                return B2e_Compress(params.inputFiles, params.outputPath.c_str(),
+                                    params.level, sink, sfxReq, params.format.c_str());
+            }
             const wchar_t* pw = params.password.empty() ? nullptr : params.password.c_str();
             CompressAdvanced adv;
             adv.dictSize      = params.dictSize;
@@ -352,7 +367,7 @@ int App::RunExtractDialogMode(const std::vector<std::wstring>& archivePaths, int
     // Filter to actual archives; a shell/CLI selection may include non-archive files.
     std::vector<std::wstring> archives;
     for (const auto& p : archivePaths)
-        if (Get7z().IsArchivePath(p.c_str()))
+        if (Get7z().IsArchivePath(p.c_str()) || B2e_IsArchiveExt(SevenZip::ExtOfPath(p.c_str()).c_str()))
             archives.push_back(p);
     if (archives.empty()) {
         MessageBoxW(nullptr, I18n::Tr(IDS_ERR_OPEN_ARCHIVE).c_str(), L"AileEx", MB_ICONERROR);

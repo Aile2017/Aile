@@ -27,9 +27,13 @@ public:
     bool CanComment() const override { return false; }  // B2E backend has no comment support
     const std::wstring& BackendName() const override { return m_toolName; }
 
+    bool IsB2e() const override { return true; }
+    std::wstring B2eColumnHeader() const override { return m_columnHeader; }
+
 private:
     std::wstring m_effectivePath;
     std::wstring m_toolName;
+    std::wstring m_columnHeader;
     bool m_canTest = false;
     bool m_canDelete = false;
     bool m_canAdd = false;

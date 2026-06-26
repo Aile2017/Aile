@@ -37,50 +37,13 @@ CArcModule::CArcModule( const wchar_t* name )
 	{
 		m_type = NOTEXIST;
 
-		// Fallback for WinRAR.exe / Rar.exe via Registry
-		if (ki_strcmpi(name, L"WinRAR.exe") == 0 || ki_strcmpi(name, L"Rar.exe") == 0) {
-			auto queryReg = [&](HKEY root) -> bool {
-				HKEY hKey = nullptr;
-				for (REGSAM sam : {(REGSAM)(KEY_READ | KEY_WOW64_64KEY), (REGSAM)(KEY_READ | KEY_WOW64_32KEY)}) {
-					if (RegOpenKeyExW(root, L"SOFTWARE\\WinRAR", 0, sam, &hKey) == ERROR_SUCCESS) {
-						wchar_t buf[MAX_PATH] = {};
-						DWORD sz = sizeof(buf), type = 0;
-						// Try exe64 first, then exe32
-						if ((RegQueryValueExW(hKey, L"exe64", nullptr, &type, (BYTE*)buf, &sz) == ERROR_SUCCESS && type == REG_SZ) ||
-							(RegQueryValueExW(hKey, L"exe32", nullptr, &type, (BYTE*)buf, &sz) == ERROR_SUCCESS && type == REG_SZ)) {
-							RegCloseKey(hKey);
-							std::wstring exePath(buf);
-							auto slash = exePath.rfind(L'\\');
-							if (slash != std::wstring::npos) {
-								std::wstring dir = exePath.substr(0, slash + 1);
-								std::wstring target = dir + name;
-								if (GetFileAttributesW(target.c_str()) != INVALID_FILE_ATTRIBUTES) {
-									ki_strcpy(m_name, target.c_str());
-									m_type = EXE;
-									return true;
-								}
-							}
-							return false;
-						}
-						RegCloseKey(hKey);
-					}
-				}
-				return false;
-			};
-			if (!queryReg(HKEY_LOCAL_MACHINE)) {
-				queryReg(HKEY_CURRENT_USER);
-			}
-		}
-
-		if (m_type == NOTEXIST) {
-			ki_strcpy( m_name, name );
-			// A name with a file extension (e.g. "WinRAR.exe") is expected to be an
-			// on-disk executable; not finding it means it is absent.  A name without
-			// an extension (e.g. "copy") may be a shell built-in, so keep SHLCMD.
-			const wchar_t* dot = ::wcsrchr(name, L'.');
-			const wchar_t* sep = ::wcspbrk(name, L"/\\");
-			m_type = (dot && (!sep || dot > sep)) ? NOTEXIST : SHLCMD;
-		}
+		ki_strcpy( m_name, name );
+		// A name with a file extension (e.g. "WinRAR.exe") is expected to be an
+		// on-disk executable; not finding it means it is absent.  A name without
+		// an extension (e.g. "copy") may be a shell built-in, so keep SHLCMD.
+		const wchar_t* dot = ::wcsrchr(name, L'.');
+		const wchar_t* sep = ::wcspbrk(name, L"/\\");
+		m_type = (dot && (!sep || dot > sep)) ? NOTEXIST : SHLCMD;
 	}
 
 	::SetCurrentDirectoryW(prev_cur);

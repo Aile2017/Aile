@@ -317,6 +317,51 @@ static int GetIconIndex(const std::wstring& name, bool isDir) {
     return sfi.iIcon;
 }
 
+void MainWindow::UpdateListColumns() {
+    HWND hList = m_hListView;
+    HWND hHeader = ListView_GetHeader(hList);
+    int count = Header_GetItemCount(hHeader);
+    for (int i = count - 1; i >= 0; --i) {
+        ListView_DeleteColumn(hList, i);
+    }
+
+    auto backend = m_session.Backend();
+    if (backend && backend->IsB2e()) {
+        std::wstring header1 = I18n::Tr(IDS_COL_NAME);
+        std::wstring header2 = backend->B2eColumnHeader();
+        if (header2.empty()) header2 = L"Info";
+
+        LVCOLUMNW lvc = {};
+        lvc.mask    = LVCF_TEXT | LVCF_WIDTH | LVCF_FMT;
+        lvc.fmt     = LVCFMT_LEFT;
+        lvc.cx      = 240;
+        lvc.pszText = const_cast<wchar_t*>(header1.c_str());
+        ListView_InsertColumn(hList, 0, &lvc);
+
+        lvc.cx      = 600;
+        lvc.pszText = const_cast<wchar_t*>(header2.c_str());
+        ListView_InsertColumn(hList, 1, &lvc);
+    } else {
+        struct { UINT nameId; int width; } cols[] = {
+            {IDS_COL_NAME,     240},
+            {IDS_COL_SIZE,      80},
+            {IDS_COL_PACKED,    80},
+            {IDS_COL_RATIO,     55},
+            {IDS_COL_TYPE,      80},
+            {IDS_COL_MODIFIED, 160},
+        };
+        for (int i = 0; i < (int)_countof(cols); ++i) {
+            std::wstring name = I18n::Tr(cols[i].nameId);
+            LVCOLUMNW lvc = {};
+            lvc.mask    = LVCF_TEXT | LVCF_WIDTH | LVCF_FMT;
+            lvc.fmt     = (i == 0) ? LVCFMT_LEFT : LVCFMT_RIGHT;
+            lvc.cx      = cols[i].width;
+            lvc.pszText = const_cast<wchar_t*>(name.c_str());
+            ListView_InsertColumn(hList, i, &lvc);
+        }
+    }
+}
+
 void MainWindow::PopulateList(const std::wstring& folderPath) {
     ListView_DeleteAllItems(m_hListView);
     m_session.SetCurrentFolder(folderPath);  // Store current folder

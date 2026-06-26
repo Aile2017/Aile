@@ -161,6 +161,8 @@ public:
     // Writable formats supported by the loaded 7z.dll (RAR not included).
     const std::vector<WritableFormat>& GetWritableFormats() const { return m_registry.GetWritableFormats(); }
 
+    static std::wstring ExtOfPath(const wchar_t* path);
+
 private:
     HMODULE                      m_hDll               = nullptr;
     bool                         m_loadBadExe         = false;  // true when LoadLibrary failed with ERROR_BAD_EXE_FORMAT
@@ -198,5 +200,4 @@ private:
     bool UnwrapSplitVolume(const wchar_t* path, const wchar_t* password, bool isSplit,
                            IInArchive* archive, std::vector<ArchiveItem>& items,
                            std::wstring* effectivePath);
-    static std::wstring ExtOfPath(const wchar_t* path);
 };

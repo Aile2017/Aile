@@ -33,6 +33,7 @@ struct AileFlowCnf {
     // output-only extensions need no special case here either.
     bool isArcExt(const wchar_t* ext) const {
         if (!ext || !ext[0]) return false;
+        if (_wcsicmp(ext, L"exe") == 0) return true; // SFX target extension
         return B2e_IsArchiveExt(ext);
     }
 };

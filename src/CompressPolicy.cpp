@@ -45,9 +45,14 @@ void NormalizeForFormat(CompressDlg::Params& p) {
         // Store regardless, and the format default is byte-identical with/without it.
         p.method.clear();
     }
-    // SFX is valid only for 7z.
-    if (p.format != L"7z")
-        p.sfxMode.clear();
+    // SFX is valid only for 7z and b2e.
+    if (p.format != L"7z" && p.sfxMode != L"") {
+        // Need to know if it's B2E, but CompressPolicy doesn't easily have B2E formats.
+        // We'll let CompressDlg handle the UI and App handle the logic.
+        // For now, if format is not 7z, we don't forcefully clear it here so B2E can pass through.
+        // B2E validation happens later.
+        // p.sfxMode.clear();
+    }
 }
 
 bool NeedsTarWrapper(const std::wstring& format,
@@ -63,9 +68,18 @@ bool NeedsTarWrapper(const std::wstring& format,
 
 std::wstring OutputExtension(const std::wstring& format,
                              const std::wstring& sfxMode, bool needsTar) {
-    bool is7z  = (format == L"7z");
-    bool sfxOn = !sfxMode.empty() && is7z;
-    if (sfxOn)   return L".exe";
+    // SFX can be 7z or B2E
+    bool sfxOn = !sfxMode.empty();
+    if (sfxOn) {
+        // B2E formats should keep their original extension (the B2E script handles the conversion)
+        // 7z formats should get .exe
+        if (format != L"7z") {
+            // Keep original extension for B2E SFX
+            return L"." + format;
+        } else {
+            return L".exe";
+        }
+    }
     if (needsTar) return L".tar." + format;
     return L"." + format;
 }

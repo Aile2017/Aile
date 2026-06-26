@@ -3,6 +3,8 @@
 #include <vector>
 #include <string>
 #include "App.h"
+#include "B2eBridge.h"
+#include "SevenZip.h"
 #include "I18n.h"
 #include "resource.h"
 
@@ -121,7 +123,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
         auto& sz7 = app.Get7z();
         if (positional.empty())
             result = app.RunEmpty(nCmdShow);
-        else if (positional.size() == 1 && sz7.IsArchivePath(positional[0].c_str()))
+        else if (positional.size() == 1 && (sz7.IsArchivePath(positional[0].c_str()) || B2e_IsArchiveExt(SevenZip::ExtOfPath(positional[0].c_str()).c_str())))
             result = app.RunBrowseMode(positional, nCmdShow, destDir);
         else
             result = app.RunCompressMode(positional, nCmdShow, destDir,

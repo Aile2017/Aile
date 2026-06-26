@@ -69,6 +69,7 @@ void MainWindow::OnArchiveOpened() {
     std::wstring status = I18n::TrFmt(IDS_FMT_STATUS_ENTRIES, fileCount, dllName.c_str());
     SetWindowTextW(m_hStatus, status.c_str());
 
+    UpdateListColumns();
     PopulateTree();
     PopulateList(L"");
     UpdateExtractDestEdit();

@@ -85,6 +85,7 @@ private:
     void UpdateSortHeader();
     void CreateControls(HWND hwnd);
     void ResizePanes(int cx, int cy);
+    void UpdateListColumns();
     void PopulateTree();
     void PopulateList(const std::wstring& folderPath);
     std::wstring SelectedFolderPath() const;
