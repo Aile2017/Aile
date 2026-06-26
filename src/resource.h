@@ -22,7 +22,7 @@
 #define IDD_SETTINGS        203
 #define IDD_INFO            204
 #define IDD_COMPRESS_ADV    205
-#define IDD_RAR_COMPRESS_ADV  206
+// Removed IDD_RAR_COMPRESS_ADV
 #define IDD_PASSWORD        207
 #define IDD_ABOUT           208
 #define IDD_ARCHIVE_PROPS   209
@@ -50,12 +50,7 @@
 #define IDC_ADV_VOLUME      6006
 
 // RAR Advanced compress dialog controls
-#define IDC_RAR_ADV_DICT      7001
-#define IDC_RAR_ADV_SOLID     7002
-#define IDC_RAR_ADV_THREADS   7003
-#define IDC_RAR_ADV_RECOVERY  7004
-#define IDC_RAR_ADV_VOLUME    7005
-#define IDC_RAR_ADV_PARAMS    7006
+// Removed RAR_ADV
 
 // Progress dialog controls
 #define IDC_PROGRESS_BAR    2001
@@ -67,10 +62,7 @@
 #define IDC_BROWSE_DIR      3003
 #define IDC_7Z_DLL_PATH     3004
 #define IDC_BROWSE_7Z       3005
-#define IDC_UNRAR_DLL_PATH  3006
-#define IDC_BROWSE_UNRAR    3007
-#define IDC_RAR_EXE_PATH    3008
-#define IDC_BROWSE_RAR      3009
+// Removed UNRAR and RAR IDs
 #define IDC_OPEN_FOLDER_AFTER 3025
 // Extract subfolder creation policy (0=never / 1=single file / 2=multiple files / 3=always)
 #define IDC_MKDIR_0         3010
@@ -207,9 +199,9 @@
 #define IDS_TITLE_SELECT_OUTPUT         11065
 #define IDS_TITLE_SELECT_COMPRESS       11066
 #define IDS_TITLE_SELECT_ADD            11067
-#define IDS_TITLE_SELECT_RAR            11068
+// Removed RAR Select Title
 #define IDS_TITLE_SELECT_7Z_DLL         11069
-#define IDS_TITLE_SELECT_UNRAR_DLL      11070
+// Removed UNRAR and RAR Title IDs
 #define IDS_TITLE_SELECT_DEFAULT_DIR    11071
 #define IDS_TITLE_SELECT_DEST_FOLDER    11072
 

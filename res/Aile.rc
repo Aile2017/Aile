@@ -128,29 +128,6 @@ BEGIN
     PUSHBUTTON      "Cancel",            IDCANCEL,      233, 195,  50,  14
 END
 
-IDD_RAR_COMPRESS_ADV DIALOGEX 0, 0, 290, 215
-STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "RAR advanced settings"
-FONT 9, "Segoe UI", 400, 0, 0x1
-BEGIN
-    GROUPBOX        "RAR options",            IDC_STATIC,     7,   4, 276, 185
-    LTEXT           "Dictionary size:",       IDC_STATIC,    14,  20,  58,   8
-    COMBOBOX        IDC_RAR_ADV_DICT,         76,  18, 110, 130, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "Threads:",               IDC_STATIC,    14,  38,  58,   8
-    COMBOBOX        IDC_RAR_ADV_THREADS,      76,  36, 110, 130, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    CONTROL         "Solid archive",          IDC_RAR_ADV_SOLID, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 14, 58, 120, 10
-    LTEXT           "Recovery record:",       IDC_STATIC,    14,  74,  62,   8
-    COMBOBOX        IDC_RAR_ADV_RECOVERY,     80,  72, 106, 130, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "Volume size:",           IDC_STATIC,    14,  92,  62,   8
-    COMBOBOX        IDC_RAR_ADV_VOLUME,       80,  90, 106, 130, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "Extra parameters:",      IDC_STATIC,    14, 114,  68,   8
-    LTEXT           "(e.g. -htb -oi)",        IDC_STATIC,    14, 124,  80,   8
-    EDITTEXT        IDC_RAR_ADV_PARAMS,       14, 136, 256,  14, ES_AUTOHSCROLL
-    LTEXT           "* When WinRAR.exe (GUI) is used, WinRAR's own progress dialog is shown.", IDC_STATIC, 14, 158, 260, 8
-
-    DEFPUSHBUTTON   "OK",                IDOK,          176, 195,  50,  14
-    PUSHBUTTON      "Cancel",            IDCANCEL,      233, 195,  50,  14
-END
 
 IDD_PROGRESS DIALOGEX 0, 0, 300, 64
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION
@@ -163,7 +140,7 @@ BEGIN
     PUSHBUTTON      "Cancel",          IDC_CANCEL,     116,  42,   68, 14
 END
 
-IDD_SETTINGS DIALOGEX 0, 0, 280, 334
+IDD_SETTINGS DIALOGEX 0, 0, 280, 294
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Settings"
 FONT 9, "Segoe UI", 400, 0, 0x1
@@ -191,22 +168,16 @@ BEGIN
     EDITTEXT        IDC_FONT_NAME,      64, 184, 155,  14, ES_AUTOHSCROLL | ES_READONLY
     PUSHBUTTON      "...",              IDC_BROWSE_FONT,223, 184,  38,  14
 
-    GROUPBOX        "Executable / DLL paths", IDC_STATIC, 7, 210, 266, 74
+    GROUPBOX        "Executable / DLL paths", IDC_STATIC, 7, 210, 266, 34
     LTEXT           "7z.dll:",           IDC_STATIC,    14, 224,  30,   8
     EDITTEXT        IDC_7Z_DLL_PATH,    46, 222, 180,  14, ES_AUTOHSCROLL
     PUSHBUTTON      "Browse...",        IDC_BROWSE_7Z, 230, 221,  36,  15
-    LTEXT           "unrar.dll:",       IDC_STATIC,    14, 242,  30,   8
-    EDITTEXT        IDC_UNRAR_DLL_PATH, 46, 240, 180,  14, ES_AUTOHSCROLL
-    PUSHBUTTON      "Browse...",        IDC_BROWSE_UNRAR, 230, 239, 36, 15
-    LTEXT           "rar.exe:",         IDC_STATIC,    14, 260,  30,   8
-    EDITTEXT        IDC_RAR_EXE_PATH,   46, 258, 180,  14, ES_AUTOHSCROLL
-    PUSHBUTTON      "Browse...",        IDC_BROWSE_RAR, 230, 257,  36,  15
 
-    GROUPBOX        "Behavior",         IDC_STATIC,     7, 288, 266,  24
-    AUTOCHECKBOX    "Open folder after extraction", IDC_OPEN_FOLDER_AFTER, 14, 299, 200, 9
+    GROUPBOX        "Behavior",         IDC_STATIC,     7, 248, 266,  24
+    AUTOCHECKBOX    "Open folder after extraction", IDC_OPEN_FOLDER_AFTER, 14, 259, 200, 9
 
-    DEFPUSHBUTTON   "OK",               IDOK,          168, 316,  50,  14
-    PUSHBUTTON      "Cancel",           IDCANCEL,      222, 316,  50,  14
+    DEFPUSHBUTTON   "OK",               IDOK,          168, 276,  50,  14
+    PUSHBUTTON      "Cancel",           IDCANCEL,      222, 276,  50,  14
 END
 
 IDD_INFO DIALOGEX 0, 0, 340, 280
@@ -324,9 +295,7 @@ BEGIN
     IDS_TITLE_SELECT_OUTPUT         "Output file name"
     IDS_TITLE_SELECT_COMPRESS       "Select files to compress"
     IDS_TITLE_SELECT_ADD            "Select files to add to archive"
-    IDS_TITLE_SELECT_RAR            "Select WinRAR.exe / Rar.exe"
     IDS_TITLE_SELECT_7Z_DLL         "Select 7z.dll"
-    IDS_TITLE_SELECT_UNRAR_DLL      "Select unrar.dll"
     IDS_TITLE_SELECT_DEFAULT_DIR    "Select default output directory"
     IDS_TITLE_SELECT_DEST_FOLDER    "Select destination folder"
 END
@@ -594,29 +563,6 @@ BEGIN
     PUSHBUTTON      "キャンセル",       IDCANCEL,      233, 195,  50,  14
 END
 
-IDD_RAR_COMPRESS_ADV DIALOGEX 0, 0, 290, 215
-STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "RAR詳細設定"
-FONT 9, "Segoe UI", 400, 0, 0x1
-BEGIN
-    GROUPBOX        "RARオプション",          IDC_STATIC,     7,   4, 276, 185
-    LTEXT           "辞書サイズ:",             IDC_STATIC,    14,  20,  58,   8
-    COMBOBOX        IDC_RAR_ADV_DICT,         76,  18, 110, 130, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "スレッド数:",             IDC_STATIC,    14,  38,  58,   8
-    COMBOBOX        IDC_RAR_ADV_THREADS,      76,  36, 110, 130, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    CONTROL         "ソリッドアーカイブ",      IDC_RAR_ADV_SOLID, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 14, 58, 120, 10
-    LTEXT           "リカバリレコード:",        IDC_STATIC,    14,  74,  62,   8
-    COMBOBOX        IDC_RAR_ADV_RECOVERY,     80,  72, 106, 130, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "分割ボリューム:",          IDC_STATIC,    14,  92,  62,   8
-    COMBOBOX        IDC_RAR_ADV_VOLUME,       80,  90, 106, 130, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "追加パラメーター:",        IDC_STATIC,    14, 114,  68,   8
-    LTEXT           "(例: -htb -oi)",          IDC_STATIC,    14, 124,  80,   8
-    EDITTEXT        IDC_RAR_ADV_PARAMS,       14, 136, 256,  14, ES_AUTOHSCROLL
-    LTEXT           "※ WinRAR.exe (GUI) 使用時は WinRAR 側の進捗ダイアログが表示されます", IDC_STATIC, 14, 158, 260, 8
-
-    DEFPUSHBUTTON   "OK",              IDOK,          176, 195,  50,  14
-    PUSHBUTTON      "キャンセル",       IDCANCEL,      233, 195,  50,  14
-END
 
 IDD_PROGRESS DIALOGEX 0, 0, 300, 64
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION
@@ -629,7 +575,7 @@ BEGIN
     PUSHBUTTON      "キャンセル",       IDC_CANCEL,     116,  42,   68, 14
 END
 
-IDD_SETTINGS DIALOGEX 0, 0, 280, 334
+IDD_SETTINGS DIALOGEX 0, 0, 280, 294
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "設定"
 FONT 9, "Segoe UI", 400, 0, 0x1
@@ -657,22 +603,16 @@ BEGIN
     EDITTEXT        IDC_FONT_NAME,      64, 184, 155,  14, ES_AUTOHSCROLL | ES_READONLY
     PUSHBUTTON      "...",              IDC_BROWSE_FONT,223, 184,  38,  14
 
-    GROUPBOX        "実行ファイル・DLL パス", IDC_STATIC, 7, 210, 266, 74
+    GROUPBOX        "実行ファイル・DLL パス", IDC_STATIC, 7, 210, 266, 34
     LTEXT           "7z.dll:",           IDC_STATIC,    14, 224,  30,   8
     EDITTEXT        IDC_7Z_DLL_PATH,    46, 222, 180,  14, ES_AUTOHSCROLL
     PUSHBUTTON      "参照...",               IDC_BROWSE_7Z, 230, 221,  36,  15
-    LTEXT           "unrar.dll:",        IDC_STATIC,    14, 242,  30,   8
-    EDITTEXT        IDC_UNRAR_DLL_PATH, 46, 240, 180,  14, ES_AUTOHSCROLL
-    PUSHBUTTON      "参照...",               IDC_BROWSE_UNRAR, 230, 239, 36, 15
-    LTEXT           "rar.exe:",          IDC_STATIC,    14, 260,  30,   8
-    EDITTEXT        IDC_RAR_EXE_PATH,   46, 258, 180,  14, ES_AUTOHSCROLL
-    PUSHBUTTON      "参照...",               IDC_BROWSE_RAR, 230, 257,  36,  15
 
-    GROUPBOX        "動作",             IDC_STATIC,     7, 288, 266,  24
-    AUTOCHECKBOX    "展開後にフォルダを開く", IDC_OPEN_FOLDER_AFTER, 14, 299, 200, 9
+    GROUPBOX        "動作",             IDC_STATIC,     7, 248, 266,  24
+    AUTOCHECKBOX    "展開後にフォルダを開く", IDC_OPEN_FOLDER_AFTER, 14, 259, 200, 9
 
-    DEFPUSHBUTTON   "OK",               IDOK,          168, 316,  50,  14
-    PUSHBUTTON      "キャンセル",        IDCANCEL,      222, 316,  50,  14
+    DEFPUSHBUTTON   "OK",               IDOK,          168, 276,  50,  14
+    PUSHBUTTON      "キャンセル",        IDCANCEL,      222, 276,  50,  14
 END
 
 IDD_INFO DIALOGEX 0, 0, 340, 280
@@ -790,9 +730,7 @@ BEGIN
     IDS_TITLE_SELECT_OUTPUT         "出力ファイル名"
     IDS_TITLE_SELECT_COMPRESS       "圧縮するファイルを選択"
     IDS_TITLE_SELECT_ADD            "アーカイブに追加するファイルを選択"
-    IDS_TITLE_SELECT_RAR            "WinRAR.exe / Rar.exe を選択"
     IDS_TITLE_SELECT_7Z_DLL         "7z.dll を選択"
-    IDS_TITLE_SELECT_UNRAR_DLL      "unrar.dll を選択"
     IDS_TITLE_SELECT_DEFAULT_DIR    "デフォルト出力先を選択"
     IDS_TITLE_SELECT_DEST_FOLDER    "展開先フォルダを選択してください"
 END
