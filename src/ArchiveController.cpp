@@ -161,10 +161,11 @@ HRESULT ArchiveController::Test() {
 
     IArchiveBackend* backend = m_session.Backend();
     std::wstring password = m_session.Password();
+    std::wstring testOutput;
     OpResult res = m_ui.RunOperation(I18n::Tr(IDS_PROGRESS_TESTING).c_str(),
-        [backend, password](IExtractProgressSink* sink) -> HRESULT {
+        [backend, password, &testOutput](IExtractProgressSink* sink) -> HRESULT {
             const wchar_t* pw = password.empty() ? nullptr : password.c_str();
-            return backend->Test(pw, sink);
+            return backend->Test(pw, sink, &testOutput);
         });
 
     // unrar.dll's TestArchive returns E_FAIL even on cancel, so treat a sink cancel
@@ -175,7 +176,11 @@ HRESULT ArchiveController::Test() {
         m_ui.ShowError(I18n::Tr(IDS_TEST_FAILED).c_str(), res.hr);
         return res.hr;
     }
-    m_ui.ShowMessage(I18n::Tr(IDS_TEST_OK), MB_ICONINFORMATION);
+    if (!testOutput.empty()) {
+        m_ui.ShowMessage(testOutput, MB_ICONINFORMATION);
+    } else {
+        m_ui.ShowMessage(I18n::Tr(IDS_TEST_OK), MB_ICONINFORMATION);
+    }
     return S_OK;
 }
 

@@ -41,7 +41,7 @@ HRESULT SevenZipBackend::Extract(const std::vector<UINT32>& indices, const wchar
     return m_sz.Extract(m_effectivePath.c_str(), indices, destDir, password, sink);
 }
 
-HRESULT SevenZipBackend::Test(const wchar_t* password, IExtractProgressSink* sink) {
+HRESULT SevenZipBackend::Test(const wchar_t* password, IExtractProgressSink* sink, std::wstring* /*outputMessage*/) {
     return m_sz.Test(m_effectivePath.c_str(), password, sink);
 }
 

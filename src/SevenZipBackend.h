@@ -15,7 +15,7 @@ public:
                  const wchar_t* password, std::wstring* effectivePath) override;
     HRESULT Extract(const std::vector<UINT32>& indices, const wchar_t* destDir,
                     const wchar_t* password, IExtractProgressSink* sink) override;
-    HRESULT Test(const wchar_t* password, IExtractProgressSink* sink) override;
+    HRESULT Test(const wchar_t* password, IExtractProgressSink* sink, std::wstring* outputMessage = nullptr) override;
     HRESULT Add(const std::vector<std::wstring>& srcPaths, const wchar_t* archiveFolder,
                 const wchar_t* password, int level, const wchar_t* method,
                 IExtractProgressSink* sink) override;

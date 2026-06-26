@@ -44,7 +44,8 @@ public:
 
     // Verify integrity of all entries.
     virtual HRESULT Test(const wchar_t* password,
-                         IExtractProgressSink* sink) = 0;
+                         IExtractProgressSink* sink,
+                         std::wstring* outputMessage = nullptr) = 0;
 
     // Add/update `srcPaths` (folders expanded recursively) under `archiveFolder`
     // ("" / nullptr = archive root). `level`/`method` are the common compression

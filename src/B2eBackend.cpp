@@ -17,10 +17,9 @@ HRESULT B2eBackend::Extract(const std::vector<UINT32>& indices, const wchar_t* d
     return B2e_Extract(m_effectivePath.c_str(), indices, m_allItems, destDir, sink);
 }
 
-HRESULT B2eBackend::Test(const wchar_t* password, IExtractProgressSink* sink) {
+HRESULT B2eBackend::Test(const wchar_t* password, IExtractProgressSink* sink, std::wstring* outputMessage) {
     if (!m_canTest) return E_NOTIMPL;
-    std::wstring output;
-    return B2e_Test(m_effectivePath.c_str(), &output);
+    return B2e_Test(m_effectivePath.c_str(), outputMessage);
 }
 
 HRESULT B2eBackend::Add(const std::vector<std::wstring>& srcPaths, const wchar_t* archiveFolder,
