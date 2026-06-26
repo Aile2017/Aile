@@ -24,6 +24,9 @@ const wchar_t* CArcB2e::init_b2e_path()
 
 CArcB2e::CArcB2e( const wchar_t* scriptname ) : CArchiver( scriptname )
 {
+	if (st_base[0] == L'\0') {
+		init_b2e_path();
+	}
 	st_life++;
 	exe = NULL;
 	m_LstScr = m_DcEScr = m_EncScr =
