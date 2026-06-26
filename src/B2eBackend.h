@@ -22,6 +22,7 @@ public:
     HRESULT SetComment(const std::wstring& text) override;
 
     bool CanTest()    const override { return m_canTest; }
+    bool CanExtractEach() const override { return m_canExtractEach; }
     bool CanAdd()     const override { return m_canAdd; }
     bool CanDelete()  const override { return m_canDelete; }
     bool CanComment() const override { return false; }  // B2E backend has no comment support
@@ -35,6 +36,7 @@ private:
     std::wstring m_toolName;
     std::wstring m_columnHeader;
     bool m_canTest = false;
+    bool m_canExtractEach = false;
     bool m_canDelete = false;
     bool m_canAdd = false;
     std::vector<ArchiveItem> m_allItems;

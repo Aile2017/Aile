@@ -54,6 +54,8 @@ public:
     bool CanAdd()     const { return m_backend && m_backend->CanAdd(); }
     bool CanDelete()  const { return m_backend && m_backend->CanDelete(); }
     bool CanComment() const { return m_backend && m_backend->CanComment(); }
+    bool CanTest()    const { return m_backend && m_backend->CanTest(); }
+    bool CanExtractEach() const { return m_backend && m_backend->CanExtractEach(); }
 
 private:
     std::wstring             m_archivePath;          // Display path (e.g. xx.001)

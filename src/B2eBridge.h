@@ -67,7 +67,8 @@ HRESULT B2e_List(const wchar_t* archivePath,
                  std::wstring* toolName = nullptr,
                  bool* canTest = nullptr,
                  bool* canDelete = nullptr,
-                 bool* canAdd = nullptr);
+                 bool* canAdd = nullptr,
+                 bool* canExtractEach = nullptr);
 
 // Extract entries from an archive.
 // indices: positions into allItems (as returned by B2e_List). Empty = extract all.

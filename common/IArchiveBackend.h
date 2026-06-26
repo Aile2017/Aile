@@ -84,6 +84,7 @@ public:
     virtual bool CanAdd()     const = 0;  // add/update entries supported
     virtual bool CanDelete()  const = 0;  // delete entries supported
     virtual bool CanComment() const = 0;  // whole-archive comment readable/editable
+    virtual bool CanExtractEach() const { return true; } // extract individual entries supported
 
     // Human-readable name of the active backend module (e.g. the loaded DLL or
     // executable). Used for status/title display in place of per-backend lookups.

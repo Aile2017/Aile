@@ -319,7 +319,7 @@ bool B2e_IsArchiveExt(const wchar_t* ext)
 
 HRESULT B2e_List(const wchar_t* archivePath, std::vector<ArchiveItem>& items,
                  std::wstring* columnHeader, std::wstring* toolName,
-                 bool* canTest, bool* canDelete, bool* canAdd)
+                 bool* canTest, bool* canDelete, bool* canAdd, bool* canExtractEach)
 {
     std::wstring path = GetFullPathString(archivePath);
 
@@ -342,6 +342,7 @@ HRESULT B2e_List(const wchar_t* archivePath, std::vector<ArchiveItem>& items,
     if (!b2e.list(aname, aflFiles)) return E_FAIL;
 
     if (canTest)   *canTest   = (b2e.ability() & aTest)   != 0;
+    if (canExtractEach) *canExtractEach = (b2e.ability() & aMeltEach) != 0;
     if (canDelete) *canDelete = (b2e.ability() & aDelete) != 0;
     if (canAdd)    *canAdd    = (b2e.ability() & aCompress) != 0;
 

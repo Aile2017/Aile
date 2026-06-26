@@ -996,15 +996,18 @@ void MainWindow::OnInitMenuPopup(HMENU hMenu) {
     bool canAdd     = hasArchive && m_session.CanAdd() && !m_session.IsReadOnly();
     bool canDelete  = hasArchive && m_session.CanDelete() && !m_session.IsReadOnly();
 
+    bool canExtractEach = hasArchive && m_session.Backend()->CanExtractEach();
+    bool canTest    = hasArchive && m_session.Backend()->CanTest();
+
     auto setEnabled = [hMenu](UINT id, bool enabled) {
         EnableMenuItem(hMenu, id, MF_BYCOMMAND | (enabled ? MF_ENABLED : MF_GRAYED));
     };
 
     setEnabled(ID_CLOSE,      hasArchive);
     setEnabled(ID_EXTRACT,    hasArchive);
-    setEnabled(ID_EXTRACT_SELECTED, hasArchive && selCount > 0);
-    setEnabled(ID_TEST,       hasArchive);
-    setEnabled(ID_OPEN_ASSOC, hasArchive);
+    setEnabled(ID_EXTRACT_SELECTED, hasArchive && selCount > 0 && canExtractEach);
+    setEnabled(ID_TEST,       canTest);
+    setEnabled(ID_OPEN_ASSOC, hasArchive && canExtractEach);
     setEnabled(ID_INFO,       selCount > 0);
     setEnabled(IDM_FILE_PROPERTIES, hasArchive);
     // Comment viewer stays available for any open archive; the dialog itself goes
