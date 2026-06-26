@@ -178,18 +178,11 @@ bool SettingsDlg::OnOK(HWND hwnd) {
     s.SetStripTrailingNumber(IsDlgButtonChecked(hwnd, IDC_STRIP_TRAILING_NUM)  == BST_CHECKED);
     s.SetBreakDDir(          IsDlgButtonChecked(hwnd, IDC_COLLAPSE_SINGLE_DIR) == BST_CHECKED);
 
-    // If the path field was left at the auto-detected value (i.e. the saved setting was empty),
-    // store an empty string so auto-detection continues to work next time.
-    // If the user manually changed the value, save it as-is.
-    auto saveAutoPath = [&hwnd, &s](int ctlId, const std::wstring& currentSaved,
-                                    const std::wstring& autoDetected,
-                                    void (Settings::*setter)(const wchar_t*)) {
-        wchar_t b[MAX_PATH] = {};
-        GetDlgItemTextW(hwnd, ctlId, b, MAX_PATH);
-        bool unchanged = currentSaved.empty() && !autoDetected.empty() && autoDetected == b;
-        (s.*setter)(unchanged ? L"" : b);
-    };
-    saveAutoPath(IDC_7Z_DLL_PATH,    s.Get7zDllPath(),    SevenZip::Find7zDll(),    &Settings::Set7zDllPath);
+    // Save the 7z.dll path exactly as it appears in the textbox.
+    // This ensures the ini file always explicitly records the path the user sees.
+    wchar_t szPath[MAX_PATH] = {};
+    GetDlgItemTextW(hwnd, IDC_7Z_DLL_PATH, szPath, MAX_PATH);
+    s.Set7zDllPath(szPath);
 
     s.Save();
     m_svc->reloadDlls();
