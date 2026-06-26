@@ -56,6 +56,7 @@ public:
     bool CanComment() const { return m_backend && m_backend->CanComment(); }
     bool CanTest()    const { return m_backend && m_backend->CanTest(); }
     bool CanExtractEach() const { return m_backend && m_backend->CanExtractEach(); }
+    bool IsB2e()      const { return m_backend && m_backend->IsB2e(); }
 
 private:
     std::wstring             m_archivePath;          // Display path (e.g. xx.001)

@@ -734,6 +734,9 @@ void MainWindow::OnContextMenu(HWND /*hwndFrom*/, int x, int y) {
     if (!m_session.IsOpen()) return;
 
     bool canDelete = m_session.CanDelete() && !m_session.IsReadOnly();
+    bool canExtractEach = m_session.CanExtractEach();
+    bool canTest   = m_session.CanTest();
+    bool isB2e     = m_session.IsB2e();
     int selCount  = ListView_GetSelectedCount(m_hListView);
 
     HMENU hMenu = CreatePopupMenu();
@@ -744,13 +747,13 @@ void MainWindow::OnContextMenu(HWND /*hwndFrom*/, int x, int y) {
     std::wstring sInfo       = I18n::Tr(IDS_CTX_INFO);
     std::wstring sDelete     = I18n::Tr(IDS_CTX_DELETE);
     AppendMenuW(hMenu, MF_STRING | MF_ENABLED, ID_EXTRACT, sExtract.c_str());
-    AppendMenuW(hMenu, MF_STRING | (selCount > 0 ? MF_ENABLED : MF_GRAYED),
+    AppendMenuW(hMenu, MF_STRING | (selCount > 0 && canExtractEach ? MF_ENABLED : MF_GRAYED),
                 ID_EXTRACT_SELECTED, sExtractSel.c_str());
     AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(hMenu, MF_STRING | (selCount > 0 ? MF_ENABLED : MF_GRAYED),
+    AppendMenuW(hMenu, MF_STRING | (selCount > 0 && canExtractEach ? MF_ENABLED : MF_GRAYED),
                 ID_OPEN_ASSOC, sOpenAssoc.c_str());
-    AppendMenuW(hMenu, MF_STRING | MF_ENABLED, ID_TEST, sTest.c_str());
-    AppendMenuW(hMenu, MF_STRING | (selCount > 0 ? MF_ENABLED : MF_GRAYED),
+    AppendMenuW(hMenu, MF_STRING | (canTest ? MF_ENABLED : MF_GRAYED), ID_TEST, sTest.c_str());
+    AppendMenuW(hMenu, MF_STRING | (selCount > 0 && !isB2e ? MF_ENABLED : MF_GRAYED),
                 ID_INFO, sInfo.c_str());
     AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(hMenu, MF_STRING | (canDelete && selCount > 0 ? MF_ENABLED : MF_GRAYED),
@@ -996,8 +999,8 @@ void MainWindow::OnInitMenuPopup(HMENU hMenu) {
     bool canAdd     = hasArchive && m_session.CanAdd() && !m_session.IsReadOnly();
     bool canDelete  = hasArchive && m_session.CanDelete() && !m_session.IsReadOnly();
 
-    bool canExtractEach = hasArchive && m_session.Backend()->CanExtractEach();
-    bool canTest    = hasArchive && m_session.Backend()->CanTest();
+    bool canExtractEach = m_session.CanExtractEach();
+    bool canTest    = m_session.CanTest();
 
     auto setEnabled = [hMenu](UINT id, bool enabled) {
         EnableMenuItem(hMenu, id, MF_BYCOMMAND | (enabled ? MF_ENABLED : MF_GRAYED));
@@ -1008,7 +1011,7 @@ void MainWindow::OnInitMenuPopup(HMENU hMenu) {
     setEnabled(ID_EXTRACT_SELECTED, hasArchive && selCount > 0 && canExtractEach);
     setEnabled(ID_TEST,       canTest);
     setEnabled(ID_OPEN_ASSOC, hasArchive && canExtractEach);
-    setEnabled(ID_INFO,       selCount > 0);
+    setEnabled(ID_INFO,       selCount > 0 && !m_session.IsB2e());
     setEnabled(IDM_FILE_PROPERTIES, hasArchive);
     // Comment viewer stays available for any open archive; the dialog itself goes
     // read-only when the backend can't write a comment (CanComment()==false).
