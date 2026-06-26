@@ -130,11 +130,11 @@ static void ApplyOverrides(CompressDlg::Params& params,
     CompressPolicy::NormalizeForFormat(params);
 
     if (!sfxOverride.empty()) {
-        if (_wcsicmp(params.format.c_str(), L"7z") == 0) {
+        if (_wcsicmp(params.format.c_str(), L"7z") == 0 || B2e_IsArchiveExt(params.format.c_str())) {
             params.sfxMode = sfxOverride;
         } else {
-            // SFX is not supported for formats other than 7z.
-            // Fallback to normal archive (ignore -ca).
+            // SFX is not supported for formats other than 7z and capable B2E formats.
+            // Fallback to normal archive (ignore -ca/-sfx).
             params.sfxMode.clear();
         }
     }
@@ -180,7 +180,9 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
     // In auto-detect mode (nCmdShow != SW_HIDE) always show dialog with presets.
     const bool skipDialog = (!typeOverride.empty() || !sfxOverride.empty()) && (nCmdShow == SW_HIDE);
     if (skipDialog) {
-        if (params.sfxMode.empty()) {
+        if (params.sfxMode.empty() || B2e_IsArchiveExt(params.format.c_str())) {
+            // For B2E SFX, we leave the extension as the original format (e.g. .lzh).
+            // The B2E script's sfx: section will create the .exe file.
             EnsureArchiveExt(params.outputPath, params.format);
         } else {
             EnsureArchiveExt(params.outputPath, L"exe");
