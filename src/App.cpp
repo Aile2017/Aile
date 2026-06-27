@@ -5,8 +5,7 @@
 #include "CompressPolicy.h"
 #include "CompressHelper.h"
 #include "I18n.h"
-#include "ProgressDlg.h"
-#include "WorkerThread.h"
+#include "WorkerThread.h"   // IExtractProgressSink (named in the compress job lambdas)
 #include "resource.h"
 #include <commctrl.h>
 #include <shlwapi.h>
@@ -250,31 +249,22 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
         m_settings.Save();
     }
 
-    ProgressDlg progDlg;
-    progDlg.Show(wnd.Hwnd(), I18n::Tr(IDS_PROGRESS_COMPRESSING).c_str());
-
     // Resolve the 7z SFX stub (empty for non-SFX or B2E formats).
     std::wstring sfxModulePath, missingLeaf;
     if (FAILED(ResolveSfxModule(params, m_sevenZip, sfxModulePath, missingLeaf))) {
-        progDlg.Dismiss();
         MessageBoxW(wnd.Hwnd(), I18n::TrFmt(IDS_FMT_SFX_NOT_FOUND_7Z, missingLeaf.c_str()).c_str(),
                     I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
         return 0;
     }
 
-    auto* sink = new ProgressPostSink(wnd.Hwnd(), WM_APP_PROGRESS, WM_APP_DONE);
-    auto& sz   = m_sevenZip;
-    progDlg.SetSink(sink);
-
-    WorkerThread worker;
-    worker.Start([&sz, params, sink, sfxModulePath]() -> HRESULT {
-        return RunCompressJob(params, sz, sfxModulePath, sink);
-    }, wnd.Hwnd(), WM_APP_DONE);
-
-    HRESULT hr = progDlg.RunMessageLoop();
-    worker.Wait();
-    delete sink;
-    if (FAILED(hr) && hr != E_ABORT)
+    // Run under the same progress/worker scaffold the GUI uses (IArchiveUI::RunOperation).
+    auto& sz = m_sevenZip;
+    OpResult res = static_cast<IArchiveUI&>(wnd).RunOperation(
+        I18n::Tr(IDS_PROGRESS_COMPRESSING).c_str(),
+        [&sz, params, sfxModulePath](IExtractProgressSink* sink) -> HRESULT {
+            return RunCompressJob(params, sz, sfxModulePath, sink);
+        });
+    if (FAILED(res.hr) && res.hr != E_ABORT)
         MessageBoxW(wnd.Hwnd(), I18n::Tr(IDS_ERR_COMPRESS_FAILED).c_str(),
                     I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
 
@@ -370,22 +360,13 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
             counter++;
         }
 
-        ProgressDlg progDlg;
-        progDlg.Show(wnd.Hwnd(), I18n::Tr(IDS_PROGRESS_COMPRESSING).c_str());
-
-        auto* sink = new ProgressPostSink(wnd.Hwnd(), WM_APP_PROGRESS, WM_APP_DONE);
-        auto& sz   = m_sevenZip;
-        progDlg.SetSink(sink);
-
-        WorkerThread worker;
-        worker.Start([&sz, params, sink, sfxModulePath]() -> HRESULT {
-            return RunCompressJob(params, sz, sfxModulePath, sink);
-        }, wnd.Hwnd(), WM_APP_DONE);
-
-        HRESULT hr = progDlg.RunMessageLoop();
-        worker.Wait();
-        delete sink;
-        if (FAILED(hr) && hr != E_ABORT)
+        auto& sz = m_sevenZip;
+        OpResult res = static_cast<IArchiveUI&>(wnd).RunOperation(
+            I18n::Tr(IDS_PROGRESS_COMPRESSING).c_str(),
+            [&sz, params, sfxModulePath](IExtractProgressSink* sink) -> HRESULT {
+                return RunCompressJob(params, sz, sfxModulePath, sink);
+            });
+        if (FAILED(res.hr) && res.hr != E_ABORT)
             MessageBoxW(wnd.Hwnd(), I18n::Tr(IDS_ERR_COMPRESS_FAILED).c_str(),
                         I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
     }
