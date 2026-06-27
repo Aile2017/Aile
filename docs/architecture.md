@@ -27,8 +27,7 @@
 │   ├── CompressDlg.h/.cpp         — Compression settings dialog (input gathering)
 │   ├── CompressPolicy.h/.cpp      — Archive policy: settings persistence, format/method/SFX + extension rules (shared by dialog + CLI)
 │   ├── AdvancedCompressDlg.h/.cpp — 7z/ZIP advanced compression options (dict/word/solid/threads/extra)
-│   ├── RarAdvancedDlg.h/.cpp      — RAR advanced compression options (recovery/volume etc.)
-│   ├── CompressHelper.h/.cpp      — Single entry point for RAR compression (`RunB2eCompressSync`)
+│   ├── CompressHelper.h/.cpp      — 7z SFX module path resolver (`Resolve7zSfxModulePath`)
 │   ├── ProgressDlg.h/.cpp         — Modal progress dialog
 │   ├── SettingsDlg.h/.cpp         — Settings dialog
 │   ├── InfoDlg.h/.cpp             — Entry details display dialog
@@ -44,11 +43,13 @@
 │   ├── SevenZipStreams.h/.cpp     — COM stream wrappers (CInFileStream/COutFileStream/CTempOutStream/CMultiVolOutStream) + ConcatFiles/ParseVolumeSize
 │   ├── SevenZipCallbacks.h/.cpp   — COM callbacks (COpen*/CTar*/CExtract*/CTest*/CUpdate*/CDelete*/CAdd*) + SrcEntry/EnumeratePaths/CanonicalizePath
 │   ├── FormatRegistry.h/.cpp      — Format/codec registry (ext→CLSID, writable formats, encoders, filters); composed by SevenZip
-│   ├── B2eBridge.h/.cpp            — B2E scripts C API wrapper
-│   ├── B2eProcess.h/.cpp          — B2E scripts subprocess (Compress / Delete)
+│   ├── B2eBridge.h/.cpp            — B2E API wrapper (`B2e_List`/`Extract`/`Compress`/`Test`/`Delete`) + external-tool subprocess (Compress/Delete)
+│   ├── B2eScript.h/.cpp            — .b2e script load / preprocess / section split
+│   ├── ArcB2e.h/.cpp               — B2E archive engine (CArcB2e over the Rythp VM)
+│   ├── Archiver.h/.cpp             — CArchiver (Noah common archiving interface)
 │   ├── IArchiveBackend.h          — Per-session archive backend interface (Open/Extract/Test/Add/Delete/comment + capabilities)
 │   ├── SevenZipBackend.h/.cpp     — IArchiveBackend adapter over 7z.dll
-│   ├── B2eBackend.h/.cpp          — IArchiveBackend adapter over B2E scripts (read) + B2eProcess (write)
+│   ├── B2eBackend.h/.cpp          — IArchiveBackend adapter over B2E scripts (read via B2e_List/Extract; write via B2e_Compress/Delete)
 │   ├── ArchiveOpener.h/.cpp       — Backend selection / open-time fallback / password retry
 │   ├── ArchiveItem.h              — Archive entry POD struct
 │   ├── I18n.h/.cpp                — Localized string loading (en-US / ja-JP via SetProcessPreferredUILanguages)
@@ -86,21 +87,21 @@
               ▼                         ▼
        ┌─────────────┐          ┌──────────────┐    ┌──────────────────────┐
        │ MainWindow   │─────────▶│ CompressDlg  │───▶│ AdvancedCompressDlg  │
-       │ (Browse)     │          │ (Compress)   │    │ RarAdvancedDlg       │
+       │ (Browse)     │          │ (Compress)   │    │ (7z/ZIP options)     │
        │ + Menu       │          └──────┬───────┘    └──────────────────────┘
        │ + Toolbar    │                  │
        │ + TreeView   │                  ▼
-       │ + ListView   │           ┌──────────────────┐
-       │ + Status     │           │ CompressHelper   │
-       └──────┬──────┘            │ (RAR consolidate)│
-              │                    └────────┬─────────┘
+       │ + ListView   │           ┌──────────────────────┐
+       │ + Status     │           │ ArchiveController    │
+       └──────┬──────┘            │ → IArchiveBackend    │
+              │                    └────────┬─────────────┘
        ┌──────┼──────┬──────────┬────────┐  │
        ▼      ▼      ▼          ▼        ▼  ▼
   ┌─────────┐┌─────────┐┌────────┐┌───────────────────┐┌─────────────┐
-  │ProgressDlg│SettingsDlg││InfoDlg ││IDD_PASSWORD       ││ B2eProcess   │
-  │ + Cancel │└─────────┘└────────┘│(PromptPassword())  ││ (B2E) │
-  └────┬─────┘                     └───────────────────┘│ Compress     │
-       │                                                  │ Delete       │
+  │ProgressDlg│SettingsDlg││InfoDlg ││IDD_PASSWORD       ││ B2eBridge    │
+  │ + Cancel │└─────────┘└────────┘│(PromptPassword())  ││ B2e_Compress │
+  └────┬─────┘                     └───────────────────┘│ B2e_Delete   │
+       │                                                  │ (ext. tools) │
        ▼                                                  └──────────────┘
   ┌─────────────────────────────┐
   │ WorkerThread                │
@@ -118,7 +119,6 @@
 |---|---|
 | `IDD_COMPRESS` | `CompressDlg` — Compression settings |
 | `IDD_COMPRESS_ADV` | `AdvancedCompressDlg` — 7z/ZIP advanced compression options |
-| `IDD_RAR_COMPRESS_ADV` | `RarAdvancedDlg` — RAR advanced compression options |
 | `IDD_PROGRESS` | `ProgressDlg` — Modal progress |
 | `IDD_SETTINGS` | `SettingsDlg` — Settings |
 | `IDD_INFO` | `InfoDlg` — Entry details |
@@ -147,7 +147,7 @@ PostMessageW(hwnd, WM_APP_DONE, hr, 0) ──→
 - Callbacks like `IArchiveExtractCallback::SetCompleted` notify UI via `PostMessage` with progress
 - `WM_APP_PROGRESS` `lParam` is `_wcsdup`'d `wchar_t*` → UI side must `free()`
 - Cancel: UI thread sets `sink->SetCancelled(true)`, worker callback returns `E_ABORT` to abort
-- `B2eProcess` cancel forcibly terminates external tools with `TerminateProcess`
+- B2E cancel forcibly terminates the spawned external tool with `TerminateProcess`
 
 ## Format Routing
 
@@ -252,9 +252,8 @@ be revisited without re-running the whole analysis.
    distinction remain.)
 
 5. **B2E and 7z backends duplicate responsibilities without sharing a common interface.** *(Resolved.)*
-   `B2eBridge`/`B2eProcess` and `SevenZip` are now consumed through the shared `IArchiveBackend` contract
+   `B2eBridge` and `SevenZip` are now consumed through the shared `IArchiveBackend` contract
    (`SevenZipBackend`, `B2eBackend`), removing the ad-hoc cross-backend branching in `MainWindow`.
-   See `backend-interface-refactor.md` for the design and the completed incremental plan.
 
 6. **Dialogs contain business rules in addition to presentation.** *(Resolved.)*
    `CompressDlg`'s archive policy — settings persistence (which fields are saved), format/method/SFX

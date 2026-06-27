@@ -20,7 +20,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
     // Load SevenZip first so the extension-detection table is available
     App& app = App::Instance();
     if (!app.Init(hInst)) {
-        MessageBoxW(nullptr, I18n::Tr(IDS_ERR_INIT_FAILED).c_str(), L"AileEx", MB_ICONERROR);
+        MessageBoxW(nullptr, I18n::Tr(IDS_ERR_INIT_FAILED).c_str(), L"Aile", MB_ICONERROR);
         return 1;
     }
 
@@ -101,7 +101,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
             break;
         }
         if (!app.Get7z().IsArchivePath(positional[0].c_str())) {
-            MessageBoxW(nullptr, I18n::Tr(IDS_ERR_OPEN_ARCHIVE).c_str(), L"AileEx", MB_ICONERROR);
+            MessageBoxW(nullptr, I18n::Tr(IDS_ERR_OPEN_ARCHIVE).c_str(), L"Aile", MB_ICONERROR);
             app.Shutdown();
             return 1;
         }

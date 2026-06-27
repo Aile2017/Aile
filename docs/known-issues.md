@@ -49,32 +49,27 @@ returns `kpidPackSize` as `VT_EMPTY` → 0 for each entry (only the archive tota
 meaningful). `7z.exe l` likewise leaves the per-file "Compressed" column blank. That 0 is
 correct 7z.dll behavior, not a bug.
 
-## RAR4 / RAR5 Routing
+## RAR4 / RAR5 Routing (7z.dll RAR handler)
 
-Cannot distinguish RAR4 / RAR5 by `.rar` extension alone (magic bytes required). Initial implementation tries RAR5 handler and falls back to RAR4 on `S_FALSE`. Must fallback not only when `archive->Open` returns `S_FALSE`, but also on `FAILED(hr)`.
+RAR **reading** (list/extract/test) is handled by 7z.dll's RAR handler; only RAR **writing**
+(compress/delete) is delegated to B2E. RAR4 / RAR5 cannot be distinguished by `.rar` extension
+alone (magic bytes required). `SevenZip::OpenArchive` tries the RAR5 handler (CLSID byte `0xCC`)
+and falls back to RAR4 (`0x03`). Fall back not only when `archive->Open` returns `S_FALSE`, but
+also on `FAILED(hr)`.
 
 ## COutFileStream Requires IOutStream
 
 Writing 7z archives requires **seekable** `IOutStream` to rewrite headers later. Implementing `ISequentialOutStream` alone produces empty archives. Must also implement `IOutStream::Seek` and `SetSize`. After `SetSize` is called, restore file pointer to original position (otherwise subsequent Writes corrupt data).
 
-## RAR Compression Routing
+## RAR Compression Routing (B2E)
 
-Two paths exist: `App::RunCompressMode()` (via command-line args) and `MainWindow::OnCompress()` (via drag-drop / Add button). **Both are consolidated via `RunRarCompressSync()` in `CompressHelper.h`** — always calls `RarProcess::Compress`. Since `SevenZip::FormatToOutGuid("rar")` is unsupported and falls back to `CLSID_Format_7z`, consolidating to single path prevents accidental 7z output (safety measure).
-
-## unrar.dll `RARHeaderDataEx` Struct
-
-Applying `#pragma pack(push, 1)` causes `CmtBuf` (8-byte pointer) to misalign from 8-byte boundary (after `FileAttr`, where 4 bytes padding should be). Result: unrar.dll writes 4 bytes past struct boundary, causing stack overflow. **Define with default alignment without `#pragma pack`.**
-
-## unrar.dll Path Separator
-
-`RARHeaderDataEx::FileNameW` uses **backslash** separator. To unify with `SevenZip::OpenArchive` convention (forward slash), normalize in `UnrarDll::ListArchive`:
-
-```cpp
-for (auto& c : it.path) if (c == L'\\') c = L'/';
-while (!it.path.empty() && it.path.back() == L'/') it.path.pop_back();
-```
-
-Without normalization, TreeView/ListView folder routing logic breaks.
+7z.dll cannot write RAR, so RAR **compression/deletion** is delegated to B2E: `B2e_Compress` /
+`B2e_Delete` run the `rar.b2e` script, which invokes WinRAR / Rar.exe. All RAR write entry points
+(`App::RunCompressMode` from the CLI, the Add/drag-drop flow, and `B2eBackend`) funnel through the
+same `B2e_*` functions, so there is a single RAR write path. Note `SevenZip::FormatToOutGuid("rar")`
+is intentionally unsupported (it would fall back to the 7z handler), which is why RAR writing must
+never reach the 7z.dll path. The legacy `unrar.dll` / `rar.exe` / `RarProcess` backend has been
+removed; do not reintroduce its struct-packing or path-separator workarounds.
 
 ## Manifest Embedding
 
@@ -100,23 +95,32 @@ In `AppendMenuW` strings, `&` **underlines (accelerator) the next character**. W
 
 Calling `IsDialogMessageW(hwnd, &msg)` on all `WM_KEYDOWN` in message loop consumes `WM_SYSKEYDOWN` internally, **disabling menu mnemonics like Alt+F** (becomes two-step: Alt alone, then F). Restrict to tab navigation only: `if (msg.message == WM_KEYDOWN && msg.wParam == VK_TAB)`.
 
-## `unrar.dll TestArchive` Cancel Return Value
+## Backend Cancel vs. Failure Disambiguation
 
-`UnrarDll::TestArchive` converts `RARProcessFileW(... RAR_TEST ...)` return to simple true/false, **so user cancellation indistinguishable from failure (false)**. In `MainWindow::OnTest`, check `sink->IsCancelled()` to normalize to `E_ABORT` equivalent, suppressing error dialog.
+Backends whose native API collapses the result to a bool (e.g. an external tool's exit code)
+make user **cancellation indistinguishable from failure**. After such an operation, check
+`sink->IsCancelled()` and normalize to an `E_ABORT` equivalent so the error dialog is suppressed
+on a deliberate cancel. (This applied to the removed unrar.dll test path and applies equally to
+B2E external-tool operations today.)
 
 ## `ForceForeground` (Foreground Theft)
 
 When parent process already exited (e.g., launcher-spawned), `SetForegroundWindow` alone gets demoted by Windows focus restriction. Two-step: `AttachThreadInput(myTid, fgTid, TRUE)` to attach foreground app's thread, momentarily add `HWND_TOPMOST` to push Z-order, then call `SetForegroundWindow` (`ForceForeground` namespace function in `MainWindow.cpp`).
 
-## RAR Delete Cancel Path
+## B2E External-Tool Cancel Path
 
-`RarProcess::Cancel()` can terminate `rar.exe`, but this only works if the progress dialog invokes its cancel callback even for operations that emit no progress messages. `ProgressDlg::RunMessageLoop()` must therefore check the sink's cancelled state after dispatching **any** UI message, not only after `WM_APP_PROGRESS`. Otherwise RAR delete/comment and WinRAR GUI-based compression appear uncancellable.
+Cancelling a B2E operation forcibly terminates the spawned external tool (`TerminateProcess`),
+but this only works if the progress dialog invokes its cancel callback even for operations that
+emit no progress messages. `ProgressDlg::RunMessageLoop()` must therefore check the sink's
+cancelled state after dispatching **any** UI message, not only after `WM_APP_PROGRESS`. Otherwise
+B2E-driven compression (e.g. WinRAR GUI) appears uncancellable. (Note: B2E *delete* cancellation
+is currently not wired — see `docs/specification.md` limitations.)
 
 ## Self-Extracting (SFX) Module Location
 
-7z SFX is simple: read `7z.sfx` (GUI) or `7zCon.sfx` (console) from **same directory as `7z.dll`**, then prepend to compressed .7z data. SDK doesn't include SFX modules; they come with standard 7-Zip install (e.g., Files\7-Zip). Search by deriving parent dir from DLL full path obtained via `SevenZip::GetLoadedPath()` (`CompressHelper::Resolve7zSfxModulePath`).
+7z SFX is simple: read `7z.sfx` (GUI) or `7zCon.sfx` (console) from **same directory as `7z.dll`**, then prepend to compressed .7z data. SDK doesn't include SFX modules; they come with standard 7-Zip install (e.g., Files\7-Zip). Search by deriving parent dir from DLL full path obtained via `SevenZip::GetLoadedPath()` (`Resolve7zSfxModulePath` in `CompressHelper.cpp`).
 
-RAR specified via `rar.exe -sfx<modulePath>`. WinRAR / Rar.exe bundles `Default.SFX` (GUI) and `WinCon.SFX` (console). 32-bit modules (`Zip.SFX` etc.) excluded.
+B2E formats produce SFX through the script's `sfx:` / `sfxd:` block (executed by `B2e_Compress`), if the script defines one. There is no longer a direct `rar.exe -sfx` path in Aile.
 
 Notes:
 - When combining split volumes and SFX, prepend SFX module only to **volume 1** (`.001`); volumes 2+ are normal. `CMultiVolOutStream::FinalizeWithSfx` handles this difference.
@@ -138,11 +142,14 @@ Notes:
 
 Opening `archive.7z.001`, 7z.dll **selects Split handler from extension map**. Split handler requests `archive.7z.002`, `.003`, ... from host via `IArchiveOpenVolumeCallback::GetStream`, builds concatenated stream internally, then passes to actual handler (e.g., 7z). `COpenVolumeCallback` (`SevenZip.cpp`) simply opens matching file from same dir and returns it. If requested file doesn't exist, return `S_FALSE` (DLL treats as final volume signal).
 
-Volume 1 detection in `OpenArchive`: if extension is **all digits** (`001`, `002` etc.), treat as split archive and pass volume callback. RAR's `.partN.rar` has `.rar` extension, so unrar.dll / 7z.dll RAR handler resolves next volume internally (callback unnecessary).
+Volume 1 detection in `OpenArchive`: if extension is **all digits** (`001`, `002` etc.), treat as split archive and pass volume callback. RAR's `.partN.rar` has `.rar` extension, so the 7z.dll RAR handler resolves the next volume internally (callback unnecessary).
 
 ## RAR 4 CJK Filename Encoding Limitation
 
-unrar.dll converts RAR 4 archive filenames (stored in local code page) to UTF-16 via `RARHeaderDataEx::FileNameW`. However, WinRAR 5.0+ no longer supports creation of RAR 4 archives, making testing with modern tools impossible. If legacy RAR 4 archives with CJK filenames are encountered and exhibit corruption/garbling, the root cause lies in unrar.dll's code page conversion, which is beyond Aile control. Workaround: convert to RAR 5 (which uses full Unicode) or 7z format.
+RAR 4 archives store filenames in a local code page; the RAR handler converts them to UTF-16 on
+read. RAR 5 uses full Unicode. WinRAR 5.0+ no longer creates RAR 4 archives, so legacy RAR 4
+files with CJK filenames may still garble depending on the handler's code-page conversion, which
+is beyond Aile's control. Workaround: convert to RAR 5 or 7z format.
 
 ## 2026-05 Audit Follow-up
 
@@ -150,5 +157,8 @@ unrar.dll converts RAR 4 archive filenames (stored in local code page) to UTF-16
 - **Mixed archive + regular input must stay in compress mode.** The specification prefers compression when both kinds are present; startup and drag-drop should not browse the first archive in that case.
 - **Do not reuse cached item lists for auto-unwrapped temporary archives.** Wrapper formats such as `.tar.gz` may reopen an extracted temp `.tar`; caching the outer path without preserving that temp path causes later operations to target the wrong file and lose read-only state.
 - **Reuse the opened archive password for metadata commands.** Archive properties and archive comment retrieval should use the same stored password as extract/test once the user has already opened an encrypted archive successfully.
-- **RAR archive comment writing still needs charset validation.** Current save flow relies on `rar.exe c -z<file>` and should be treated as version/charset-sensitive until behavior is verified against real RAR4/RAR5 comment samples.
+- **RAR archive comment writing is not currently supported.** The bundled `rar.b2e` exposes only
+  compress/delete (no `comment:` section), and 7z.dll does not write RAR comments. If RAR comment
+  editing is added later (via a B2E `comment:` block), treat it as version/charset-sensitive until
+  verified against real RAR4/RAR5 comment samples.
 

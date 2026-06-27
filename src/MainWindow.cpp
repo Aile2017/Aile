@@ -56,7 +56,7 @@ bool MainWindow::Create(HINSTANCE hInst, int nCmdShow) {
 
     HMENU hMenu = LoadMenuW(hInst, MAKEINTRESOURCEW(IDR_MAIN_MENU));
     HWND hwnd = CreateWindowExW(
-        0, ClassName(), L"AileEx",
+        0, ClassName(), L"Aile",
         WS_OVERLAPPEDWINDOW,
         wx, wy, ww, wh,
         nullptr, hMenu, hInst, this);
@@ -1041,7 +1041,7 @@ void MainWindow::ShowError(const wchar_t* msg, HRESULT hr) {
         text += hrStr;
     }
     HWND parent = IsWindowVisible(m_hwnd) ? m_hwnd : nullptr;
-    MessageBoxW(parent, text.c_str(), L"AileEx", MB_ICONERROR);
+    MessageBoxW(parent, text.c_str(), L"Aile", MB_ICONERROR);
 }
 
 bool MainWindow::Ensure7zLoaded() {

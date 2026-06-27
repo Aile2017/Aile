@@ -58,7 +58,7 @@ void MainWindow::OnArchiveOpened() {
     // Title
     const std::wstring& path = m_session.ArchivePath();
     const wchar_t* leaf = wcsrchr(path.c_str(), L'\\');
-    std::wstring title = std::wstring(L"AileEx - ") + (leaf ? leaf + 1 : path.c_str());
+    std::wstring title = std::wstring(L"Aile - ") + (leaf ? leaf + 1 : path.c_str());
     SetWindowTextW(m_hwnd, title.c_str());
 
     // Status
@@ -207,7 +207,7 @@ void MainWindow::CloseArchive() {
     if (m_hTreeView) TreeView_DeleteAllItems(m_hTreeView);
     if (m_hListView) ListView_DeleteAllItems(m_hListView);
 
-    SetWindowTextW(m_hwnd, L"AileEx");
+    SetWindowTextW(m_hwnd, L"Aile");
     if (m_hStatus) SetWindowTextW(m_hStatus, L"");
     UpdateExtractDestEdit();
 }

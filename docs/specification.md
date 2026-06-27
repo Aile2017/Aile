@@ -94,7 +94,7 @@ Dynamically updated via `WM_INITMENUPOPUP` based on archive state (open / read-o
 
 - Supported formats: dynamically enumerated from loaded 7z.dll (`GetNumberOfFormats` / `GetHandlerProperty2`). Typical formats: 7z / ZIP / TAR / GZip / BZip2 / XZ and ZS-extended formats (Zstandard / LZ4 / LZ5 / Brotli / Lizard). B2E formats are appended separately when B2E scripts are loaded.
 - B2E formats spawn external archiver processes as defined in their `.b2e` scripts.
-  - 7z.dll does not support RAR writing. **B2E format compression is consolidated via `B2eProcess`**
+  - 7z.dll does not support RAR writing. **B2E format compression is consolidated via `B2e_Compress` (B2eBridge)**
 - Other formats use 7z.dll's `IOutArchive`
 - Compression level: 0 (no compression) / 1 / 3 / 5 / 7 / 9 (maximum). Zstd: 1..22. Lizard: 10..49.
 - Method selection:
@@ -138,7 +138,7 @@ Dynamically updated via `WM_INITMENUPOPUP` based on archive state (open / read-o
 
 Verify integrity of the selected archive in place. Does not extract files.
 - 7z backend: Pass `testMode=1` to `IInArchive::Extract`
-- b2e backend: Pass `B2E_TEST` to `B2eProcessFileW`
+- b2e backend: run the script's `test:` section via `B2e_Test`
 - Show `ProgressDlg` during verification. Cancellable. Display result in message box on completion
 
 ### Delete Feature (`ID_DELETE`)
@@ -271,7 +271,7 @@ Menu mnemonics like `Alt+F` also work. Tab key navigated via `IsDialogMessageW`.
 - Progress bar + current filename + elapsed time + cancel button
 - Worker thread notifies via `PostMessage(WM_APP_PROGRESS, percent, (LPARAM)wcsdup(filename))`
 - On completion: `PostMessage(WM_APP_DONE, hr, 0)`
-- Cancel: `ProgressPostSink::SetCancelled(true)` or for RAR: `B2eProcess::Cancel()`
+- Cancel: `ProgressPostSink::SetCancelled(true)`; for B2E ops, the spawned external tool is terminated (`TerminateProcess`)
 - Progress PostMessage throttled to ~20Hz (prevents cancel messages from being buried)
 
 ## Primary Win32 Messages
@@ -293,7 +293,7 @@ Priority and implementation approach for unimplemented features: see [`docs/road
 - Individual extraction from solid archives not possible (7z.dll limitation)
 - Archive search/filter not implemented
 - Multi-archive simultaneous browse (tabs etc.) not implemented
-- B2E delete cancel path not implemented (`B2eProcess::Delete` does not support `Cancel()`)
+- B2E delete cancel path not implemented (`B2e_Delete` does not support cancellation)
 - Header-encrypted 7z archive deletion fails (password is not passed to the delete path)
 
 

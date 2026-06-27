@@ -10,15 +10,15 @@
 
 ### 1.1 目的
 
-AileEx の `a` / `w` アクションに `-t`（形式）/ `-m`（方式）/ `-l`（レベル）を組み合わせて、
+Aile の `a` / `w` アクションに `-t`（形式）/ `-m`（方式）/ `-l`（レベル）を組み合わせて、
 圧縮設定のコマンドライン制御を行う。
 
 ```powershell
 # ダイアログなしで自動実行
-AileEx.exe a file.txt -tzip -mdeflate -l9
+Aile.exe a file.txt -tzip -mdeflate -l9
 
 # ダイアログにプリセットして表示
-AileEx.exe a file.txt -mdeflate -l9
+Aile.exe a file.txt -mdeflate -l9
 ```
 
 ### 1.2 有効スコープ

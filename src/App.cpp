@@ -451,7 +451,7 @@ int App::RunExtractDialogMode(const std::vector<std::wstring>& archivePaths, int
         if (Get7z().IsArchivePath(p.c_str()) || B2e_IsArchiveExt(SevenZip::ExtOfPath(p.c_str()).c_str()))
             archives.push_back(p);
     if (archives.empty()) {
-        MessageBoxW(nullptr, I18n::Tr(IDS_ERR_OPEN_ARCHIVE).c_str(), L"AileEx", MB_ICONERROR);
+        MessageBoxW(nullptr, I18n::Tr(IDS_ERR_OPEN_ARCHIVE).c_str(), L"Aile", MB_ICONERROR);
         return 1;
     }
 
