@@ -275,52 +275,16 @@ void ArchiveController::Compress(CompressDlg::Params params, bool openAfterCompr
     }
     auto& sz = m_svc.sevenZip;
 
-    // Resolve the 7z SFX module (search in the same folder as 7z.dll if specified).
-    std::wstring sfxModulePath;
-    if (!params.sfxMode.empty() && !isB2e) {
-        sfxModulePath = Resolve7zSfxModulePath(
-            sz.GetLoadedPath().c_str(), params.sfxMode.c_str());
-        if (sfxModulePath.empty()) {
-            const wchar_t* leaf = (params.sfxMode == L"console") ? L"7zCon.sfx" : L"7z.sfx";
-            m_ui.ShowMessage(I18n::TrFmt(IDS_FMT_SFX_NOT_FOUND_7Z, leaf), MB_ICONERROR);
-            return;
-        }
+    // Resolve the 7z SFX stub (empty for non-SFX or B2E formats).
+    std::wstring sfxModulePath, missingLeaf;
+    if (FAILED(ResolveSfxModule(params, sz, sfxModulePath, missingLeaf))) {
+        m_ui.ShowMessage(I18n::TrFmt(IDS_FMT_SFX_NOT_FOUND_7Z, missingLeaf.c_str()), MB_ICONERROR);
+        return;
     }
 
-    auto inputs  = params.inputFiles;
-    auto outPath = params.outputPath;
-    auto format  = params.format;
-    int  level   = params.level;
-    auto method  = params.method;
-    auto pw      = params.password;
-    auto advDict    = params.dictSize;
-    auto advWord    = params.wordSize;
-    auto advSolid   = params.solidBlock;
-    auto advThreads = params.threads;
-    auto advExtra   = params.extra;
-    auto advVolume  = params.volumeSize;
-    bool encHdr     = params.encryptHeaders;
-    bool sfxRequested = !params.sfxMode.empty();
-
     OpResult res = m_ui.RunOperation(I18n::Tr(IDS_PROGRESS_COMPRESSING).c_str(),
-        [&sz, isB2e, inputs, outPath, format, level, method, pw,
-         advDict, advWord, advSolid, advThreads, advExtra, advVolume,
-         sfxModulePath, encHdr, sfxRequested](IExtractProgressSink* sink) -> HRESULT {
-            if (isB2e) {
-                return B2e_Compress(inputs, outPath.c_str(), level, sink, sfxRequested, format.c_str());
-            } else {
-                CompressAdvanced adv;
-                adv.dictSize      = advDict;
-                adv.wordSize      = advWord;
-                adv.solidBlock    = advSolid;
-                adv.threads       = advThreads;
-                adv.extra         = advExtra;
-                adv.volumeSize    = advVolume;
-                adv.sfxModulePath = sfxModulePath;
-                return sz.Compress(inputs, outPath.c_str(), format.c_str(),
-                                   level, method.c_str(), pw.empty() ? nullptr : pw.c_str(),
-                                   sink, &adv, encHdr);
-            }
+        [&sz, params, sfxModulePath](IExtractProgressSink* sink) -> HRESULT {
+            return RunCompressJob(params, sz, sfxModulePath, sink);
         });
     hrDone = res.hr;
 

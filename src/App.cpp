@@ -253,19 +253,13 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
     ProgressDlg progDlg;
     progDlg.Show(wnd.Hwnd(), I18n::Tr(IDS_PROGRESS_COMPRESSING).c_str());
 
-    // Resolve 7z SFX module (search same folder as 7z.dll if specified) - skip for B2E
-    std::wstring sfxModulePath;
-    bool isB2e = B2e_IsArchiveExt(params.format.c_str());
-    if (!params.sfxMode.empty() && !isB2e) {
-        sfxModulePath = Resolve7zSfxModulePath(
-            m_sevenZip.GetLoadedPath().c_str(), params.sfxMode.c_str());
-        if (sfxModulePath.empty()) {
-            progDlg.Dismiss();
-            const wchar_t* leaf = (params.sfxMode == L"console") ? L"7zCon.sfx" : L"7z.sfx";
-            std::wstring msg = I18n::TrFmt(IDS_FMT_SFX_NOT_FOUND_7Z, leaf);
-            MessageBoxW(wnd.Hwnd(), msg.c_str(), I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
-            return 0;
-        }
+    // Resolve the 7z SFX stub (empty for non-SFX or B2E formats).
+    std::wstring sfxModulePath, missingLeaf;
+    if (FAILED(ResolveSfxModule(params, m_sevenZip, sfxModulePath, missingLeaf))) {
+        progDlg.Dismiss();
+        MessageBoxW(wnd.Hwnd(), I18n::TrFmt(IDS_FMT_SFX_NOT_FOUND_7Z, missingLeaf.c_str()).c_str(),
+                    I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
+        return 0;
     }
 
     auto* sink = new ProgressPostSink(wnd.Hwnd(), WM_APP_PROGRESS, WM_APP_DONE);
@@ -273,25 +267,8 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
     progDlg.SetSink(sink);
 
     WorkerThread worker;
-    worker.Start([&sz, params, sink, sfxModulePath, isB2e]() -> HRESULT {
-        if (isB2e) {
-            bool sfxReq = !params.sfxMode.empty();
-            return B2e_Compress(params.inputFiles, params.outputPath.c_str(),
-                                params.level, sink, sfxReq, params.format.c_str());
-        }
-        const wchar_t* pw = params.password.empty() ? nullptr : params.password.c_str();
-        CompressAdvanced adv;
-        adv.dictSize      = params.dictSize;
-        adv.wordSize      = params.wordSize;
-        adv.solidBlock    = params.solidBlock;
-        adv.threads       = params.threads;
-        adv.extra         = params.extra;
-        adv.volumeSize    = params.volumeSize;
-        adv.sfxModulePath = sfxModulePath;
-        return sz.Compress(params.inputFiles, params.outputPath.c_str(),
-                           params.format.c_str(), params.level,
-                           params.method.c_str(), pw, sink, &adv,
-                           params.encryptHeaders);
+    worker.Start([&sz, params, sink, sfxModulePath]() -> HRESULT {
+        return RunCompressJob(params, sz, sfxModulePath, sink);
     }, wnd.Hwnd(), WM_APP_DONE);
 
     HRESULT hr = progDlg.RunMessageLoop();
@@ -340,18 +317,13 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
         m_settings.Save();
     }
 
-    // Resolve 7z SFX module once (reused for all files) - skip for B2E formats.
-    std::wstring sfxModulePath;
-    bool isB2e = B2e_IsArchiveExt(baseParams.format.c_str());
-    if (!baseParams.sfxMode.empty() && !isB2e) {
-        sfxModulePath = Resolve7zSfxModulePath(
-            m_sevenZip.GetLoadedPath().c_str(), baseParams.sfxMode.c_str());
-        if (sfxModulePath.empty()) {
-            const wchar_t* leaf = (baseParams.sfxMode == L"console") ? L"7zCon.sfx" : L"7z.sfx";
-            std::wstring msg = I18n::TrFmt(IDS_FMT_SFX_NOT_FOUND_7Z, leaf);
-            MessageBoxW(wnd.Hwnd(), msg.c_str(), I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
-            return 0;
-        }
+    // Resolve the 7z SFX stub once (reused for all files; empty for non-SFX or B2E).
+    const bool isB2e = B2e_IsArchiveExt(baseParams.format.c_str());
+    std::wstring sfxModulePath, missingLeaf;
+    if (FAILED(ResolveSfxModule(baseParams, m_sevenZip, sfxModulePath, missingLeaf))) {
+        MessageBoxW(wnd.Hwnd(), I18n::TrFmt(IDS_FMT_SFX_NOT_FOUND_7Z, missingLeaf.c_str()).c_str(),
+                    I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
+        return 0;
     }
 
     std::map<std::wstring, std::vector<std::wstring>> groups;
@@ -406,25 +378,8 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
         progDlg.SetSink(sink);
 
         WorkerThread worker;
-        worker.Start([&sz, params, sink, sfxModulePath, isB2e]() -> HRESULT {
-            if (isB2e) {
-                bool sfxReq = !params.sfxMode.empty();
-                return B2e_Compress(params.inputFiles, params.outputPath.c_str(),
-                                    params.level, sink, sfxReq, params.format.c_str());
-            }
-            const wchar_t* pw = params.password.empty() ? nullptr : params.password.c_str();
-            CompressAdvanced adv;
-            adv.dictSize      = params.dictSize;
-            adv.wordSize      = params.wordSize;
-            adv.solidBlock    = params.solidBlock;
-            adv.threads       = params.threads;
-            adv.extra         = params.extra;
-            adv.volumeSize    = params.volumeSize;
-            adv.sfxModulePath = sfxModulePath;
-            return sz.Compress(params.inputFiles, params.outputPath.c_str(),
-                               params.format.c_str(), params.level,
-                               params.method.c_str(), pw, sink, &adv,
-                               params.encryptHeaders);
+        worker.Start([&sz, params, sink, sfxModulePath]() -> HRESULT {
+            return RunCompressJob(params, sz, sfxModulePath, sink);
         }, wnd.Hwnd(), WM_APP_DONE);
 
         HRESULT hr = progDlg.RunMessageLoop();
