@@ -241,9 +241,14 @@ be revisited without re-running the whole analysis.
    unwrap → `UnwrapTarStream` / `UnwrapSplitVolume` (so `OpenArchive` is open + enumerate). COM
    plumbing already lives in `SevenZipStreams` / `SevenZipCallbacks`. What remains is the *public*
    shape: `OpenArchive` still returns `effectivePath` and the path-based API carries format-specific
-   caveats. That leak is now contained by `ArchiveSession` (which owns the temp lifecycle), and the
-   API itself is frozen by the cross-app `SevenZip.h` contract, so narrowing it further is out of
-   scope unless that contract is revisited.
+   caveats. That leak is now contained by `ArchiveSession` (which owns the temp lifecycle). The unification
+   removed the cross-app `SevenZip.h` contract that previously froze the shape, but the per-session
+   abstraction this concern targets already exists one layer up as `IArchiveBackend` /
+   `SevenZipBackend` (which hold the archive path internally), so `SevenZip` is left as the
+   stateless low-level wrapper beneath it. Narrowing `SevenZip`'s own API further (e.g. folding it
+   into a session object) is **intentionally deferred**: it would duplicate or require merging with
+   `SevenZipBackend` for little practical gain, while touching every metadata call site. If revisited,
+   the natural step is to merge `SevenZip` and `SevenZipBackend` rather than reshape `SevenZip.h` alone.
 
 4. **Archive backend behavior is selected by flags instead of polymorphism.** *(Resolved.)*
    `MainWindow` previously relied on flags such as `m_openedWithB2e`. Backend/session state now lives
