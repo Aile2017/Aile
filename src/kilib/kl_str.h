@@ -56,10 +56,6 @@ public: //-- Character advance ---------------------------
 
 	kiStr& removeTrailWS();
 
-	// Retained as a no-op for call sites (AileFlowKiLib.cpp): the MBCS
-	// lead-byte table it used to populate no longer exists under UTF-16.
-	static void standalone_init() {}
-
 protected: //-- For derived classes -----------------------------
 
 	wchar_t* m_pBuf;

@@ -333,11 +333,7 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
 
     // RunCompressEachMode is only called from -w (always SW_HIDE), so skip dialog when -t/-ca given.
     const bool skipDialog = (!typeOverride.empty() || !sfxOverride.empty()) && (nCmdShow == SW_HIDE);
-    if (skipDialog) {
-        if (baseParams.sfxMode.empty()) {
-            baseParams.sfxMode.clear();
-        }
-    } else {
+    if (!skipDialog) {
         CompressDlg dlg;
         if (!dlg.Show(wnd.Hwnd(), baseParams, enc, wf)) return 0;
         CompressPolicy::Save(baseParams, m_settings);
@@ -367,8 +363,6 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
     for (const auto& pair : groups) {
         CompressDlg::Params params = baseParams;
         params.inputFiles = pair.second;
-        
-        bool isB2e = B2e_IsArchiveExt(params.format.c_str());
 
         std::wstring baseOutput = pair.first;
         params.outputPath = baseOutput;

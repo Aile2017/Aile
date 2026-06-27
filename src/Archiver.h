@@ -71,8 +71,6 @@ private: //--< private >--
 
 	void ensure_loaded() { if(not_loaded){ m_Able=v_load(); not_loaded=false; } }
 
-	friend class CNoahArchiverManager;
-	bool extCheck( const wchar_t* ext );
 	kiStr m_MyExtList, m_MyCmpExt;
 	StrArray m_Mhd;
 	int m_MhdDef,m_Able;
@@ -177,31 +175,6 @@ inline void CArchiver::add_cmp_mhd( const wchar_t* method, bool Default )
 	m_Mhd.add(method);
 	if( Default )
 		m_MhdDef = m_Mhd.len() - 1;
-}
-
-inline bool CArchiver::extCheck( const wchar_t* ext )
-{
-	const wchar_t *x=m_MyExtList,*y;
-	int ln = ki_strlen(ext);
-	while( *x )
-	{
-		for( y=x+1; *y && *y!=L'.'; y++ );
-		if( *y==L'\0' ) break;
-
-		if( y-x == ln )
-		{
-			while( x!=y )
-			{
-				if( *x!=ext[ln+(x-y)] )
-					break;
-				x++;
-			}
-			if( x==y )
-				return true;
-		}
-		x=y+1;
-	}
-	return false;
 }
 
 /*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*/

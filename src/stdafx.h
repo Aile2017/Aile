@@ -1,4 +1,5 @@
-// stdafx.h — precompiled header for Noah-origin source files (ArcB2e, Archiver, kilib)
+// stdafx.h — shared prefix header for Noah-origin source files (ArcB2e, Archiver, kilib).
+// Included directly by those TUs; it is not configured as a CMake precompiled header.
 
 #ifndef AFX_STDAFX_H__AILEFLOW__INCLUDED_
 #define AFX_STDAFX_H__AILEFLOW__INCLUDED_
