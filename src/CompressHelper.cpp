@@ -45,8 +45,10 @@ HRESULT ResolveSfxModule(const CompressDlg::Params& params, SevenZip& sevenZip,
 }
 
 HRESULT RunCompressJob(const CompressDlg::Params& params, SevenZip& sevenZip,
-                       const std::wstring& sfxModulePath, IExtractProgressSink* sink) {
+                       const std::wstring& sfxModulePath, IExtractProgressSink* sink,
+                       HWND hwndParent) {
     if (B2e_IsArchiveExt(params.format.c_str())) {
+        B2e_SetDialogParent(hwndParent);
         const bool sfxReq = !params.sfxMode.empty();
         return B2e_Compress(params.inputFiles, params.outputPath.c_str(),
                             params.level, sink, sfxReq, params.format.c_str());

@@ -33,13 +33,13 @@ public:
     // Called after OpenArchive when the `t` action is given; fires the integrity test
     // directly. Returns the test result HRESULT (S_OK = passed/cancelled).
     HRESULT TriggerTest();
-    HWND Hwnd() const { return m_hwnd; }
     // Call before TranslateAccelerator / IsDialogMessage in the message loop.
     // Returns true if the message was consumed.
     bool PreTranslateMessage(const MSG& msg);
     // Set a session-level destination override (from -d option or [...] browse button).
     // Takes priority over settings and archive parent dir until cleared.
     void SetExtractDestOverride(const std::wstring& path) { m_extractDestOverride = path; }
+    HWND Hwnd() const override { return m_hwnd; }
 
     static const wchar_t* ClassName() { return L"AileEx_MainWnd"; }
     static bool RegisterClass(HINSTANCE hInst);

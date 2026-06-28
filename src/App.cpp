@@ -276,10 +276,11 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
 
     // Run under the same progress/worker scaffold the GUI uses (IArchiveUI::RunOperation).
     auto& sz = m_sevenZip;
+    HWND hwnd = wnd.Hwnd();
     OpResult res = static_cast<IArchiveUI&>(wnd).RunOperation(
         I18n::Tr(IDS_PROGRESS_COMPRESSING).c_str(),
-        [&sz, params, sfxModulePath](IExtractProgressSink* sink) -> HRESULT {
-            return RunCompressJob(params, sz, sfxModulePath, sink);
+        [&sz, params, sfxModulePath, hwnd](IExtractProgressSink* sink) -> HRESULT {
+            return RunCompressJob(params, sz, sfxModulePath, sink, hwnd);
         });
     if (FAILED(res.hr) && res.hr != E_ABORT)
         MessageBoxW(wnd.Hwnd(), I18n::Tr(IDS_ERR_COMPRESS_FAILED).c_str(),
@@ -378,10 +379,11 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
         }
 
         auto& sz = m_sevenZip;
+        HWND hwnd = wnd.Hwnd();
         OpResult res = static_cast<IArchiveUI&>(wnd).RunOperation(
             I18n::Tr(IDS_PROGRESS_COMPRESSING).c_str(),
-            [&sz, params, sfxModulePath](IExtractProgressSink* sink) -> HRESULT {
-                return RunCompressJob(params, sz, sfxModulePath, sink);
+            [&sz, params, sfxModulePath, hwnd](IExtractProgressSink* sink) -> HRESULT {
+                return RunCompressJob(params, sz, sfxModulePath, sink, hwnd);
             });
         if (FAILED(res.hr) && res.hr != E_ABORT)
             MessageBoxW(wnd.Hwnd(), I18n::Tr(IDS_ERR_COMPRESS_FAILED).c_str(),

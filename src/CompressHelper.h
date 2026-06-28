@@ -28,4 +28,5 @@ HRESULT ResolveSfxModule(const CompressDlg::Params& params, SevenZip& sevenZip,
 // is the stub resolved by ResolveSfxModule. Runs synchronously on the worker
 // thread and reports progress through `sink`.
 HRESULT RunCompressJob(const CompressDlg::Params& params, SevenZip& sevenZip,
-                       const std::wstring& sfxModulePath, IExtractProgressSink* sink);
+                       const std::wstring& sfxModulePath, IExtractProgressSink* sink,
+                       HWND hwndParent = nullptr);

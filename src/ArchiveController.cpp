@@ -282,9 +282,10 @@ void ArchiveController::Compress(CompressDlg::Params params, bool openAfterCompr
         return;
     }
 
+    HWND hwnd = m_ui.Hwnd();
     OpResult res = m_ui.RunOperation(I18n::Tr(IDS_PROGRESS_COMPRESSING).c_str(),
-        [&sz, params, sfxModulePath](IExtractProgressSink* sink) -> HRESULT {
-            return RunCompressJob(params, sz, sfxModulePath, sink);
+        [&sz, params, sfxModulePath, hwnd](IExtractProgressSink* sink) -> HRESULT {
+            return RunCompressJob(params, sz, sfxModulePath, sink, hwnd);
         });
     hrDone = res.hr;
 

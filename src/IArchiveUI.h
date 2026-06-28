@@ -21,6 +21,8 @@ class IArchiveUI {
 public:
     virtual ~IArchiveUI() = default;
 
+    virtual HWND Hwnd() const = 0;
+
     // Run `work` (which performs one backend call, reporting through the sink) on
     // the worker thread under a modal progress dialog titled `title`.
     virtual OpResult RunOperation(const wchar_t* title,
