@@ -269,12 +269,22 @@ void CompressDlg::OnMethodChange(HWND hwnd) {
     int fsel = (int)SendMessageW(hFmt, CB_GETCURSEL, 0, 0);
     int ssel = (int)SendMessageW(hSfx, CB_GETCURSEL, 0, 0);
     int msel = (int)SendMessageW(hMethod, CB_GETCURSEL, 0, 0);
-    
+
     if (fsel == CB_ERR) return;
     const wchar_t* fmtId = (const wchar_t*)SendMessageW(hFmt, CB_GETITEMDATA, fsel, 0);
     const wchar_t* sfxId = (ssel != CB_ERR) ? (const wchar_t*)SendMessageW(hSfx, CB_GETITEMDATA, ssel, 0) : L"";
-    const wchar_t* methodId = (msel != CB_ERR) ? (const wchar_t*)SendMessageW(hMethod, CB_GETITEMDATA, msel, 0) : L"";
-    
+
+    // B2E formats store an integer index in CB_GETITEMDATA, not a wchar_t*.
+    // Using it as a pointer causes a crash, so we pass an empty method id.
+    bool isB2e = false;
+    if (fmtId) {
+        for (const auto& bf : m_b2eFormats) {
+            if (_wcsicmp(fmtId, bf.ext.c_str()) == 0) { isB2e = true; break; }
+        }
+    }
+    const wchar_t* methodId = (!isB2e && msel != CB_ERR)
+        ? (const wchar_t*)SendMessageW(hMethod, CB_GETITEMDATA, msel, 0) : L"";
+
     UpdateOutputExt(hwnd, fmtId, sfxId, methodId);
     UpdateLevelList(hwnd);
 }

@@ -120,8 +120,25 @@ static void ApplyOverrides(CompressDlg::Params& params,
             params.method.clear();
     }
 
-    if (!methodOverride.empty())
-        params.method = methodOverride;
+    if (!methodOverride.empty()) {
+        // For B2E formats, -m<name> maps to the method index in the type list.
+        if (B2e_IsArchiveExt(params.format.c_str())) {
+            auto formats = B2e_GetWritableFormats();
+            for (const auto& fi : formats) {
+                if (_wcsicmp(fi.ext.c_str(), params.format.c_str()) == 0) {
+                    for (int i = 0; i < (int)fi.methods.size(); ++i) {
+                        if (_wcsicmp(fi.methods[i].name.c_str(), methodOverride.c_str()) == 0) {
+                            params.level = i;
+                            break;
+                        }
+                    }
+                    break;
+                }
+            }
+        } else {
+            params.method = methodOverride;
+        }
+    }
 
     if (!levelOverride.empty()) {
         try {
