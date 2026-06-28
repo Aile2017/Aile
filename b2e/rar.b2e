@@ -20,7 +20,7 @@ load:
  (name WinRAR.exe)
 
  ; Compression and special modes exposed in the AileFlow dialog.
- (type rar Store Default *Best RR Recover password)
+ (type rar Store Default *Best RR password)
 
 encode:
  ; -scfl = read the response file (list charset) as UTF-8 so non-ASCII names
@@ -42,11 +42,8 @@ encode:
     (cmd a -m5 -s -mm -scfl (arc.rar) (resp@ (listr)))
     (cmd rr%r (arc.rar))))
 
- ; Method 5: Recover / repair an existing archive.
- (if (method 5) (cmd r (arc)))
-
- ; Method 6: Password-protected archive.
- (if (method 6) (exec
+ ; Method 5: Password-protected archive.
+ (if (method 5) (exec
     (let p (inputpw "Password"))
     (cmd a -p%p -m5 -s -mm -scfl (arc.rar) (resp@ (listr)))))
 
