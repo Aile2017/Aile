@@ -105,7 +105,8 @@ static void ApplyOverrides(CompressDlg::Params& params,
                             const std::wstring& typeOverride,
                             const std::wstring& methodOverride,
                             const std::wstring& levelOverride,
-                            const std::wstring& sfxOverride) {
+                            const std::wstring& sfxOverride,
+                            SevenZip& sevenZip) {
     if (!typeOverride.empty()) {
         std::wstring fmt = typeOverride;
         if (fmt == L"gzip") fmt = L"gz";
@@ -122,7 +123,7 @@ static void ApplyOverrides(CompressDlg::Params& params,
 
     if (!methodOverride.empty()) {
         // For B2E formats, -m<name> maps to the method index in the type list.
-        if (B2e_IsArchiveExt(params.format.c_str())) {
+        if (WillUseB2eForCompress(params.format.c_str(), sevenZip)) {
             auto formats = B2e_GetWritableFormats();
             for (const auto& fi : formats) {
                 if (_wcsicmp(fi.ext.c_str(), params.format.c_str()) == 0) {
@@ -229,16 +230,10 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
     params.inputFiles = filePaths;
     CompressPolicy::Load(params, m_settings);
     params.outputPath = Settings::ComputeDefaultOutputPath(m_settings, filePaths, destDir);
-    ApplyOverrides(params, typeOverride, methodOverride, levelOverride, sfxOverride);
+    ApplyOverrides(params, typeOverride, methodOverride, levelOverride, sfxOverride, m_sevenZip);
 
-    if (!m_sevenZip.IsLoaded()) {
-        MessageBoxW(wnd.Hwnd(), I18n::Tr(IDS_ERR_7Z_NOT_LOADED).c_str(),
-                    I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
-        return 0;
-    }
-
-    const auto* enc = &m_sevenZip.GetEncoderNames();
-    const auto* wf  = &m_sevenZip.GetWritableFormats();
+    const auto* enc = m_sevenZip.IsLoaded() ? &m_sevenZip.GetEncoderNames() : nullptr;
+    const auto* wf  = m_sevenZip.IsLoaded() ? &m_sevenZip.GetWritableFormats() : nullptr;
 
     // Skip dialog only when -t is given in forced (-a/-w) mode (SW_HIDE).
     // In auto-detect mode (nCmdShow != SW_HIDE) always show dialog with presets.
@@ -251,7 +246,7 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
             return 0;
         }
 
-        if (params.sfxMode.empty() || B2e_IsArchiveExt(params.format.c_str())) {
+        if (params.sfxMode.empty() || WillUseB2eForCompress(params.format.c_str(), m_sevenZip)) {
             // For B2E SFX, we leave the extension as the original format (e.g. .lzh).
             // The B2E script's sfx: section will create the .exe file.
             EnsureArchiveExt(params.outputPath, params.format, params.method);
@@ -300,21 +295,15 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
     MainWindow wnd(Services());
     if (!wnd.Create(m_hInst, SW_HIDE)) return 1;
 
-    if (!m_sevenZip.IsLoaded()) {
-        MessageBoxW(wnd.Hwnd(), I18n::Tr(IDS_ERR_7Z_NOT_LOADED).c_str(),
-                    I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
-        return 0;
-    }
-
     // Show dialog once for the first file; apply chosen settings to all files.
     CompressDlg::Params baseParams;
     baseParams.inputFiles = { filePaths[0] };
     CompressPolicy::Load(baseParams, m_settings);
     baseParams.outputPath = Settings::ComputeDefaultOutputPath(m_settings, { filePaths[0] }, destDir);
-    ApplyOverrides(baseParams, typeOverride, methodOverride, levelOverride, sfxOverride);
+    ApplyOverrides(baseParams, typeOverride, methodOverride, levelOverride, sfxOverride, m_sevenZip);
 
-    const auto* enc = &m_sevenZip.GetEncoderNames();
-    const auto* wf  = &m_sevenZip.GetWritableFormats();
+    const auto* enc = m_sevenZip.IsLoaded() ? &m_sevenZip.GetEncoderNames() : nullptr;
+    const auto* wf  = m_sevenZip.IsLoaded() ? &m_sevenZip.GetWritableFormats() : nullptr;
 
     // RunCompressEachMode is only called from -w (always SW_HIDE), so skip dialog when -t/-ca given.
     const bool skipDialog = (!typeOverride.empty() || !sfxOverride.empty()) && (nCmdShow == SW_HIDE);
@@ -326,7 +315,7 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
     }
 
     // Resolve the 7z SFX stub once (reused for all files; empty for non-SFX or B2E).
-    const bool isB2e = B2e_IsArchiveExt(baseParams.format.c_str());
+    const bool isB2e = WillUseB2eForCompress(baseParams.format.c_str(), m_sevenZip);
     std::wstring sfxModulePath, missingLeaf;
     if (FAILED(ResolveSfxModule(baseParams, m_sevenZip, sfxModulePath, missingLeaf))) {
         MessageBoxW(wnd.Hwnd(), I18n::TrFmt(IDS_FMT_SFX_NOT_FOUND_7Z, missingLeaf.c_str()).c_str(),

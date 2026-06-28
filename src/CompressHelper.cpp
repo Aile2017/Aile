@@ -28,12 +28,21 @@ std::wstring Resolve7zSfxModulePath(const wchar_t* sevenZipDllPath,
     return FileExists(full) ? full : std::wstring{};
 }
 
+bool WillUseB2eForCompress(const wchar_t* format, SevenZip& sevenZip) {
+    if (!B2e_IsArchiveExt(format)) return false;
+    if (!sevenZip.IsLoaded()) return true;
+    for (const auto& wf : sevenZip.GetWritableFormats())
+        if (_wcsicmp(wf.ext.c_str(), format) == 0)
+            return false;  // 7z.dll can write it — prefer 7z.dll
+    return true;
+}
+
 HRESULT ResolveSfxModule(const CompressDlg::Params& params, SevenZip& sevenZip,
                          std::wstring& outModulePath, std::wstring& missingLeaf) {
     outModulePath.clear();
     missingLeaf.clear();
     // SFX stubs only apply to 7z.dll output; B2E formats handle SFX in-script.
-    if (params.sfxMode.empty() || B2e_IsArchiveExt(params.format.c_str()))
+    if (params.sfxMode.empty() || WillUseB2eForCompress(params.format.c_str(), sevenZip))
         return S_OK;
     outModulePath = Resolve7zSfxModulePath(sevenZip.GetLoadedPath().c_str(),
                                            params.sfxMode.c_str());
@@ -47,7 +56,7 @@ HRESULT ResolveSfxModule(const CompressDlg::Params& params, SevenZip& sevenZip,
 HRESULT RunCompressJob(const CompressDlg::Params& params, SevenZip& sevenZip,
                        const std::wstring& sfxModulePath, IExtractProgressSink* sink,
                        HWND hwndParent) {
-    if (B2e_IsArchiveExt(params.format.c_str())) {
+    if (WillUseB2eForCompress(params.format.c_str(), sevenZip)) {
         B2e_SetDialogParent(hwndParent);
         const bool sfxReq = !params.sfxMode.empty();
         return B2e_Compress(params.inputFiles, params.outputPath.c_str(),

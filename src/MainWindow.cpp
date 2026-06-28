@@ -614,8 +614,6 @@ void MainWindow::OnDropFiles(HDROP hDrop) {
         if (addToCurrent) {
             AddFilesToCurrentArchive(std::move(regular));
         } else {
-            if (!Ensure7zLoaded()) return;
-
             CompressDlg::Params params;
             params.inputFiles  = std::move(regular);
             CompressPolicy::Load(params, m_svc.settings);
@@ -623,8 +621,8 @@ void MainWindow::OnDropFiles(HDROP hDrop) {
 
             CompressDlg dlg;
             auto& sz7 = m_svc.sevenZip;
-            const auto* enc = &sz7.GetEncoderNames();
-            const auto* wf  = &sz7.GetWritableFormats();
+            const auto* enc = sz7.IsLoaded() ? &sz7.GetEncoderNames() : nullptr;
+            const auto* wf  = sz7.IsLoaded() ? &sz7.GetWritableFormats() : nullptr;
             if (dlg.Show(m_hwnd, params, enc, wf)) {
                 auto& s = m_svc.settings;
                 CompressPolicy::Save(params, s);

@@ -51,22 +51,30 @@ static const MethodEntry kMethodsTar[] = {
 bool CompressDlg::Show(HWND hwndParent, Params& params,
                        const std::vector<std::wstring>* encoderNames,
                        const std::vector<WritableFormat>* writableFormats) {
-    if (!writableFormats || writableFormats->empty()) return false;
-
     m_params       = params;
     m_encoderNames = encoderNames;
 
-    // Build format list from 7z.dll
-    m_writableFormats = *writableFormats;
-    
-    // Append B2E formats
-    m_b2eFormats = B2e_GetWritableFormats();
-    for (const auto& bf : m_b2eFormats) {
-        WritableFormat wf;
-        wf.label = bf.label;
-        wf.ext = bf.ext;
-        m_writableFormats.push_back(wf);
+    // Build combined format list: 7z.dll formats first, then B2E formats.
+    // B2E formats that 7z.dll can already write are excluded to avoid duplicate entries
+    // and to ensure OnFormatChange shows the correct method/level UI for each format.
+    m_writableFormats = (writableFormats && !writableFormats->empty()) ? *writableFormats
+                                                                       : std::vector<WritableFormat>{};
+    m_b2eFormats.clear();
+    for (const auto& bf : B2e_GetWritableFormats()) {
+        bool sevenZipCanWrite = false;
+        if (writableFormats) {
+            for (const auto& wf : *writableFormats)
+                if (_wcsicmp(wf.ext.c_str(), bf.ext.c_str()) == 0) { sevenZipCanWrite = true; break; }
+        }
+        if (!sevenZipCanWrite) {
+            m_b2eFormats.push_back(bf);
+            WritableFormat entry;
+            entry.label = bf.label;
+            entry.ext   = bf.ext;
+            m_writableFormats.push_back(entry);
+        }
     }
+    if (m_writableFormats.empty()) return false;
 
     INT_PTR result = DialogBoxParamW(
         GetModuleHandleW(nullptr),

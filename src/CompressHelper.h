@@ -7,6 +7,12 @@
 class ProgressPostSink;
 class IExtractProgressSink;
 
+// Returns true when compression for `format` will be handled by B2E rather than 7z.dll:
+// the format is registered in B2E AND (7z.dll is not loaded OR 7z.dll cannot write it).
+// Use this single predicate everywhere the compress routing decision is needed so that
+// ResolveSfxModule, RunCompressJob, and extension-selection code stay consistent.
+bool WillUseB2eForCompress(const wchar_t* format, SevenZip& sevenZip);
+
 // Returns the absolute path to the 7z SFX module (7z.sfx / 7zCon.sfx).
 // Searches the same directory as 7z.dll. mode is "gui" or "console".
 // Returns empty string if not found.
