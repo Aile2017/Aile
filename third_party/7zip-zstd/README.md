@@ -15,7 +15,7 @@ mcmilk **7-Zip-zstd** build, so no separate codec DLLs are needed.
 
 | | |
 |---|---|
-| Build | 7-Zip 26.01 ZS v1.5.7 R1 (x64) |
+| Build | 7-Zip 26.02 ZS v1.5.7 R1 (x64) |
 | Architecture | **x64** (`machine 0x8664`) — must match the x64 app EXEs |
 | Source | `..\7-Zip-zstd\build\bin-x64-ndm\` (local build) |
 | License | `..\7-Zip-zstd\build\pkg\skel\License.txt` |
