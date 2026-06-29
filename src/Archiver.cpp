@@ -421,7 +421,7 @@ bool CArchiver::GetVersionInfoStr( wchar_t* name, wchar_t* buf, size_t cbBuf )
 		{
 			wchar_t blockname[500]=L"";
 			::wsprintfW( blockname,
-				L"\\StringFileInfo\\%04x%04x\\ProductVersion",
+				L"\\StringFileInfo\\%04x%04x\\FileVersion",
 				tr[0], tr[1] );
 
 			wchar_t* inf = NULL;
@@ -431,8 +431,7 @@ bool CArchiver::GetVersionInfoStr( wchar_t* name, wchar_t* buf, size_t cbBuf )
 			{
 				wchar_t* v = buf;
 				for( ; *inf && cbInf; ++inf,--cbInf )
-					if( *inf != L' ' )
-						*v++ = (*inf==L',' ? L'.' : *inf);
+					*v++ = (*inf==L',' ? L'.' : *inf);
 				*v = L'\0';
 				got = true;
 			}

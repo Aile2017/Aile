@@ -821,24 +821,30 @@ static INT_PTR CALLBACK AboutDlgProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
         if (sz.IsLoaded()) {
             std::wstring p = sz.GetLoadedPath();
             entries.push_back({ LeafName(p), p });
+        } else {
+            entries.push_back({ L"7z.dll", L"" });
         }
 
         // B2E tools aren't loaded DLLs with fixed version properties, but B2eBridge
         // provides formatted version strings directly via executing the tools.
         // We append them manually after calculating the DLL name widths.
-        size_t maxName = 0;
+        size_t maxName = 12; // Start with 12 to match CArcModule::ver formatting
         std::vector<std::wstring> versions;
         versions.reserve(entries.size());
         for (auto& e : entries) {
             if (e.name.size() > maxName) maxName = e.name.size();
-            versions.push_back(GetFileVersionString(e.path.c_str()));
+            if (e.path.empty()) {
+                versions.push_back(L"----");
+            } else {
+                versions.push_back(GetFileVersionString(e.path.c_str()));
+            }
         }
 
         std::wstring text;
         for (size_t i = 0; i < entries.size(); ++i) {
             text += entries[i].name;
             // Pad right of name column to align versions
-            text.append(maxName + 2 - entries[i].name.size(), L' ');
+            text.append(maxName + 1 - entries[i].name.size(), L' ');
             text += versions[i].empty() ? I18n::Tr(IDS_ABOUT_NO_VERSION) : versions[i];
             text += L"\r\n";
         }
