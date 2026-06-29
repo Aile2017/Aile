@@ -307,7 +307,14 @@ void CompressDlg::OnSfxChange(HWND hwnd) {
     if (fsel == CB_ERR || ssel == CB_ERR) return;
     const wchar_t* fmtId = (const wchar_t*)SendMessageW(hFmt, CB_GETITEMDATA, fsel, 0);
     const wchar_t* sfxId = (const wchar_t*)SendMessageW(hSfx, CB_GETITEMDATA, ssel, 0);
-    const wchar_t* methodId = (msel != CB_ERR) ? (const wchar_t*)SendMessageW(hMethod, CB_GETITEMDATA, msel, 0) : L"";
+
+    bool isB2e = false;
+    if (fmtId) {
+        for (const auto& bf : m_b2eFormats) {
+            if (_wcsicmp(fmtId, bf.ext.c_str()) == 0) { isB2e = true; break; }
+        }
+    }
+    const wchar_t* methodId = (!isB2e && msel != CB_ERR) ? (const wchar_t*)SendMessageW(hMethod, CB_GETITEMDATA, msel, 0) : L"";
     UpdateOutputExt(hwnd, fmtId, sfxId, methodId);
 }
 
