@@ -187,6 +187,8 @@ bool CArcModule::lst_exe( const wchar_t* lstcmd, aflArray& files,
 				break;
 		}
 	}
+	int ex = -1;
+	::GetExitCodeProcess( pi.hProcess, (DWORD*)&ex );
 	::CloseHandle( pi.hProcess );
 	::CloseHandle( rp );
 
@@ -316,7 +318,7 @@ bool CArcModule::lst_exe( const wchar_t* lstcmd, aflArray& files,
 		}
 	}
 
-	return true;
+	return (ex == 0 || files.len() > 0);
 }
 
 int CArcModule::tst_exe( const wchar_t* tstcmd, kiStr& output )
