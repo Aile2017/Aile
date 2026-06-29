@@ -178,7 +178,9 @@ void CompressDlg::UpdateOutputExt(HWND hwnd, const wchar_t* fmtId, const wchar_t
 
     bool isInvalid = CompressPolicy::IsInvalidStreamInput(fmtId, m_params.inputFiles);
     // GUI still updates extension if they select tar, but doesn't auto-tar wrap streams
-    std::wstring ext = CompressPolicy::OutputExtension(fmtId, sfxMode ? sfxMode : L"", methodId ? methodId : L"", false);
+    // We intentionally pass L"" for sfxMode so the text box always shows the base archive extension (.7z/.zip)
+    // rather than .exe. The actual .exe suffix is applied later in App::RunCompressMode.
+    std::wstring ext = CompressPolicy::OutputExtension(fmtId, L"", methodId ? methodId : L"", false);
 
     std::wstring path(outPath);
     CompressPolicy::ApplyOutputExtension(path, ext, m_writableFormats);

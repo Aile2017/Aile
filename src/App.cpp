@@ -247,16 +247,34 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
         }
 
         if (params.sfxMode.empty() || WillUseB2eForCompress(params.format.c_str(), m_sevenZip)) {
-            // For B2E SFX, we leave the extension as the original format (e.g. .lzh).
-            // The B2E script's sfx: section will create the .exe file.
-            EnsureArchiveExt(params.outputPath, params.format, params.method);
+            params.outputPath += CompressPolicy::OutputExtension(params.format, params.sfxMode, params.method, false);
         } else {
-            EnsureArchiveExt(params.outputPath, L"exe");
+            params.outputPath += L".exe";
         }
     } else {
         CompressDlg dlg;
         if (!dlg.Show(wnd.Hwnd(), params, enc, wf))
             return 0;
+            
+        // If SFX was chosen via GUI (and it's not a B2E SFX which keeps its original ext), 
+        // the text box will still have shown .7z/.zip to prevent .exe loop. 
+        // We enforce the final .exe extension here before compression.
+        if (!params.sfxMode.empty() && !WillUseB2eForCompress(params.format.c_str(), m_sevenZip)) {
+            // Remove the format's extension if it was automatically added by the dialog
+            std::wstring expectedExt = CompressPolicy::OutputExtension(params.format, L"", params.method, false);
+            bool stripped = false;
+            if (params.outputPath.size() >= expectedExt.size() &&
+                _wcsicmp(params.outputPath.c_str() + params.outputPath.size() - expectedExt.size(), expectedExt.c_str()) == 0) {
+                params.outputPath.resize(params.outputPath.size() - expectedExt.size());
+                stripped = true;
+            }
+            if (stripped) {
+                params.outputPath += L".exe";
+            } else {
+                EnsureArchiveExt(params.outputPath, L"exe");
+            }
+        }
+            
         CompressPolicy::Save(params, m_settings);
         m_settings.Save();
     }
@@ -310,6 +328,8 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
     if (!skipDialog) {
         CompressDlg dlg;
         if (!dlg.Show(wnd.Hwnd(), baseParams, enc, wf)) return 0;
+        
+        // Output path handling per-file is done inside the loop below, but we save policy here
         CompressPolicy::Save(baseParams, m_settings);
         m_settings.Save();
     }
@@ -335,10 +355,15 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
 
         std::wstring baseOutput = pair.first;
         params.outputPath = baseOutput;
-        if (!params.sfxMode.empty() && !isB2e) {
-            EnsureArchiveExt(params.outputPath, L"exe");
+        
+        if (!skipDialog && !params.sfxMode.empty() && !isB2e) {
+            // For per-file extraction from dialog, baseOutput hasn't had any extension appended yet.
+            // Just append .exe directly.
+            params.outputPath += L".exe";
+        } else if (!params.sfxMode.empty() && !isB2e) {
+            params.outputPath += L".exe";
         } else {
-            EnsureArchiveExt(params.outputPath, params.format, params.method);
+            params.outputPath += CompressPolicy::OutputExtension(params.format, params.sfxMode, params.method, false);
         }
 
         int counter = 1;

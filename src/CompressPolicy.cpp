@@ -162,7 +162,7 @@ void ApplyOutputExtension(std::wstring& path, const std::wstring& ext,
     size_t nameStart = (slash == std::wstring::npos) ? 0 : slash + 1;
 
     auto isArchiveExt = [&](const std::wstring& e) -> bool {
-        if (_wcsicmp(e.c_str(), L"exe") == 0 || _wcsicmp(e.c_str(), L"tar") == 0)
+        if (_wcsicmp(e.c_str(), L"tar") == 0)
             return true;
         for (const auto& wf : writableFormats)
             if (_wcsicmp(e.c_str(), wf.ext.c_str()) == 0) return true;
