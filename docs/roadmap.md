@@ -338,7 +338,6 @@ Save ListView contents as CSV / TSV / text.
 
 Individual items overlapping with CLAUDE.md "Remaining tasks":
 
-- **Manual test matrix**: Systematically check browse / compress / extract / cancel / drop / SFX for each format
 - **Error handling comprehensive review**: HRESULT handling, consistency of error messages shown to user
 - **Write-unsupported format delete error message**: ISO/CAB/JAR etc. fail at `IOutArchive` acquisition (`QueryInterface` → `E_NOINTERFACE`). Current error message is generic; make it explicit that the format does not support deletion.
 - **B2E archive comment support decision**: Either implement whole-archive comment read/write via a B2E `comment:` path where supported, or align the specification/UI docs to the current `E_NOTIMPL` behavior.
