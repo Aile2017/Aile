@@ -161,6 +161,11 @@ public:
     // Writable formats supported by the loaded 7z.dll (RAR not included).
     const std::vector<WritableFormat>& GetWritableFormats() const { return m_registry.GetWritableFormats(); }
 
+    // True when ext (possibly an alias like "jar" for zip) resolves to a writable
+    // format handler. Use this instead of scanning GetWritableFormats() by string,
+    // which only lists each handler's primary extension.
+    bool IsWritableExt(const wchar_t* ext) const { return m_registry.IsWritableExt(ext); }
+
     static std::wstring ExtOfPath(const wchar_t* path);
 
 private:

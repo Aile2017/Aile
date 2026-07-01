@@ -25,10 +25,13 @@ HRESULT SevenZipBackend::Open(const wchar_t* path, std::vector<ArchiveItem>& ite
     if (effectivePath) *effectivePath = m_effectivePath;
 
     // Writable when the opened archive's format is in the DLL's writable set.
-    // Split volumes (ext "001" etc.) fall through as read-only, which is correct.
-    m_canModify = false;
-    for (const auto& wf : m_sz.GetWritableFormats())
-        if (_wcsicmp(wf.ext.c_str(), m_ext.c_str()) == 0) { m_canModify = true; break; }
+    // Resolved via the full alias-aware extension map (IsWritableExt), not by
+    // string-matching against each handler's primary extension only — otherwise
+    // an archive opened via an alias extension (e.g. "jar"/"docx" for zip) would
+    // be wrongly treated as read-only even though the underlying format is
+    // writable. Split volumes (ext "001" etc.) still fall through as read-only,
+    // which is correct: the Split handler itself has no write support.
+    m_canModify = m_sz.IsWritableExt(m_ext.c_str());
 
     // Only ZIP exposes an editable whole-archive comment through this backend
     // (SetZipArchiveComment); the 7z format has none by spec.

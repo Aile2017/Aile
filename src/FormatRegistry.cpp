@@ -20,6 +20,7 @@ void FormatRegistry::Clear() {
     m_encoderNames.clear();
     m_extToClsid.clear();
     m_writableFormats.clear();
+    m_writableClsids.clear();
 }
 
 // ============================================================
@@ -111,6 +112,7 @@ void FormatRegistry::EnumerateFormats() {
                         pvUpdate.boolVal != VARIANT_FALSE;
         PropVariantClear(&pvUpdate);
 
+        if (canWrite) m_writableClsids.push_back(clsid);
         if (canWrite && !primaryExt.empty()) {
             WritableFormat wf;
             wf.ext   = primaryExt;
@@ -160,6 +162,17 @@ bool FormatRegistry::IsArchiveExt(const wchar_t* ext) const {
     };
     for (int i = 0; kFallback[i]; ++i)
         if (lower == kFallback[i]) return true;
+    return false;
+}
+
+bool FormatRegistry::IsWritableExt(const wchar_t* ext) const {
+    if (!ext || !ext[0]) return false;
+    std::wstring lower(ext);
+    for (auto& c : lower) c = (wchar_t)towlower(c);
+    auto it = m_extToClsid.find(lower);
+    if (it == m_extToClsid.end()) return false;
+    for (const auto& clsid : m_writableClsids)
+        if (IsEqualGUID(clsid, it->second)) return true;
     return false;
 }
 

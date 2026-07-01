@@ -44,6 +44,14 @@ public:
     const std::vector<WritableFormat>& GetWritableFormats() const { return m_writableFormats; }
     const std::vector<std::wstring>&   GetEncoderNames()    const { return m_encoderNames; }
 
+    // True when `ext` resolves (via the full alias-aware extension→CLSID map) to a
+    // format handler that supports writing. Unlike comparing against
+    // GetWritableFormats() (which lists only each handler's primary extension),
+    // this recognizes alias extensions of a writable format too — e.g. "jar" and
+    // "docx" resolve to the zip handler's CLSID, so they report writable just like
+    // "zip" does, instead of being wrongly treated as read-only.
+    bool IsWritableExt(const wchar_t* ext) const;
+
     // ext→CLSID resolution, with a static fallback when enumeration is unavailable.
     GUID InGuidForPath(const wchar_t* path) const;       // input handler from path's ext
     GUID OutGuidForFormat(const wchar_t* format) const;  // output handler from format name
@@ -58,6 +66,7 @@ private:
     Func_GetNumberOfFormats  m_pfnGetNumFormats   = nullptr;
     Func_GetHandlerProperty2 m_pfnGetHandlerProp2 = nullptr;
     std::map<std::wstring, GUID> m_extToClsid;      // extension (lowercase) → CLSID
-    std::vector<WritableFormat>  m_writableFormats; // writable formats (for UI)
+    std::vector<WritableFormat>  m_writableFormats; // writable formats (for UI, primary extension only)
+    std::vector<GUID>            m_writableClsids;  // CLSIDs of writable handlers, for IsWritableExt()
     std::vector<std::wstring>    m_encoderNames;    // lowercased encoder names
 };
