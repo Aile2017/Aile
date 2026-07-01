@@ -1,42 +1,70 @@
-# Aile `-t` / `-m` / `-l` オプション 実装仕様
+# Aile 圧縮系 CLI 修飾子 (`-d` / `-t` / `-m` / `-l` / `-sfx`)
 
 **作成日:** 2026-06-08  
-**更新日:** 2026-06-09  
-**対象プロジェクト:** Aile  
+**更新日:** 2026-07-01  
+**対象プロジェクト:** Aile
 
 ---
 
 ## 1. 概要
 
-### 1.1 目的
+この文書は、Aile の圧縮系 CLI 起動で使う修飾子の現在の実装仕様をまとめたものです。
 
-Aile の `a` / `w` アクションに `-t`（形式）/ `-m`（方式）/ `-l`（レベル）を組み合わせて、
-圧縮設定のコマンドライン制御を行う。
+- `a <files...>`: 明示的圧縮
+- `w <files...>`: 各ファイル個別圧縮
+- 通常起動 + 通常ファイル入力: 自動検出圧縮
+
+対象修飾子:
+
+- `-d<dir>` — 出力先 / 抽出先
+- `-t<format>` — 形式
+- `-m<method>` — 方式
+- `-l<level>` — レベル
+- `-sfx` / `-sfx:<variant>` — SFX
 
 ```powershell
-# ダイアログなしで自動実行
+# ダイアログなしで直接圧縮
 Aile.exe a file.txt -tzip -mdeflate -l9
 
-# ダイアログにプリセットして表示
-Aile.exe a file.txt -mdeflate -l9
+# 出力先と SFX を指定して直接圧縮
+Aile.exe a file.txt -dC:\out -sfx:console
+
+# 自動検出モード: ダイアログにプリセットして表示
+Aile.exe file.txt -t7z -mlzma2 -l9
 ```
-
-### 1.2 有効スコープ
-
-**すべての圧縮モードで有効。** ただしモードによって動作が異なる。
-
-| モード | `-t` | `-m`/`-l` |
-|---|---|---|
-| `a`/`w`（明示的圧縮） | ダイアログスキップ → 直接圧縮 | 圧縮設定に適用 |
-| 自動検出（通常ファイルをドロップ等） | ダイアログ表示（スキップしない）| ダイアログにプリセット |
-
-抽出モード（`x`）とブラウズモードでは `-t`/`-m`/`-l` を無視する。
 
 ---
 
-## 2. オプション仕様
+## 2. 起動モードごとの効き方
 
-### 2.1 `-t<format>` — アーカイブ形式
+| モード | `-d` | `-t` / `-m` / `-l` / `-sfx` |
+|---|---|---|
+| `a` | 出力パス初期値に反映 | `-t` または `-sfx` があればダイアログ省略、なければプリセットして表示 |
+| `w` | 出力先ディレクトリ初期値に反映 | `-t` または `-sfx` があればダイアログ省略、なければ最初の 1 回だけ表示 |
+| 自動検出圧縮 | 出力パス初期値に反映 | 常にダイアログ表示。指定値はプリセットのみ |
+| `x` | 抽出先として使う。指定時はフォルダ選択省略 | 無視 |
+| `t` | 無視 | すべて無視 |
+
+ダイアログ省略は **`a` / `w` かつ `-t` または `-sfx` 指定時のみ** です。
+
+---
+
+## 3. 修飾子仕様
+
+### 3.1 `-d<dir>` — 出力先 / 抽出先
+
+- `x <archive>`: `<dir>` に直接展開
+- `a` / `w` / 自動検出圧縮: 圧縮ダイアログの出力パス初期値に反映
+- `t`: 解析はされるが無視
+
+例:
+
+```powershell
+Aile.exe x archive.7z -dC:\temp\out
+Aile.exe a file.txt -dC:\temp\out -tzip
+```
+
+### 3.2 `-t<format>` — アーカイブ形式
 
 | 値 | 形式 | 備考 |
 |---|---|---|
@@ -48,18 +76,25 @@ Aile.exe a file.txt -mdeflate -l9
 | `xz` | XZ | ストリーム形式 |
 | `zst` | Zstandard | 7-Zip ZS 拡張 DLL のみ |
 
-値は大文字小文字不問（内部で小文字化）。
-また、登録済みのB2E形式の拡張子（`lha`等）も指定可能。
+値は大文字小文字不問です。内部では小文字化され、いくつかの別名は正規化されます。
 
-### 2.2 `-m<method>` — 圧縮方式
+- `gzip` → `gz`
+- `bzip2` → `bz2`
+- `brotli` → `br`
+- `lizard` → `liz`
+- `zstd` → `zst`
 
-形式によって有効な値が異なる。
+また、登録済みの B2E 形式の拡張子（例: `rar`, `lzh`）も指定できます。
+
+### 3.3 `-m<method>` — 圧縮方式
+
+形式によって有効な値が異なります。
 
 **`-t7z` の場合**
 
 | 値 | 方式 | 備考 |
 |---|---|---|
-| `lzma2` | LZMA2 | **既定** |
+| `lzma2` | LZMA2 | 既定 |
 | `lzma` | LZMA | |
 | `ppmd` | PPMd | |
 | `bzip2` | BZip2 | |
@@ -74,212 +109,131 @@ Aile.exe a file.txt -mdeflate -l9
 
 | 値 | 方式 | 備考 |
 |---|---|---|
-| `deflate` | Deflate | **既定** |
+| `deflate` | Deflate | 既定 |
 | `deflate64` | Deflate64 | |
 | `bzip2` | BZip2 | |
 | `lzma` | LZMA | |
 | `ppmd` | PPMd | |
-| `copy` | 無圧縮 | |
+| `copy` | Store | |
 | `zstd` | Zstandard | 7-Zip ZS 拡張 DLL のみ |
 
-**B2E形式（`lha` 等）の場合**
+**`-ttar` の場合**
 
-方式はB2Eスクリプト側の実装依存となります。`-m` は無視されます。
+- `gz` / `bz2` / `xz` / `zst` / `lz4` / `lz5` / `br` / `liz` などを指定すると
+  `tar.<method>` を作成
+- method 未指定なら素の `.tar`
 
-**ストリーム形式（`gz` / `bz2` / `xz` 等）の場合**
+**B2E 形式（`rar`, `lzh` など）の場合**
 
-`-m` は無視されます。形式そのものが圧縮アルゴリズムを決定します。
+`-m<name>` は、その形式の `.b2e` スクリプトが公開する type list の**名前一致**で解決され、
+内部ではその index が `level` に設定されます。
 
-### 2.3 `-l<level>` — 圧縮レベル
+**単体ストリーム形式（`gz` / `bz2` / `xz` 等）の場合**
+
+`-m` は使いません。形式そのものが圧縮アルゴリズムを決定します。
+
+### 3.4 `-l<level>` — 圧縮レベル
 
 | 形式 / 方式 | 有効値 | 備考 |
 |---|---|---|
-| `7z` / `zip` (標準) | `0`〜`9` | 0=無圧縮、9=最高圧縮 (LZMA2等) |
-| `zstd` | `1`〜`22` | Zstandardのレベル範囲 |
-| `lizard` | `10`〜`49` | Lizardのレベル範囲 |
-| `brotli` | `0`〜`11` | Brotliのレベル範囲 |
-| `lz4` / `lz5` | `1`〜`12` | LZ4/LZ5のレベル範囲 |
-| ストリーム形式 / B2E | 無視 | |
+| `7z` / `zip` (標準) | `0`〜`9` | 0=無圧縮、9=最高圧縮 |
+| `zstd` | `1`〜`22` | Zstandard の範囲 |
+| `lizard` | `10`〜`49` | Lizard の範囲 |
+| `brotli` | `0`〜`11` | Brotli の範囲 |
+| `lz4` / `lz5` | `1`〜`12` | LZ4/LZ5 の範囲 |
+| B2E | 数値 index | `.b2e` の type list index を指す |
+| 単体ストリーム形式 | 実質未使用 | 形式自体を指定するため |
+
+数値は実装側で範囲内に丸められます。数値でない文字列は無視されます。
+
+### 3.5 `-sfx` / `-sfx:<variant>` — 自己解凍形式
+
+| 値 | 動作 |
+|---|---|
+| `-sfx` | `gui` を指定した扱い |
+| `-sfx:gui` | GUI SFX |
+| `-sfx:console` | Console SFX |
+
+- `a` / `w` では `-sfx` 単独でもダイアログ省略条件になります
+- 7z と B2E 形式のみ有効です
+- 非対応形式では通常圧縮にフォールバックします
+
+7z の場合は最終出力が `.exe` になります。B2E の場合は実際の SFX 生成は script 側に委ねられます。
 
 ---
 
-## 3. 動作フロー
+## 4. 重要な動作ルール
 
-### 3.1 ダイアログの扱い
+### 4.1 自動検出モードでは常にダイアログを出す
 
-**`a`/`w` アクション（`SW_HIDE` で起動）:**
+通常起動で通常ファイルを渡した場合は、`-t` や `-sfx` があってもダイアログは省略されません。
+指定値はプリセットとして使われるだけです。
 
-| `-t` | `-m`/`-l` | 動作 |
-|---|---|---|
-| あり | 任意 | ダイアログスキップ → 直接圧縮実行 |
-| なし | あり | ダイアログ表示（値がプリセットされた状態） |
-| なし | なし | ダイアログ表示（保存済み設定で起動、現状通り） |
+### 4.2 単体ストリーム形式は単一ファイル専用
 
-**自動検出モード（通常の `nCmdShow` で起動）:**
+現在の実装では、`gz` / `bz2` / `xz` / `zst` などの**単体ストリーム形式は単一ファイル専用**です。
 
-| `-t`/`-m`/`-l` | 動作 |
-|---|---|
-| いずれかあり | ダイアログ表示（`-t` があっても**スキップしない**）、値をプリセット |
-| すべてなし | ダイアログ表示（保存済み設定、現状通り） |
+以下はエラーになります。
 
-ダイアログスキップは `a`/`w` アクション（`SW_HIDE`）でのみ行う。
-実装上は `nCmdShow == SW_HIDE` で判別する。
+- 複数ファイル入力
+- ディレクトリ入力
 
-### 3.2 ストリーム形式 + 複数ファイルの挙動
-
-`-tgz aaa.txt bbb.txt` のように複数ファイルをストリーム形式で圧縮する場合、
-`SevenZip::Compress` が内部で自動的に TAR でまとめてから gz 圧縮する。
-出力ファイルは `aaa.tar.gz` になる（単一ファイルなら `aaa.gz`）。
-この挙動はダイアログから gz を選んだ場合と同一。
-
-### 3.3 組み合わせ例
+複数ファイルを 1 つにまとめたい場合は、`tar` を選んで `-m` にストリーム方式を指定してください。
 
 ```powershell
-# a/w アクション: -t あり → ダイアログスキップ
+# 複数ファイルを gz 系でまとめる
+Aile.exe a a.txt b.txt -ttar -mgz
+
+# 各ファイルを個別に gzip する
+Aile.exe w a.txt b.txt -tgz
+```
+
+### 4.3 方式指定と既定方式の正規化
+
+`-t` だけを変えたとき、既定方式が新しい形式に合わなくならないように、
+実装側で method は必要に応じてクリア/正規化されます。
+
+例:
+
+- `7z` → `zip` に切り替えたとき、`lzma2` を持ち越さない
+- `tar` / 単体ストリーム形式では不要な method を落とす
+
+---
+
+## 5. 例
+
+```powershell
+# a/w: -t あり → ダイアログ省略
 Aile.exe a file.txt -tzip -mdeflate -l9
 Aile.exe a file.txt -t7z
 Aile.exe a file.txt -ttar -mzst -l22
-Aile.exe w *.txt -tzip -l5
+Aile.exe w a.txt b.txt -tzip -l5
 
-# a/w アクション: -t なし → ダイアログ表示（プリセット）
-Aile.exe a file.txt -mdeflate           # 方式だけプリセット
-Aile.exe a file.txt -l9                 # レベルだけプリセット
-Aile.exe a file.txt -mdeflate -l9       # 方式+レベルをプリセット
+# a/w: -sfx だけでもダイアログ省略
+Aile.exe a file.txt -sfx
+Aile.exe a file.txt -sfx:console
 
-# 自動検出モード: -t があってもダイアログ表示（プリセットのみ）
-Aile.exe -tzip file.txt                  # ダイアログが ZIP プリセット状態で開く
-Aile.exe -mdeflate file.txt              # ダイアログが Deflate プリセット状態で開く
+# a/w: -t/-sfx なし → ダイアログ表示
+Aile.exe a file.txt -mdeflate
+Aile.exe a file.txt -l9
+Aile.exe a file.txt -dC:\out -mdeflate -l9
+
+# 自動検出圧縮: 常にダイアログ表示
+Aile.exe -tzip file.txt
+Aile.exe -mdeflate file.txt
 ```
 
 ---
 
-## 4. 実装スケッチ
+## 6. 実装対応箇所
 
-### 4.1 `main.cpp` — パース追加
-
-```cpp
-std::wstring typeOverride;    // -t
-std::wstring methodOverride;  // -m
-std::wstring levelOverride;   // -l  (空文字 = 未指定)
-
-// パースループ内に追加
-else if ((a[0]==L'-'||a[0]==L'/') && (a[1]==L't'||a[1]==L'T') && a[2]) {
-    typeOverride = a + 2;
-    for (auto& c : typeOverride) c = (wchar_t)towlower(c);
-}
-else if ((a[0]==L'-'||a[0]==L'/') && (a[1]==L'm'||a[1]==L'M') && a[2]) {
-    methodOverride = a + 2;
-}
-else if ((a[0]==L'-'||a[0]==L'/') && (a[1]==L'l'||a[1]==L'L') && a[2] != L'\0') {
-    levelOverride = a + 2;
-}
-
-// a/w アクションのみ渡す（SW_HIDE → ダイアログスキップ判定の起点）
-case Action::CompressEach:
-    result = app.RunCompressEachMode(positional, SW_HIDE, destDir,
-                                     typeOverride, methodOverride, levelOverride, sfxOverride);
-    break;
-case Action::Compress:
-    result = app.RunCompressMode(positional, SW_HIDE, destDir,
-                                 typeOverride, methodOverride, levelOverride, sfxOverride);
-    break;
-
-// 自動検出モードも渡す（nCmdShow → ダイアログは必ず表示、プリセットのみ）
-if (!regularFiles.empty())
-    result = app.RunCompressMode(regularFiles, nCmdShow, L"",
-                                 typeOverride, methodOverride, levelOverride, sfxOverride);
-```
-
-### 4.2 `App.h` — シグネチャ変更
-
-```cpp
-int RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdShow,
-                    const std::wstring& destDir       = L"",
-                    const std::wstring& typeOverride  = L"",
-                    const std::wstring& methodOverride= L"",
-                    const std::wstring& levelOverride = L"");
-
-int RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCmdShow,
-                        const std::wstring& destDir       = L"",
-                        const std::wstring& typeOverride  = L"",
-                        const std::wstring& methodOverride= L"",
-                        const std::wstring& levelOverride = L"");
-```
-
-### 4.3 `App.cpp` — オーバーライド適用ロジック
-
-```cpp
-// params を設定ファイルから読み込んだ後、オーバーライドを上書き適用
-params.LoadFromSettings(m_settings);
-if (!typeOverride.empty())   params.format = typeOverride;
-if (!methodOverride.empty()) ApplyMethodOverride(params, methodOverride);
-if (!levelOverride.empty())  ApplyLevelOverride(params, levelOverride);
-
-// ダイアログスキップは a/w アクション（SW_HIDE）かつ -t 指定時のみ
-bool skipDialog = !typeOverride.empty() && (nCmdShow == SW_HIDE);
-
-if (skipDialog) {
-    // 出力パスに拡張子付与
-    if (params.outputPath.find(L'.') == std::wstring::npos)
-        params.outputPath += L"." + params.format;
-} else {
-    // ダイアログ表示（-t/-m/-l のプリセット値が入った状態）
-    CompressDlg dlg;
-    if (!dlg.Show(wnd.Hwnd(), params, enc, wf, rarAvailable)) return 0;
-    params.SaveToSettings(m_settings);
-    m_settings.Save();
-}
-```
-
-### 4.4 `-l` の数値パースと方式ごとの動的制限
-
-`-l` は方式に応じて有効なレベル範囲（zstdなら1〜22等）でクランプ（丸め）されます。
-
-```cpp
-// ApplyOverrides 内のイメージ
-if (!levelOverride.empty()) {
-    try {
-        int val = std::stoi(levelOverride);
-        int minL, maxL, defL;
-        if (CompressPolicy::GetLevelRangeForMethod(params.method, minL, maxL, defL)) {
-            if (val < minL) val = minL;
-            if (val > maxL) val = maxL;
-        } else {
-            if (val < 0) val = 0;
-            if (val > 9) val = 9;
-        }
-        params.level = val;
-    } catch (...) { }
-}
-```
-
----
-
-## 5. 実装チェックリスト
-
-- [x] `main.cpp` — `-t` / `-m` / `-l` パース実装済み
-- [x] `App.h` — `RunCompressMode` / `RunCompressEachMode` シグネチャ実装済み
-- [x] `App.cpp` — `ApplyOverrides()` 実装済み
-- [x] `App.cpp` — `RunCompressMode` オーバーライド適用 + ダイアログスキップロジック実装済み
-- [x] `App.cpp` — `RunCompressEachMode` 同上
-- [ ] テスト
-  - [ ] `a file.txt -tzip -mdeflate -l9` でダイアログなし ZIP 圧縮
-  - [ ] `a file.txt -t7z` でダイアログなし 7z 圧縮
-  - [ ] `a file.txt -ttar -mzst` でダイアログなし tar.zst 圧縮
-  - [ ] `a file.txt -mdeflate` でダイアログあり・Deflate プリセット
-  - [ ] `a file.txt -l9` でダイアログあり・レベル9 プリセット
-  - [ ] `a file.txt`（オプションなし）で現状通りの動作
-  - [ ] `w *.txt -tzip` で各ファイル個別 ZIP 圧縮
-  - [ ] `-tzip file.txt`（自動検出）で `-t` 無視・ダイアログ表示
-  - [ ] `-ttar -mgz aaa.txt bbb.txt` で `aaa.tar.gz` 生成
-
----
-
-## 6. リスク・注意点
-
-| リスク | 対策 |
-|---|---|
-| 無効な形式名 | エラーメッセージ表示・中断 |
-| DLL が非対応の方式 | 7z.dll 側でエラー返却（許容）|
-| ストリーム形式に `-m`/`-l` | 無視 |
-| `-t` なしで `-m` がダイアログで選べない形式 | ダイアログ上で無効化される（既存動作） |
+- `src/main.cpp`
+  - `-d` / `-t` / `-m` / `-l` / `-sfx` をパース
+  - `a` / `w` / `x` / `t` ごとに引き回しを分岐
+- `src/App.cpp`
+  - `ApplyOverrides(...)` で形式・方式・レベル・SFX を正規化
+  - `RunCompressMode(...)` / `RunCompressEachMode(...)` でダイアログ省略条件を判定
+- `src/CompressPolicy.cpp`
+  - 形式ごとの method 正規化
+  - ストリーム形式の入力制約
+  - 出力拡張子計算

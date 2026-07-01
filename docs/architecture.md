@@ -16,7 +16,7 @@
 ├── src/
 │   ├── main.cpp                   — wWinMain, argument parsing, mode routing
 │   ├── App.h/.cpp                 — Singleton, DLL load management, message loop; Services() builds AppServices
-│   ├── AppServices.h              — Injected service bundle (Settings/SevenZip/B2eBridge + reloadDlls) for the GUI
+│   ├── AppServices.h              — Injected service bundle (Settings/SevenZip + reloadDlls) for the GUI
 │   ├── MainWindow.h               — Browse window class (menu + toolbar + TreeView + ListView + status bar)
 │   ├── MainWindow.cpp             — window lifecycle, message routing, layout, menus, dialogs (core)
 │   ├── MainWindowView.cpp         — tree/list population, sorting, selection, navigation
@@ -80,7 +80,6 @@
                   ┌────────▼─────────┐
                   │      App         │←─ Settings (INI read/write, MRU)
                   │ (Singleton)      │←─ SevenZip (7z.dll wrapper)
-                  │                  │←─ B2eBridge (B2E scripts wrapper)
                   └────────┬─────────┘
                            │
               ┌────────────┴────────────┐
@@ -143,7 +142,7 @@ User clicks Cancel:
 PostMessageW(hwnd, WM_APP_DONE, hr, 0) ──→
 ```
 
-- Worker executes archive operations (`SevenZip::Extract` / `Compress`, `B2eBridge::ExtractArchive`)
+- Worker executes archive operations (`SevenZip::Extract` / `Compress`, `B2e_Extract` / `B2e_Compress`)
 - Callbacks like `IArchiveExtractCallback::SetCompleted` notify UI via `PostMessage` with progress
 - `WM_APP_PROGRESS` `lParam` is `_wcsdup`'d `wchar_t*` → UI side must `free()`
 - Cancel: UI thread sets `sink->SetCancelled(true)`, worker callback returns `E_ABORT` to abort
@@ -224,7 +223,7 @@ be revisited without re-running the whole analysis.
    layer, and adds a second `RunBackgroundOp` seam for B2E ops that show their own dialog.)
 
 2. **`App` acts as a singleton service locator plus startup orchestrator.** *(Service-locator part resolved.)*
-   `App` still owns `Settings`/`SevenZip`/`B2eBridge` and the startup modes, but the GUI no longer
+   `App` still owns `Settings`/`SevenZip` and the startup modes, but the GUI no longer
    reaches them through `App::Instance()`. Services are now injected as an `AppServices` bundle
    (`AppServices.h`): `App::Services()` builds it, `MainWindow` takes it at construction and forwards
    it to `ArchiveController`, and the settings/about dialogs receive it too (Aile's bundle also
@@ -303,6 +302,5 @@ contract allows). No further items from this review pass remain.
   lifecycle, cache, comment, properties), `SevenZipRead.cpp` (~500: open/test/extract) and
   `SevenZipWrite.cpp` (~490: compress/add/delete). The public `SevenZip.h` API is unchanged throughout,
   so the cross-app contract and Aile are untouched.
-
 
 

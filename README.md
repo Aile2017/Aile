@@ -22,6 +22,7 @@ cmake --build build_release   # Release
 | Aile.exe (Debug) | `build\Aile.exe` |
 | Aile.exe (Release) | `build_release\Aile.exe` |
 | AileShell.dll | `build_release\AileShell.dll` |
+| AileSetup.exe | `build_release\ailesetup\AileSetup.exe` |
 
 ### Build 32-bit Shell Extensions
 
@@ -37,10 +38,12 @@ $vcvars32 = "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliar
 cmd /c "`"$vcvars32`" && cmake -B build_x86 -G Ninja -DCMAKE_BUILD_TYPE=Debug && cmake --build build_x86 --target AileShell"
 
 # Configure and build the x86 Release
-cmd /c "`"$vcvars32`" && cmake -B build_release_x86 -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build_release_x86 --target AileShell"
+cmd /c "`"$vcvars32`" && cmake -B build_x86_release -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build_x86_release --target AileShell"
 ```
 
-To register the generated extensions, build and use the `AileSetup.exe` tool.
+The x86 build produces `build_x86_release\AileShell32.dll`. To register the generated shell
+extensions, place `AileShell.dll`, `AileShell32.dll` (optional), and `AileSetup.exe` next to
+`Aile.exe`, then run `AileSetup.exe`.
 
 ---
 

@@ -34,7 +34,7 @@ cmake -B build_release -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build_release
 ```
 
-Output: `build_release\Aile.exe`, `build_release\AileSetup.exe`, `build_release\AileShell.dll`
+Output: `build_release\Aile.exe`, `build_release\AileShell.dll`, `build_release\ailesetup\AileSetup.exe`
 
 ### 32-bit shell extension (x86)
 
@@ -49,24 +49,25 @@ flag, which Ninja does not accept anyway). Configure a **separate** build tree
 and build only the shell target:
 
 ```bat
-cmake -B build_release_x86 -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build_release_x86 --target AileShell
+cmake -B build_x86_release -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build_x86_release --target AileShell
 ```
 
 A 32-bit tree appends `32` to every output name. The shell target produces:
 
 | File | Notes |
 |---|---|
-| `build_release_x86\Aile\AileShell32.dll` | 32-bit shell DLL; still launches the 64-bit `Aile.exe` sibling |
-| `build_release_x86\Aile\Aile32_register.bat` | Registers it via the SysWOW64 `regsvr32` (writes the 32-bit registry view) |
-| `build_release_x86\Aile\Aile32_unregister.bat` | Unregisters it |
+| `build_x86_release\AileShell32.dll` | 32-bit shell DLL; still launches the 64-bit `Aile.exe` sibling |
+| `build_x86_release\ailesetup\AileSetup32.exe` | Optional 32-bit build of the setup tool |
 
-Deploy `AileShell32.dll` and the two batches **into the same folder as the
-64-bit `Aile.exe`** (alongside `AileShell.dll`), then run
-`Aile32_register.bat`. The 64-bit and 32-bit handlers share one CLSID but
-register into separate WoW64 registry views, so both can coexist on one machine.
+Deploy `AileShell32.dll` **into the same folder as the 64-bit `Aile.exe`**
+(alongside `AileShell.dll` and `AileSetup.exe`), then run `AileSetup.exe`.
+`AileSetup.exe` detects both `AileShell.dll` and `AileShell32.dll` in its own
+directory and registers/unregisters them with the correct `regsvr32`
+(`System32` for 64-bit, `SysWOW64` for 32-bit). The two handlers share one CLSID
+but register into separate WoW64 registry views, so both can coexist on one machine.
 
-> A full `cmake --build build_release_x86` also builds `Aile32.exe`, but that
+> A full `cmake --build build_x86_release` also builds `Aile32.exe`, but that
 > 32-bit executable is not needed — only the shell DLL is. Build just the
 > `AileShell` target.
 
@@ -90,5 +91,4 @@ target_link_options(Aile PRIVATE "/MANIFEST:NO")  # Manifest embedded from Aile.
 | `b2e.exe` | From B2E installation directory | B2E compression |
 
 All paths can be overridden in settings dialog. Selecting `b2e.exe` uses stdout parsing to reflect in progress bar.
-
 

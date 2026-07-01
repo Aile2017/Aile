@@ -85,20 +85,18 @@ Implemented per the spec below. Shared COM core in `common/shell/`
 (`ShellExt.cpp/h` = `IShellExtInit`+`IContextMenu`, `DllMain.cpp` = class factory + 4 exports +
 HKCU register/unregister, `ShellConfig.h` = per-app constants interface, `ArchiveClassify.h` =
 static archive detection that mirrors `SevenZip::IsArchivePath` so 7z.dll is never loaded inside
-Explorer). Two separate DLLs `AileShell.dll` (CLSID `{A50BB570-A951-4D73-A1B2-CA2B709FFD34}`) and
-`AileShell.dll` (CLSID `{62EF5960-FE49-490D-BC9B-ADCCE789A7B3}`), each linking the shared core +
-its own `*ShellConfig.cpp` + `.def` (built directly per target, not via an OBJECT library). Menu
-delegates to the app EXE (resolved as the DLL's sibling) via `ShellExecuteW` using the `a`/`x`/`t`
-subcommands. Registers per-user (HKCU, no elevation) via `regsvr32`; deploy as a sibling of the EXE.
+Explorer). The shipped DLL is `AileShell.dll` (CLSID `{A50BB570-A951-4D73-A1B2-CA2B709FFD34}`),
+with an optional x86 companion build `AileShell32.dll` using the same CLSID in the 32-bit registry
+view. Menu delegates to `Aile.exe` (resolved as the DLL's sibling) via `ShellExecuteW` using the
+`a`/`x`/`t` subcommands. Registration is per-user (HKCU, no elevation) via `regsvr32`; `AileSetup`
+drives the correct 64-bit / 32-bit registration when the DLLs are deployed next to the EXE.
 
 First pass is the **legacy `IContextMenu`** handler only (Win11: "Show more options"); the new Win11
 top-level menu (`IExplorerCommand` + MSIX sparse package) is deferred. Original spec retained below.
 
-Applies to **Aile**. Each app ships its **own DLL with its own CLSID**
-(`AileShell.dll` / `AileShell.dll`); they cannot share a single DLL because each needs a
-distinct CLSID, registers independently, delegates to a different EXE, and must install/uninstall
-separately (a user may install only one app). However, the **implementation code is shared** — only
-the per-app constants (CLSID, target EXE name, menu label/icon) differ.
+Applies to **Aile**. The repository ships one shell-extension implementation with two build flavors:
+`AileShell.dll` (x64) and `AileShell32.dll` (x86, optional). The implementation code is shared; only
+the output bitness differs.
 
 **Project structure:**
 
@@ -343,6 +341,9 @@ Individual items overlapping with CLAUDE.md "Remaining tasks":
 - **Manual test matrix**: Systematically check browse / compress / extract / cancel / drop / SFX for each format
 - **Error handling comprehensive review**: HRESULT handling, consistency of error messages shown to user
 - **Write-unsupported format delete error message**: ISO/CAB/JAR etc. fail at `IOutArchive` acquisition (`QueryInterface` → `E_NOINTERFACE`). Current error message is generic; make it explicit that the format does not support deletion.
+- **B2E archive comment support decision**: Either implement whole-archive comment read/write via a B2E `comment:` path where supported, or align the specification/UI docs to the current `E_NOTIMPL` behavior.
+- **B2E delete cancel path**: Wire cancellation through the B2E delete route so it matches the progress/cancel model used by extract/compress, or document it as an intentional limitation.
+- **Compress output rule consolidation**: Consolidate output path / extension / SFX finalization rules so `Settings`, `CompressPolicy`, and `App` do not each carry part of the behavior.
 
 ---
 
@@ -353,5 +354,3 @@ These are **spec-level constraints**, no implementation planned for now:
 - **Individual extraction from solid archives** — 7z.dll limitation. Full extraction only is efficient way
 - **Split creation for gz / bz2 / xz / tar** — Format specs require non-seekable output, unsupported
 - **Multi-archive simultaneous browse (tabs)** — UI structure major redesign needed, low priority
-
-
