@@ -342,7 +342,7 @@ Individual items overlapping with CLAUDE.md "Remaining tasks":
 - **Write-unsupported format delete error message**: ISO/CAB/JAR etc. fail at `IOutArchive` acquisition (`QueryInterface` → `E_NOINTERFACE`). Current error message is generic; make it explicit that the format does not support deletion.
 - **B2E archive comment support decision**: Either implement whole-archive comment read/write via a B2E `comment:` path where supported, or align the specification/UI docs to the current `E_NOTIMPL` behavior.
 - **B2E delete cancel path**: Wire cancellation through the B2E delete route so it matches the progress/cancel model used by extract/compress, or document it as an intentional limitation.
-- **Compress output rule consolidation**: Consolidate output path / extension / SFX finalization rules so `Settings`, `CompressPolicy`, and `App` do not each carry part of the behavior.
+- ~~**Compress output rule consolidation**~~ — Implemented (2026-07-01). `CompressPolicy::FinalizeOutputPath` / `CombinedWritableFormats` are now the single place for output extension + SFX (`.exe`) decisions, replacing the three duplicated sites in `App.cpp` and the standalone `EnsureArchiveExt` helper.
 
 ---
 
