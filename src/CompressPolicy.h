@@ -47,4 +47,24 @@ std::wstring OutputExtension(const std::wstring& format,
 void ApplyOutputExtension(std::wstring& path, const std::wstring& ext,
                           const std::vector<WritableFormat>& writableFormats);
 
+// The combined format list shown by the compress dialog and used for extension
+// recognition by CLI finalize: 7z.dll's writable formats first, then B2E-writable
+// formats that 7z.dll cannot already write (matches the "7z.dll wins whenever both
+// can write a format" priority rule, so B2E-only formats are never shadowed).
+std::vector<WritableFormat> CombinedWritableFormats(const std::vector<WritableFormat>* sevenZipFormats);
+
+// Single source of the "final output extension" decision, covering both the CLI
+// path (bare stem from ComputeDefaultOutputPath, no extension yet) and the dialog
+// path (path already carries the base extension from the live UpdateOutputExt
+// preview, which always previews with SFX off). Strips any already-recognized
+// archive extension via ApplyOutputExtension, then appends the correct final
+// extension: ".exe" for a real 7z.dll SFX, the original format extension for a
+// B2E SFX (the script controls the actual conversion), or the normal
+// format/method extension otherwise. `isB2e` must be the same
+// WillUseB2eForCompress() result used to route the compression itself, so the
+// 7z.dll-priority rule and the extension decision never disagree.
+std::wstring FinalizeOutputPath(std::wstring path, const std::wstring& format,
+                                const std::wstring& method, const std::wstring& sfxMode,
+                                bool isB2e, const std::vector<WritableFormat>& writableFormats);
+
 }  // namespace CompressPolicy

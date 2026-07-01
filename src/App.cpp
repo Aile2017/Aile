@@ -174,49 +174,6 @@ static void ApplyOverrides(CompressDlg::Params& params,
     }
 }
 
-// Append ".<format>" unless the path already ends with it (case-insensitive).
-// A "does the path contain any dot" test is wrong: a dotted input name such as
-// "v-internalGW.log.ERROR" yields a stem "v-internalGW.log", which already
-// contains a dot, so the archive would be written without its ".7z" extension.
-// Match strictly on the trailing extension instead.
-static void EnsureArchiveExt(std::wstring& path, const std::wstring& format, const std::wstring& method = L"") {
-    std::wstring fmt = format;
-    if (fmt == L"gzip") fmt = L"gz";
-    if (fmt == L"bzip2") fmt = L"bz2";
-    if (fmt == L"brotli") fmt = L"br";
-    if (fmt == L"lizard") fmt = L"liz";
-    if (fmt == L"zstd") fmt = L"zst";
-
-    std::wstring suffix = L"." + fmt;
-    if (_wcsicmp(fmt.c_str(), L"tar") == 0 && !method.empty()) {
-        std::wstring m = method;
-        for (auto& c : m) c = (wchar_t)towlower(c);
-        if (m == L"gz" || m == L"gzip" ||
-            m == L"bz2" || m == L"bzip2" ||
-            m == L"xz" || 
-            m == L"zst" || m == L"zstd" ||
-            m == L"lz4" || m == L"lz5" ||
-            m == L"br" || m == L"brotli" ||
-            m == L"liz" || m == L"lizard") {
-            
-            // Map common aliases to canonical 7-Zip stream extensions manually
-            // since FormatRegistry::NormalizeFormatAlias is not static/public.
-            std::wstring can = m;
-            if (m == L"gzip" || m == L"gz") can = L"gz";
-            else if (m == L"bzip2" || m == L"bz2") can = L"bz2";
-            else if (m == L"brotli" || m == L"br") can = L"br";
-            else if (m == L"lizard" || m == L"liz") can = L"liz";
-            else if (m == L"zstd" || m == L"zst") can = L"zst";
-
-            suffix += L"." + can;
-        }
-    }
-
-    if (path.size() < suffix.size() ||
-        _wcsicmp(path.c_str() + path.size() - suffix.size(), suffix.c_str()) != 0)
-        path += suffix;
-}
-
 int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdShow,
                          const std::wstring& destDir,
                          const std::wstring& typeOverride,
@@ -234,47 +191,37 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
 
     const auto* enc = m_sevenZip.IsLoaded() ? &m_sevenZip.GetEncoderNames() : nullptr;
     const auto* wf  = m_sevenZip.IsLoaded() ? &m_sevenZip.GetWritableFormats() : nullptr;
+    const auto combinedFormats = CompressPolicy::CombinedWritableFormats(wf);
 
     // Skip dialog only when -t is given in forced (-a/-w) mode (SW_HIDE).
     // In auto-detect mode (nCmdShow != SW_HIDE) always show dialog with presets.
     const bool skipDialog = (!typeOverride.empty() || !sfxOverride.empty()) && (nCmdShow == SW_HIDE);
     if (skipDialog) {
         if (CompressPolicy::IsInvalidStreamInput(params.format, params.inputFiles)) {
-            MessageBoxW(wnd.Hwnd(), 
+            MessageBoxW(wnd.Hwnd(),
                 L"ストリーム形式（gzip, bzip2 など）は単一ファイル専用です。\n複数ファイルをまとめる場合はtar形式を使用し、メソッド（-m）にストリーム形式を指定するか、\n個別圧縮（w コマンド）を使用してください。",
                 I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONERROR);
             return 0;
         }
 
-        if (params.sfxMode.empty() || WillUseB2eForCompress(params.format.c_str(), m_sevenZip)) {
-            params.outputPath += CompressPolicy::OutputExtension(params.format, params.sfxMode, params.method, false);
-        } else {
-            params.outputPath += L".exe";
-        }
+        params.outputPath = CompressPolicy::FinalizeOutputPath(
+            params.outputPath, params.format, params.method, params.sfxMode,
+            WillUseB2eForCompress(params.format.c_str(), m_sevenZip), combinedFormats);
     } else {
         CompressDlg dlg;
         if (!dlg.Show(wnd.Hwnd(), params, enc, wf))
             return 0;
-            
-        // If SFX was chosen via GUI (and it's not a B2E SFX which keeps its original ext), 
-        // the text box will still have shown .7z/.zip to prevent .exe loop. 
-        // We enforce the final .exe extension here before compression.
-        if (!params.sfxMode.empty() && !WillUseB2eForCompress(params.format.c_str(), m_sevenZip)) {
-            // Remove the format's extension if it was automatically added by the dialog
-            std::wstring expectedExt = CompressPolicy::OutputExtension(params.format, L"", params.method, false);
-            bool stripped = false;
-            if (params.outputPath.size() >= expectedExt.size() &&
-                _wcsicmp(params.outputPath.c_str() + params.outputPath.size() - expectedExt.size(), expectedExt.c_str()) == 0) {
-                params.outputPath.resize(params.outputPath.size() - expectedExt.size());
-                stripped = true;
-            }
-            if (stripped) {
-                params.outputPath += L".exe";
-            } else {
-                EnsureArchiveExt(params.outputPath, L"exe");
-            }
+
+        // SFX was chosen via GUI: the text box still shows the base extension
+        // (.7z/.zip) since the live preview always previews with SFX off, to
+        // avoid flashing ".exe" while the user is still choosing options. Swap
+        // in the real final extension now, right before compression.
+        if (!params.sfxMode.empty()) {
+            params.outputPath = CompressPolicy::FinalizeOutputPath(
+                params.outputPath, params.format, params.method, params.sfxMode,
+                WillUseB2eForCompress(params.format.c_str(), m_sevenZip), combinedFormats);
         }
-            
+
         CompressPolicy::Save(params, m_settings);
         m_settings.Save();
     }
@@ -322,6 +269,7 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
 
     const auto* enc = m_sevenZip.IsLoaded() ? &m_sevenZip.GetEncoderNames() : nullptr;
     const auto* wf  = m_sevenZip.IsLoaded() ? &m_sevenZip.GetWritableFormats() : nullptr;
+    const auto combinedFormats = CompressPolicy::CombinedWritableFormats(wf);
 
     // RunCompressEachMode is only called from -w (always SW_HIDE), so skip dialog when -t/-ca given.
     const bool skipDialog = (!typeOverride.empty() || !sfxOverride.empty()) && (nCmdShow == SW_HIDE);
@@ -353,18 +301,10 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
         CompressDlg::Params params = baseParams;
         params.inputFiles = pair.second;
 
-        std::wstring baseOutput = pair.first;
-        params.outputPath = baseOutput;
-        
-        if (!skipDialog && !params.sfxMode.empty() && !isB2e) {
-            // For per-file extraction from dialog, baseOutput hasn't had any extension appended yet.
-            // Just append .exe directly.
-            params.outputPath += L".exe";
-        } else if (!params.sfxMode.empty() && !isB2e) {
-            params.outputPath += L".exe";
-        } else {
-            params.outputPath += CompressPolicy::OutputExtension(params.format, params.sfxMode, params.method, false);
-        }
+        // baseOutput is always a bare stem (no dialog runs per-file), so this is a
+        // plain append; FinalizeOutputPath's strip step is a no-op here.
+        params.outputPath = CompressPolicy::FinalizeOutputPath(
+            pair.first, params.format, params.method, params.sfxMode, isB2e, combinedFormats);
 
         int counter = 1;
         std::wstring originalOutputPath = params.outputPath;

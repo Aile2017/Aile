@@ -3,6 +3,7 @@
 // CLI (App::ApplyOverrides). Behavior matches the prior inline logic. AileEx.
 #include "CompressPolicy.h"
 #include "Settings.h"
+#include "B2eBridge.h"
 #include <windows.h>
 
 namespace CompressPolicy {
@@ -181,6 +182,34 @@ void ApplyOutputExtension(std::wstring& path, const std::wstring& ext,
     }
 
     path += ext;
+}
+
+std::vector<WritableFormat> CombinedWritableFormats(const std::vector<WritableFormat>* sevenZipFormats) {
+    std::vector<WritableFormat> combined = (sevenZipFormats && !sevenZipFormats->empty())
+        ? *sevenZipFormats : std::vector<WritableFormat>{};
+    for (const auto& bf : B2e_GetWritableFormats()) {
+        bool sevenZipCanWrite = false;
+        if (sevenZipFormats)
+            for (const auto& wf : *sevenZipFormats)
+                if (_wcsicmp(wf.ext.c_str(), bf.ext.c_str()) == 0) { sevenZipCanWrite = true; break; }
+        if (!sevenZipCanWrite) {
+            WritableFormat entry;
+            entry.label = bf.label;
+            entry.ext   = bf.ext;
+            combined.push_back(entry);
+        }
+    }
+    return combined;
+}
+
+std::wstring FinalizeOutputPath(std::wstring path, const std::wstring& format,
+                                const std::wstring& method, const std::wstring& sfxMode,
+                                bool isB2e, const std::vector<WritableFormat>& writableFormats) {
+    std::wstring ext = sfxMode.empty() ? OutputExtension(format, L"", method, false)
+                      : isB2e          ? (L"." + format)   // B2E script controls the actual conversion
+                                       : L".exe";           // real 7z.dll SFX
+    ApplyOutputExtension(path, ext, writableFormats);
+    return path;
 }
 
 }  // namespace CompressPolicy

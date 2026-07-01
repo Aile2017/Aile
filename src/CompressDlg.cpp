@@ -54,11 +54,11 @@ bool CompressDlg::Show(HWND hwndParent, Params& params,
     m_params       = params;
     m_encoderNames = encoderNames;
 
-    // Build combined format list: 7z.dll formats first, then B2E formats.
-    // B2E formats that 7z.dll can already write are excluded to avoid duplicate entries
-    // and to ensure OnFormatChange shows the correct method/level UI for each format.
-    m_writableFormats = (writableFormats && !writableFormats->empty()) ? *writableFormats
-                                                                       : std::vector<WritableFormat>{};
+    // Build combined format list: 7z.dll formats first, then B2E formats that
+    // 7z.dll can't already write (matches the 7z.dll-priority rule; see
+    // CompressPolicy::CombinedWritableFormats). m_b2eFormats mirrors the B2E-only
+    // subset so OnFormatChange can show the correct method/level UI per format.
+    m_writableFormats = CompressPolicy::CombinedWritableFormats(writableFormats);
     m_b2eFormats.clear();
     for (const auto& bf : B2e_GetWritableFormats()) {
         bool sevenZipCanWrite = false;
@@ -66,13 +66,7 @@ bool CompressDlg::Show(HWND hwndParent, Params& params,
             for (const auto& wf : *writableFormats)
                 if (_wcsicmp(wf.ext.c_str(), bf.ext.c_str()) == 0) { sevenZipCanWrite = true; break; }
         }
-        if (!sevenZipCanWrite) {
-            m_b2eFormats.push_back(bf);
-            WritableFormat entry;
-            entry.label = bf.label;
-            entry.ext   = bf.ext;
-            m_writableFormats.push_back(entry);
-        }
+        if (!sevenZipCanWrite) m_b2eFormats.push_back(bf);
     }
     if (m_writableFormats.empty()) return false;
 
