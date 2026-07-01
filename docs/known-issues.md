@@ -162,3 +162,61 @@ is beyond Aile's control. Workaround: convert to RAR 5 or 7z format.
   editing is added later (via a B2E `comment:` block), treat it as version/charset-sensitive until
   verified against real RAR4/RAR5 comment samples.
 
+## Writable-Format Detection Must Use CLSID, Not the Primary-Extension String
+
+`FormatRegistry::GetWritableFormats()` lists only **one** extension per format handler (the first
+token of 7z.dll's `kExtension` string, e.g. `"zip"`). But a handler often covers many alias
+extensions (zip also covers `jar`, `z01`, `zipx`, `docx`, `xlsx`, `odt`, `epub`, ...). Comparing an
+opened archive's extension against that primary-extension list with `_wcsicmp` (as
+`SevenZipBackend::Open` used to) wrongly reports `.jar`/`.docx`/etc. as read-only even though the
+underlying zip handler fully supports Add/Delete — 7z.dll's own `DeleteItems` succeeds on them
+when called directly.
+
+Fix: resolve the extension to a CLSID via the existing alias-aware `m_extToClsid` map (already used
+by `InGuidForPath` for opening) and check that CLSID against the writable-handler set. See
+`FormatRegistry::IsWritableExt`. Genuinely non-writable formats (verified via `kUpdate=false`, e.g.
+Cab/Iso in the bundled 7-Zip ZS build) are unaffected — this only fixes the alias-extension case.
+
+## Content-Signature Fallback for Misleading Extensions
+
+7z.dll picks the format handler purely from the file's extension (`FormatToInGuid`) and has no
+built-in fallback: if that handler's `Open()` fails, the DLL does not try any other format. Unlike
+7-Zip/WinRAR (which determine format from the file's content signature, using the extension only as
+an ordering hint), Aile without this fallback would treat e.g. a `.zip` renamed to `.7z` as an open
+failure — and since open failure and "needs a password" are indistinguishable at that layer, the
+caller (`ArchiveOpener::Open`) would assume the header is encrypted and show a password prompt
+instead of just opening it.
+
+`FormatRegistry::DetectFormatBySignature` reads the format handlers' own
+`kSignature`/`kMultiSignature`/`kSignatureOffset` properties (the same magic-byte tables 7-Zip
+itself uses) and matches them against the file's header bytes.
+`SevenZip::OpenArchiveWithFallback` tries this as a last resort, after the extension-implied CLSID
+and the RAR5→RAR4 pair fail. **Safety invariant:** the retry is skipped whenever the detected format
+is the same CLSID already tried (e.g. a header-encrypted `.7z` with a wrong/missing password still
+has a valid 7z signature) — this is what keeps the fallback from ever interfering with the
+assume-encrypted/password-prompt path. Do not change this to a broader "always try the detected
+format" rule without re-verifying the password-prompt flow still triggers correctly.
+
+## MSVC LTO Miscompile on Release Builds (2026-07)
+
+A full CMake Release build (`/GL` + `/LTCG`, combined with `/GR-` and `/guard:cf`) crashed
+(`0xC0000005`) opening a large real-world zip (postgresql JDBC driver jar, 534 entries) inside
+`SevenZip::OpenArchiveWithFallback` / `FormatRegistry`'s signature-collection code. The identical
+source compiled per-file (no cross-TU optimization) and an AddressSanitizer build both opened the
+same file correctly on every run, and manual review found no UB in the affected code — this
+narrowed the bug to MSVC's LTO pipeline itself, not application logic. Diagnosed by resolving the
+crash address from the Windows Error Reporting `.dmp`/event-log offset against the matching
+`Aile.pdb` (`/Zi` + `/DEBUG` are kept in Release for exactly this).
+
+Resolution: LTO (`INTERPROCEDURAL_OPTIMIZATION_RELEASE`) is commented out in `CMakeLists.txt`, not
+deleted, with repro notes. Do not re-enable without re-running that exact repro (a large real
+zip/jar, full CMake Release build — a per-file compile will not reproduce it) to confirm a future
+toolchain update actually fixed it.
+
+**Lesson for future stale-object symptoms:** if Debug works but Release exhibits crashes or wrong
+behavior after a header change, check `build_release/CMakeFiles/Aile.dir/**/*.obj` timestamps
+against the changed header before suspecting the new code — an incomplete incremental rebuild
+(stale `.obj` for a file that transitively includes the changed header) produces an inconsistent
+class layout across translation units, which crashes in unrelated-looking code. A clean rebuild of
+`build_release` resolves it.
+

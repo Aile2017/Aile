@@ -3,7 +3,7 @@
 Summary of features commonly found in archive managers but not yet implemented in Aile,
 and features that would be nice to have. Includes implementation hints and effort estimates.
 
-Last updated: 2026-06-13
+Last updated: 2026-07-01
 
 Effort estimates:
 - **S** = half day to 1 day
@@ -339,10 +339,12 @@ Save ListView contents as CSV / TSV / text.
 Individual items overlapping with CLAUDE.md "Remaining tasks":
 
 - **Error handling comprehensive review**: HRESULT handling, consistency of error messages shown to user
-- **Write-unsupported format delete error message**: ISO/CAB/JAR etc. fail at `IOutArchive` acquisition (`QueryInterface` → `E_NOINTERFACE`). Current error message is generic; make it explicit that the format does not support deletion.
+- **Write-unsupported format delete error message**: Cab/Iso etc. genuinely lack write support (`kUpdate=false`) and fail at `IOutArchive` acquisition (`QueryInterface` → `E_NOINTERFACE`). Current error message is generic; make it explicit that the format does not support deletion. (Note: JAR is not actually in this category — see below.)
 - **B2E archive comment support decision**: Either implement whole-archive comment read/write via a B2E `comment:` path where supported, or align the specification/UI docs to the current `E_NOTIMPL` behavior.
 - **B2E delete cancel path**: Wire cancellation through the B2E delete route so it matches the progress/cancel model used by extract/compress, or document it as an intentional limitation.
 - ~~**Compress output rule consolidation**~~ — Implemented (2026-07-01). `CompressPolicy::FinalizeOutputPath` / `CombinedWritableFormats` are now the single place for output extension + SFX (`.exe`) decisions, replacing the three duplicated sites in `App.cpp` and the standalone `EnsureArchiveExt` helper.
+- ~~**Add/Delete wrongly disabled for zip-alias extensions**~~ — Fixed (2026-07-01). `jar`/`docx`/`xlsx`/etc. (all zip aliases) were wrongly treated as read-only because the writable check string-matched against each handler's primary extension only. `FormatRegistry::IsWritableExt` now resolves via CLSID instead. See `docs/known-issues.md`.
+- ~~**Archive open fails when the extension doesn't match the real format**~~ — Fixed (2026-07-01). A file renamed to a misleading extension (e.g. `.zip` → `.7z`) now opens correctly via content-signature detection, matching 7-Zip/WinRAR, instead of falling into the assume-encrypted/password-prompt path. See `docs/known-issues.md`.
 
 ---
 
