@@ -56,10 +56,25 @@ public:
     GUID InGuidForPath(const wchar_t* path) const;       // input handler from path's ext
     GUID OutGuidForFormat(const wchar_t* format) const;  // output handler from format name
 
+    // Content-based format detection: matches `data` (the archive's first
+    // `len` bytes) against every registered format's magic-byte signature(s)
+    // at their declared offset, the same signature table 7-Zip/WinRAR use to
+    // determine format from content rather than trusting the file extension.
+    // Returns false when nothing matches. Used as a last-resort fallback when
+    // the extension-implied format fails to open (e.g. a zip renamed to .7z).
+    bool DetectFormatBySignature(const unsigned char* data, size_t len, GUID& outClsid) const;
+
 private:
     void EnumerateCodecs();
     void EnumerateFormats();
     static std::wstring ExtOfPath(const wchar_t* path);
+
+    // One format handler's signature data, collected for DetectFormatBySignature.
+    struct FormatSignature {
+        GUID clsid;
+        UINT32 offset;                        // byte offset where the signature starts
+        std::vector<std::string> signatures;  // one or more alternative byte sequences
+    };
 
     Func_GetNumberOfMethods  m_pfnGetNumMethods   = nullptr;
     Func_GetMethodProperty   m_pfnGetMethodProp   = nullptr;
@@ -69,4 +84,5 @@ private:
     std::vector<WritableFormat>  m_writableFormats; // writable formats (for UI, primary extension only)
     std::vector<GUID>            m_writableClsids;  // CLSIDs of writable handlers, for IsWritableExt()
     std::vector<std::wstring>    m_encoderNames;    // lowercased encoder names
+    std::vector<FormatSignature> m_signatures;      // per-format magic bytes, for DetectFormatBySignature()
 };

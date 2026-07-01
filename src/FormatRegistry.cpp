@@ -1,5 +1,6 @@
 #include "FormatRegistry.h"
 #include <cwctype>
+#include <cstring>
 
 void FormatRegistry::Populate(HMODULE hDll) {
     Clear();
@@ -59,6 +60,8 @@ void FormatRegistry::EnumerateCodecs() {
 void FormatRegistry::EnumerateFormats() {
     m_extToClsid.clear();
     m_writableFormats.clear();
+    m_writableClsids.clear();
+    m_signatures.clear();
 
     UINT32 n = 0;
     if (FAILED(m_pfnGetNumFormats(&n))) return;
@@ -119,6 +122,47 @@ void FormatRegistry::EnumerateFormats() {
             wf.label = name + L" (." + primaryExt + L")";
             m_writableFormats.push_back(std::move(wf));
         }
+
+        // Magic-byte signature(s), for content-based format detection
+        // (DetectFormatBySignature). kSignature is a single byte sequence;
+        // kMultiSignature is zero or more alternatives, each prefixed by a
+        // 1-byte length. kSignatureOffset is the byte offset within the file
+        // where the signature starts (0 for most formats; e.g. ISO's is 32769).
+        std::vector<std::string> sigs;
+
+        PROPVARIANT pvSig; PropVariantInit(&pvSig);
+        if (SUCCEEDED(m_pfnGetHandlerProp2(i, 6 /*kSignature*/, &pvSig)) &&
+            pvSig.vt == VT_BSTR && pvSig.bstrVal) {
+            UINT len = SysStringByteLen(pvSig.bstrVal);
+            if (len > 0) sigs.emplace_back(reinterpret_cast<const char*>(pvSig.bstrVal), len);
+        }
+        PropVariantClear(&pvSig);
+
+        PROPVARIANT pvMulti; PropVariantInit(&pvMulti);
+        if (SUCCEEDED(m_pfnGetHandlerProp2(i, 7 /*kMultiSignature*/, &pvMulti)) &&
+            pvMulti.vt == VT_BSTR && pvMulti.bstrVal) {
+            const unsigned char* p = reinterpret_cast<const unsigned char*>(pvMulti.bstrVal);
+            UINT total = SysStringByteLen(pvMulti.bstrVal);
+            UINT pos = 0;
+            while (pos < total) {
+                unsigned char segLen = p[pos++];
+                if (segLen == 0 || pos + segLen > total) break;
+                sigs.emplace_back(reinterpret_cast<const char*>(p + pos), segLen);
+                pos += segLen;
+            }
+        }
+        PropVariantClear(&pvMulti);
+
+        if (!sigs.empty()) {
+            PROPVARIANT pvOffset; PropVariantInit(&pvOffset);
+            UINT32 offset = 0;
+            if (SUCCEEDED(m_pfnGetHandlerProp2(i, 8 /*kSignatureOffset*/, &pvOffset)) &&
+                pvOffset.vt == VT_UI4)
+                offset = pvOffset.ulVal;
+            PropVariantClear(&pvOffset);
+
+            m_signatures.push_back({clsid, offset, std::move(sigs)});
+        }
     }
     
     // Inject common short aliases if they aren't explicitly registered by the DLL
@@ -162,6 +206,20 @@ bool FormatRegistry::IsArchiveExt(const wchar_t* ext) const {
     };
     for (int i = 0; kFallback[i]; ++i)
         if (lower == kFallback[i]) return true;
+    return false;
+}
+
+bool FormatRegistry::DetectFormatBySignature(const unsigned char* data, size_t len, GUID& outClsid) const {
+    if (!data) return false;
+    for (const auto& fs : m_signatures) {
+        for (const auto& sig : fs.signatures) {
+            if (fs.offset + sig.size() <= len &&
+                memcmp(data + fs.offset, sig.data(), sig.size()) == 0) {
+                outClsid = fs.clsid;
+                return true;
+            }
+        }
+    }
     return false;
 }
 

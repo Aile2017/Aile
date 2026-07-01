@@ -187,6 +187,38 @@ HRESULT SevenZip::OpenArchiveWithFallback(const wchar_t* path, const GUID& prima
         }
     }
 
+    // Still not open: the extension may simply be wrong (e.g. a zip renamed to
+    // .7z). 7z.dll itself has no cross-format fallback — the caller must pick
+    // the CLSID — so read the file's header and match it against every
+    // registered format's signature, the same way 7-Zip/WinRAR determine
+    // format from content rather than trusting the extension. Skipped when the
+    // detected format is the one already tried (e.g. a header-encrypted 7z
+    // with a wrong/missing password still has a valid 7z signature), so this
+    // never interferes with the assume-encrypted/password-prompt fallback the
+    // caller does when every candidate fails.
+    if (FAILED(hr) || hr == S_FALSE) {
+        unsigned char header[65536] = {};
+        UInt32 bytesRead = 0;
+        fileSpec->Seek(0, 0, nullptr);
+        fileSpec->Read(header, sizeof(header), &bytesRead);
+
+        GUID detected{};
+        if (m_registry.DetectFormatBySignature(header, bytesRead, detected) &&
+            !IsEqualGUID(detected, formatGuid) &&
+            !IsEqualGUID(detected, CLSID_Format_Rar)) {  // already covered by the RAR5→RAR4 pair above
+            if (archive) { archive->Release(); archive = nullptr; }
+
+            hr = CreateInArchive(detected, &archive);
+            if (SUCCEEDED(hr) && archive) {
+                fileSpec->Seek(0, 0, nullptr);
+                hr = archive->Open(fileSpec, &maxCheck, openCb);
+                if (SUCCEEDED(hr) && archive) {
+                    m_cache.PutFormat(path, detected);
+                }
+            }
+        }
+    }
+
     // If cache was used but format matched, no need to update
     if (!hadCachedFormat && SUCCEEDED(hr) && archive) {
         m_cache.PutFormat(path, formatGuid);  // Cache the successful format
