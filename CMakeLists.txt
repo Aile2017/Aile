@@ -7,6 +7,26 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Dynamic CRT linking: use the Visual C++ Redistributable runtime (/MD, /MDd)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 
+# Guard against silent header-dependency loss with Ninja+MSVC (see
+# docs/known-issues.md, "Ninja Header-Dependency Poisoning"): ninja matches
+# cl's /showIncludes notes against the byte-exact prefix captured here at
+# configure time. cl emits that note in the console's code page, so a
+# localized (non-ASCII) prefix breaks whenever a build runs from a console
+# with a different code page — ninja then records empty header dependencies
+# and later incremental builds silently link stale objects (crashes in
+# unrelated-looking code).
+if(MSVC AND CMAKE_GENERATOR MATCHES "Ninja" AND DEFINED CMAKE_CL_SHOWINCLUDES_PREFIX
+   AND NOT CMAKE_CL_SHOWINCLUDES_PREFIX MATCHES "^[ -~]+$")
+    message(WARNING
+        "cl.exe emits a localized (non-ASCII) /showIncludes prefix. Incremental builds "
+        "from a console whose code page differs from configure time will silently "
+        "record empty header dependencies and later link stale objects. Fix: install "
+        "the Visual Studio English language pack, set VSLANG=1033 (user environment "
+        "variable), delete CMakeCache.txt, and reconfigure so the prefix becomes the "
+        "ASCII 'Note: including file:'. Details: docs/known-issues.md, "
+        "'Ninja Header-Dependency Poisoning'.")
+endif()
+
 set(COMMON_DIR ${CMAKE_CURRENT_SOURCE_DIR}/common)
 
 # 32-bit builds (x86 Native Tools prompt) append "32" to every output binary so
