@@ -122,6 +122,14 @@ LRESULT MainWindow::HandleMsg(UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
 
     case WM_COMMAND:
+        if ((HWND)lp == m_hExtractEdit) {
+            // Manual edits to the "Extract to:" box become the session override,
+            // so F5/menu extraction and the browse-dialog seed honor them.
+            // Clearing the box reverts to the settings-derived destination.
+            if (HIWORD(wp) == EN_CHANGE && !m_syncingExtractEdit)
+                m_extractDestOverride = GetWindowTextString(m_hExtractEdit);
+            return 0;
+        }
         OnCommand(LOWORD(wp));
         return 0;
 
@@ -533,29 +541,27 @@ void MainWindow::ApplyFontToControls() {
 
 void MainWindow::UpdateExtractDestEdit() {
     if (!m_hExtractEdit) return;
+    std::wstring text;
     if (!m_extractDestOverride.empty()) {
-        SetWindowTextW(m_hExtractEdit, m_extractDestOverride.c_str());
-        return;
-    }
-    const auto& st = m_svc.settings;
-    if (st.GetOutputDirModeFixed()) {
-        SetWindowTextW(m_hExtractEdit, st.GetDefaultOutputDir().c_str());
-    } else {
+        text = m_extractDestOverride;
+    } else if (m_svc.settings.GetOutputDirModeFixed()) {
+        text = m_svc.settings.GetDefaultOutputDir();
+    } else if (m_session.IsOpen()) {
         // Same-as-source mode: show the archive's parent directory, or empty if none open.
-        std::wstring dir;
-        if (m_session.IsOpen()) {
-            // Normalize to absolute path so relative-path args (e.g. "test.zip") resolve correctly.
-            wchar_t full[MAX_PATH] = {};
-            std::wstring abs;
-            if (GetFullPathNameW(m_session.ArchivePath().c_str(), MAX_PATH, full, nullptr) != 0)
-                abs = full;
-            else
-                abs = m_session.ArchivePath();
-            auto sl = abs.find_last_of(L"\\/");
-            dir = (sl != std::wstring::npos) ? abs.substr(0, sl) : L"";
-        }
-        SetWindowTextW(m_hExtractEdit, dir.c_str());
+        // Normalize to absolute path so relative-path args (e.g. "test.zip") resolve correctly.
+        wchar_t full[MAX_PATH] = {};
+        std::wstring abs;
+        if (GetFullPathNameW(m_session.ArchivePath().c_str(), MAX_PATH, full, nullptr) != 0)
+            abs = full;
+        else
+            abs = m_session.ArchivePath();
+        auto sl = abs.find_last_of(L"\\/");
+        if (sl != std::wstring::npos) text = abs.substr(0, sl);
     }
+    // Settings-derived text must not be captured back into the override by EN_CHANGE.
+    m_syncingExtractEdit = true;
+    SetWindowTextW(m_hExtractEdit, text.c_str());
+    m_syncingExtractEdit = false;
 }
 
 // ---- Drag-and-drop ----
@@ -704,10 +710,8 @@ void MainWindow::OnCommand(WORD id) {
         break;
     case ID_TOOLBAR_BROWSE_DEST: {
         std::wstring path = GetWindowTextString(m_hExtractEdit);
-        if (BrowseFolderDialog(m_hwnd, IDS_TITLE_SELECT_DEST_FOLDER, &path)) {
-            m_extractDestOverride = path;
-            SetWindowTextW(m_hExtractEdit, path.c_str());
-        }
+        if (BrowseFolderDialog(m_hwnd, IDS_TITLE_SELECT_DEST_FOLDER, &path))
+            ApplyExtractDest(path);
         break;
     }
     default:

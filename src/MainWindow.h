@@ -128,7 +128,8 @@ private:
     HIMAGELIST  m_hToolbarImages = nullptr;  // down-scaled toolbar icons
     HFONT       m_hFont        = nullptr;
 
-    std::wstring             m_extractDestOverride;  // Set by -d option or [...] browse; overrides settings
+    std::wstring             m_extractDestOverride;  // Set by -d option, [...] browse, or manual edit; overrides settings
+    bool                     m_syncingExtractEdit = false;  // Suppress EN_CHANGE sync during programmatic SetWindowText
     // App-owned services (Settings/7z/Unrar) injected at construction. Declared
     // before m_controller so it can be passed into the controller's initializer.
     AppServices              m_svc;
