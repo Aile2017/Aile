@@ -220,3 +220,38 @@ against the changed header before suspecting the new code — an incomplete incr
 class layout across translation units, which crashes in unrelated-looking code. A clean rebuild of
 `build_release` resolves it.
 
+## Ninja Header-Dependency Poisoning via Console Code Page (2026-07)
+
+Root cause of the recurring "incremental Release build produces a crashing binary; clean rebuild
+fixes it" pattern (the stale-object lesson above), reproduced deliberately on this machine.
+
+Mechanism: Ninja+MSVC tracks header dependencies by parsing `cl /showIncludes` output against the
+`msvc_deps_prefix` recorded in `CMakeFiles/rules.ninja` at configure time. On this machine that
+prefix is the Japanese note `メモ: インクルード ファイル:` encoded in **CP932**. `cl.exe` emits
+that note in the **console's active code page**, so a build run from a UTF-8 console
+(`chcp 65001` — PowerShell 7.4+ can set this on startup) emits UTF-8 bytes that do not match the
+CP932 prefix. Ninja then silently stores an **empty-but-valid deps record** (`#deps 0 (VALID)`,
+visible via `ninja -t deps`) for every TU compiled in that session. From then on, header changes
+never trigger recompiles of those TUs; the stale objects link against freshly compiled ones with
+a different class layout, and the binary crashes in unrelated-looking code. A clean rebuild heals
+it only until the next mixed-code-page build.
+
+Detection: `ninja -C build_release -t deps | grep -c "#deps 0"` — any non-zero count means
+poisoned records. A leaked `メモ: インクルード ファイル:` line in build output (ninja normally
+swallows matched lines) is the live symptom of a mismatched build.
+
+Resolution (2026-07-03): the VS **English language pack** was installed and `VSLANG=1033` set as
+a user environment variable, then all four build dirs (`build`, `build_release`, `build_x86`,
+`build_x86_release`) were regenerated. `msvc_deps_prefix` is now the ASCII
+`Note: including file:`, which matches under any console code page — verified by rebuilding under
+`chcp 65001` with deps staying intact. The remaining requirement is that **`VSLANG=1033` must be
+present in the build environment** (a shell inherited from a pre-2026-07-03 process lacks it; set
+it inline). If it is missing, cl emits the Japanese note again and the poisoning returns —
+detection: `ninja -t deps | grep -c "#deps 0"`.
+
+In the same pass, all caches were switched from the Strawberry Perl cmake 3.29 / ninja 1.12
+(incidental installs, not meant for general use) to the VS-bundled cmake 4.3 / ninja 1.13
+(`CMAKE_MAKE_PROGRAM` baked into each cache). Do not build with the Strawberry copies: a
+different ninja version discards `.ninja_log`/`.ninja_deps` ("starting over") — measured
+consequence is a full rebuild (safe but slow), not corruption.
+

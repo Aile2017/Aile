@@ -31,14 +31,16 @@ To support 32-bit file managers on 64-bit OS, you can build the 32-bit version o
 **Important**: You must use the 32-bit MSVC environment (`vcvars32.bat`). If you use `vcvarsall.bat x64` with Ninja, it will incorrectly build 64-bit binaries.
 
 ```powershell
-# Adjust the Visual Studio path for your environment
-$vcvars32 = "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars32.bat"
+# Adjust the Visual Studio paths for your environment
+$vcvars32 = "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars32.bat"
+$cmake    = "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
+$ninja    = "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe"
 
 # Configure and build the x86 Debug
-cmd /c "`"$vcvars32`" && cmake -B build_x86 -G Ninja -DCMAKE_BUILD_TYPE=Debug && cmake --build build_x86 --target AileShell"
+cmd /c "`"$vcvars32`" && `"$cmake`" -B build_x86 -G Ninja -DCMAKE_BUILD_TYPE=Debug `"-DCMAKE_MAKE_PROGRAM=$ninja`" && `"$cmake`" --build build_x86 --target AileShell"
 
 # Configure and build the x86 Release
-cmd /c "`"$vcvars32`" && cmake -B build_x86_release -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build_x86_release --target AileShell"
+cmd /c "`"$vcvars32`" && `"$cmake`" -B build_x86_release -G Ninja -DCMAKE_BUILD_TYPE=Release `"-DCMAKE_MAKE_PROGRAM=$ninja`" && `"$cmake`" --build build_x86_release --target AileShell"
 ```
 
 The x86 build produces `build_x86_release\AileShell32.dll`. To register the generated shell
