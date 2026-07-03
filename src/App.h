@@ -14,7 +14,6 @@ public:
     void Shutdown();
 
     HINSTANCE GetInstance() const { return m_hInst; }
-    Settings& GetSettings()       { return m_settings; }
     SevenZip& Get7z()             { return m_sevenZip; }
     // Reference bundle injected into the GUI object graph (see AppServices.h).
     AppServices Services()        { return { m_settings, m_sevenZip,

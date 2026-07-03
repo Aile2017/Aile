@@ -55,16 +55,6 @@ void WorkerThread::Start(Task task, HWND hwndNotify, UINT doneMsg) {
     }
 }
 
-void WorkerThread::RequestCancel() {
-    // Cancellation is handled via the ProgressPostSink::SetCancelled flag.
-    // WorkerThread itself has no direct cancel — the task lambda checks the sink.
-}
-
-bool WorkerThread::IsRunning() const {
-    if (m_hThread == INVALID_HANDLE_VALUE) return false;
-    return WaitForSingleObject(m_hThread, 0) == WAIT_TIMEOUT;
-}
-
 void WorkerThread::Wait() {
     if (m_hThread != INVALID_HANDLE_VALUE) {
         WaitForSingleObject(m_hThread, INFINITE);

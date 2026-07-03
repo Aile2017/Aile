@@ -37,7 +37,6 @@
 #define IDC_METHOD          1005
 #define IDC_PASSWORD        1006
 #define IDC_ENCRYPT_HDR     1007
-#define IDC_INPUT_LIST      1008
 #define IDC_ADV_BUTTON      1009
 #define IDC_SFX_MODE        1010
 
@@ -101,7 +100,6 @@
 #define ID_EXTRACT          40001
 #define ID_ADD              40002
 #define ID_SETTINGS_DLG     40003
-#define ID_REFRESH          40004
 #define ID_TEST             40005
 #define ID_DELETE           40006
 #define ID_CLOSE            40007

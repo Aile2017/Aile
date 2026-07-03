@@ -94,14 +94,7 @@ bool ArchiveController::Extract(std::vector<UINT32> indices, std::wstring preset
             if (st.GetOutputDirModeFixed()) {
                 destDir = st.GetDefaultOutputDir();
             } else {
-                wchar_t full[MAX_PATH] = {};
-                std::wstring abs;
-                if (GetFullPathNameW(m_session.ArchivePath().c_str(), MAX_PATH, full, nullptr) != 0)
-                    abs = full;
-                else
-                    abs = m_session.ArchivePath();
-                auto sl = abs.find_last_of(L"\\/");
-                destDir = (sl != std::wstring::npos) ? abs.substr(0, sl) : abs;
+                destDir = AbsParentDir(m_session.ArchivePath());
             }
         }
         if (!m_ui.BrowseDestFolder(destDir))

@@ -45,8 +45,6 @@ public:
     ~WorkerThread();
 
     void Start(Task task, HWND hwndNotify, UINT doneMsg);
-    void RequestCancel();
-    bool IsRunning() const;
     void Wait();
 
 private:

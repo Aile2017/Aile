@@ -296,19 +296,6 @@ std::vector<std::wstring> B2e_GetComponentVersions()
     return result;
 }
 
-std::wstring B2e_GetExtensionFilterPattern()
-{
-    // Build "*.<ext>;*.<ext>;..." from every extension handled by a loaded .b2e,
-    // so the open dialog's archive filter tracks the scripts (no hardcoded list).
-    std::wstring pattern;
-    for (const auto& kv : GetExtMap()) {
-        if (!pattern.empty()) pattern += L';';
-        pattern += L"*.";
-        pattern += kv.first;
-    }
-    return pattern;
-}
-
 bool B2e_IsArchiveExt(const wchar_t* ext)
 {
     // Build "x.<ext>" so kiPath::ext() inside FindScript can extract the extension.

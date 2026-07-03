@@ -68,8 +68,8 @@ public:
                            IExtractProgressSink* sink) = 0;
 
     // Whole-archive comment. GetComment yields an empty string for formats/archives
-    // without one. SetComment requires CanComment() && CanWrite(); an empty string
-    // removes the comment. Returns E_NOTIMPL when unsupported.
+    // without one. SetComment requires CanComment() and a non-read-only session;
+    // an empty string removes the comment. Returns E_NOTIMPL when unsupported.
     virtual HRESULT GetComment(std::wstring& out) = 0;
     virtual HRESULT SetComment(const std::wstring& text) = 0;
 

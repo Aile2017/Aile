@@ -97,9 +97,7 @@ bool MainWindow::TriggerExtract(const std::wstring& presetDest) {
 
 void MainWindow::OnExtractSmart() {
     if (!m_session.IsOpen()) return;
-    wchar_t buf[MAX_PATH] = {};
-    if (m_hExtractEdit) GetWindowTextW(m_hExtractEdit, buf, MAX_PATH);
-    std::wstring dest = buf;
+    std::wstring dest = GetWindowTextString(m_hExtractEdit);
     if (ListView_GetSelectedCount(m_hListView) > 0)
         OnExtractSelected(dest);
     else

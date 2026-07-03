@@ -548,15 +548,7 @@ void MainWindow::UpdateExtractDestEdit() {
         text = m_svc.settings.GetDefaultOutputDir();
     } else if (m_session.IsOpen()) {
         // Same-as-source mode: show the archive's parent directory, or empty if none open.
-        // Normalize to absolute path so relative-path args (e.g. "test.zip") resolve correctly.
-        wchar_t full[MAX_PATH] = {};
-        std::wstring abs;
-        if (GetFullPathNameW(m_session.ArchivePath().c_str(), MAX_PATH, full, nullptr) != 0)
-            abs = full;
-        else
-            abs = m_session.ArchivePath();
-        auto sl = abs.find_last_of(L"\\/");
-        if (sl != std::wstring::npos) text = abs.substr(0, sl);
+        text = AbsParentDir(m_session.ArchivePath());
     }
     // Settings-derived text must not be captured back into the override by EN_CHANGE.
     m_syncingExtractEdit = true;

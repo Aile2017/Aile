@@ -91,9 +91,9 @@ public:
     bool GetOpenFolderAfterExtract() const          { return m_openFolderAfterExtract; }
     void SetOpenFolderAfterExtract(bool v)          { m_openFolderAfterExtract = v; }
 
-    // OpenFolderCommand: INI-only. Empty = use Explorer (ShellExecuteW).
+    // OpenFolderCommand: INI-only, no UI or setter — edit the INI to change it.
+    // Empty = use Explorer (ShellExecuteW).
     const std::wstring& GetOpenFolderCommand() const { return m_openFolderCommand; }
-    void SetOpenFolderCommand(const wchar_t* v)     { m_openFolderCommand = v; }
 
     // MRU (recently used archives) — head is most recent; duplicates removed case-insensitively.
     const std::vector<std::wstring>& GetMruPaths() const { return m_mruPaths; }

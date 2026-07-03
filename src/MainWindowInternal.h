@@ -56,6 +56,15 @@ inline std::wstring ParentDir(const std::wstring& path) {
     return (sl != std::wstring::npos) ? path.substr(0, sl) : path;
 }
 
+// ParentDir after normalizing to an absolute path, so relative-path args
+// (e.g. "test.zip") resolve against the current directory correctly.
+inline std::wstring AbsParentDir(const std::wstring& path) {
+    wchar_t full[MAX_PATH] = {};
+    std::wstring abs =
+        (GetFullPathNameW(path.c_str(), MAX_PATH, full, nullptr) != 0) ? full : path;
+    return ParentDir(abs);
+}
+
 // Return the initial output path based on OutputDirMode setting and the given source files.
 // Returns "dir\stem" (no extension) so CompressDlg::UpdateOutputExt can append the right one.
 inline std::wstring DefaultOutputPath(const Settings& s, const std::vector<std::wstring>& srcFiles) {
