@@ -197,7 +197,16 @@ has a valid 7z signature) — this is what keeps the fallback from ever interfer
 assume-encrypted/password-prompt path. Do not change this to a broader "always try the detected
 format" rule without re-verifying the password-prompt flow still triggers correctly.
 
-## MSVC LTO Miscompile on Release Builds (2026-07)
+## MSVC LTO Miscompile on Release Builds (2026-07) — MISDIAGNOSIS, LTO re-enabled
+
+**Correction (2026-07-03):** this was not an LTO miscompile. The real cause was the ninja
+header-dependency poisoning documented in the next section: the Release build dir was linking
+stale objects with an outdated class layout. The evidence recorded below fits that cause exactly —
+"only in a full CMake Release build" (the poisoned incremental dir), while per-file compiles and
+the ASan build (both fresh, consistent compiles) worked. After fixing the root cause, a clean LTO
+build passed the exact repro (postgresql-42.5.0.jar, 5 consecutive `t`-mode runs, plus other real
+jars), and LTO was re-enabled in `CMakeLists.txt`. The original (incorrect) analysis is kept below
+for the record.
 
 A full CMake Release build (`/GL` + `/LTCG`, combined with `/GR-` and `/guard:cf`) crashed
 (`0xC0000005`) opening a large real-world zip (postgresql JDBC driver jar, 534 entries) inside
@@ -208,10 +217,8 @@ narrowed the bug to MSVC's LTO pipeline itself, not application logic. Diagnosed
 crash address from the Windows Error Reporting `.dmp`/event-log offset against the matching
 `Aile.pdb` (`/Zi` + `/DEBUG` are kept in Release for exactly this).
 
-Resolution: LTO (`INTERPROCEDURAL_OPTIMIZATION_RELEASE`) is commented out in `CMakeLists.txt`, not
-deleted, with repro notes. Do not re-enable without re-running that exact repro (a large real
-zip/jar, full CMake Release build — a per-file compile will not reproduce it) to confirm a future
-toolchain update actually fixed it.
+(Superseded) LTO was commented out in `CMakeLists.txt` at the time; per the correction above it
+was re-enabled on 2026-07-03 after the true root cause was fixed and the exact repro passed.
 
 **Lesson for future stale-object symptoms:** if Debug works but Release exhibits crashes or wrong
 behavior after a header change, check `build_release/CMakeFiles/Aile.dir/**/*.obj` timestamps

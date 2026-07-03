@@ -116,27 +116,23 @@ if(MSVC)
     )
 endif()
 
-# Link-Time Optimization (LTO) — intentionally NOT enabled for Release.
+# Link-Time Optimization (LTO) for Release.
 #
-# 2026-07: MSVC's /GL + /LTCG combined with /GR- and /guard:cf produced a real
-# miscompile: opening a large real-world zip (postgresql-42.5.0.jar, 534
-# entries) crashed inside SevenZip::OpenArchiveWithFallback / FormatRegistry's
-# signature-collection code, but only in a full CMake Release build. The exact
-# same source compiled per-file (no cross-TU optimization) and an
-# AddressSanitizer build both opened the file correctly every time, and manual
-# review found no UB in the affected code — narrowing this to the LTO
-# pipeline itself rather than application logic. Re-evaluate if a future
-# MSVC/toolchain update might have fixed the underlying issue, but do not
-# re-enable without re-running that repro (a large real zip/jar, full CMake
-# Release build, not a per-file compile) to confirm it's actually fixed.
-#
-# include(CheckIPOSupported)
-# check_ipo_supported(RESULT IPO_OK OUTPUT IPO_ERR)
-# if(IPO_OK)
-#     set_property(TARGET Aile PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
-# else()
-#     message(STATUS "IPO/LTO not supported: ${IPO_ERR}")
-# endif()
+# History: LTO was disabled 2026-07 after Release builds crashed opening a
+# large real zip (postgresql-42.5.0.jar) — diagnosed at the time as an MSVC
+# /GL+/LTCG miscompile. That was a misdiagnosis: the real cause was stale
+# objects from ninja's header-dependency records being silently emptied by a
+# console-code-page mismatch (see docs/known-issues.md, "Ninja
+# Header-Dependency Poisoning"). After fixing that root cause, a clean LTO
+# build passed the exact repro (that jar and others, repeated runs), so LTO
+# was re-enabled 2026-07-03.
+include(CheckIPOSupported)
+check_ipo_supported(RESULT IPO_OK OUTPUT IPO_ERR)
+if(IPO_OK)
+    set_property(TARGET Aile PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+else()
+    message(STATUS "IPO/LTO not supported: ${IPO_ERR}")
+endif()
 
 # ── Shell extension DLL (Explorer right-click menu) ──────────────────────────
 # Shared COM core from common/shell + Aile-specific config. Delegates to
