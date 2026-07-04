@@ -1,0 +1,71 @@
+==============================================================================
+ Aile - External Archiver Tools (B2E Scripts)
+==============================================================================
+
+The bundled 7-Zip ZS engine reads almost every archive format, but some
+formats it cannot write - most notably RAR. For those, Aile delegates to
+external command-line archivers through B2E scripts.
+
+A .b2e script describes one external tool: which executable to run and
+how to build its command line for compress / delete / test operations.
+Scripts live in the b2e\ folder next to Aile.exe and are discovered
+automatically at startup.
+
+B2E is the scripting system introduced by Noah (Kazuhiro Inaba); Aile
+ships scripts derived from Noah's and extends the format.
+
+
+RAR support
+===========
+Reading, extracting and testing RAR archives works out of the box via
+the 7-Zip engine - nothing to set up.
+
+Creating or modifying RAR archives requires WinRAR (or Rar.exe) to be
+installed, because RAR compression is proprietary:
+
+  1. Install WinRAR (https://www.win-rar.com/).
+  2. Aile finds WinRAR.exe automatically through the registry. If it is
+     installed in a non-standard location, set the path explicitly in
+     Actions > Settings > RAR tool path.
+
+Once found, "rar" appears as a format in the compression dialog and as
+-trar on the command line. The bundled rar.b2e script offers these
+methods:
+
+  Store      no compression
+  Default    WinRAR default settings
+  Best       maximum compression, solid archive (default)
+  RR         create archive, then append a recovery record
+  password   create an encrypted archive
+
+On the command line, select a method by name (-mBest) or by list index
+(-l2); see docs\cli.txt.
+
+
+How scripts map to formats
+==========================
+The script filename (without .b2e) is split on "." to get the archive
+extensions it handles:
+
+  rar.b2e                  handles .rar
+  cab.lzh.rpm.cpio.b2e     handles .cab .lzh .rpm .cpio
+
+For formats both the 7-Zip engine and a script support, the engine is
+preferred for reading; the script supplies whatever the engine cannot do
+(typically writing).
+
+Adding support for another external archiver is a matter of dropping a
+new .b2e script into the b2e\ folder. The script format is documented in
+the project repository (docs/b2e-script-guide.md):
+
+  https://github.com/Aile2017/Aile
+
+
+Notes
+=====
+  - In the compression dialog, B2E formats expose the script's method
+    list instead of the usual 0-9 level scale.
+  - Cancelling a B2E operation terminates the external tool's process.
+  - The external tools themselves are not distributed with Aile and are
+    subject to their own licenses (WinRAR is commercial software with a
+    trial period).

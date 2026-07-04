@@ -1,0 +1,98 @@
+==============================================================================
+ Aile - Command-Line Usage
+==============================================================================
+
+Aile.exe can be driven from the command line, a shortcut, or another
+program (the Explorer context menu uses the same interface).
+
+General form:
+
+  Aile.exe <action> <files...> [modifiers]
+
+The first argument selects the action (no leading dash). Modifiers are
+written with the value attached directly to the option (no space).
+
+
+Actions
+-------
+  (none)         Auto-detect: archives are opened for browsing, regular
+                 files open the compression dialog.
+  a <files...>   Compress: compress the given files into one archive.
+  w <files...>   Compress each: create one archive per input file. The
+                 compression dialog appears once (for the first file) and
+                 its choices apply to all remaining files.
+  x <archive>    Extract: ask for a destination (or use -d) and extract,
+                 without showing the archive list.
+  t <archive>    Test: verify archive integrity with no main window.
+                 Exit code 0 = passed (or cancelled), 1 = failed,
+                 unsupported, or argument error. Modifiers are ignored.
+
+The a / w / x / t actions run without showing the main window.
+
+
+Modifiers
+---------
+  -d<dir>        Destination.
+                   with x:      extract directly to <dir>, skipping the
+                                folder picker (subfolder policy still
+                                applies)
+                   with a / w:  preset the output path in the dialog
+
+  -t<format>     Archive format, e.g. -t7z, -tzip, -ttar, -tgz, -tbz2,
+                 -txz, -tzst, -trar. Case-insensitive; common aliases
+                 (gzip, bzip2, zstd, ...) are accepted. Registered B2E
+                 formats (rar, ...) work too.
+                 With a / w this skips the compression dialog; in
+                 auto-detect mode the dialog is shown with the format
+                 pre-selected.
+
+  -m<method>     Compression method for 7z / zip (e.g. -mlzma2, -mppmd,
+                 -mdeflate, -mzstd). With -ttar, selects the stream
+                 wrapper: -mgz / -mbz2 / -mxz / -mzst / ... creates
+                 tar.gz / tar.xz etc. For B2E formats the name selects
+                 an entry from the script's method list. Ignored for
+                 single-stream formats.
+
+  -l<level>      Compression level. 0-9 for 7z / zip; format-specific
+                 ranges otherwise (zstd 1-22, brotli 0-11, lizard 10-49,
+                 lz4/lz5 1-12). For B2E formats this is an index into
+                 the script's method list. Out-of-range values are
+                 clamped.
+
+  -sfx           Create a self-extracting .exe (GUI flavor).
+  -sfx:console   Console flavor. 7z and RAR only; with a / w this also
+                 skips the dialog.
+
+Dialog skipping: the compression dialog is skipped only when -t or -sfx
+is combined with the a or w action. In auto-detect mode the dialog always
+appears with the given values pre-set.
+
+Single-stream formats (gz, bz2, xz, zst, ...) accept exactly one input
+file. To combine multiple files use -ttar with -m<stream>, or compress
+each file separately with w.
+
+
+Examples
+--------
+  # Compress directly, no dialog
+  Aile.exe a report.txt -tzip -mdeflate -l9
+  Aile.exe a src\ -t7z -mzstd -l19
+  Aile.exe a a.txt b.txt -ttar -mgz
+
+  # One archive per file
+  Aile.exe w a.txt b.txt -tzip -l5
+  Aile.exe w a.txt b.txt -tgz
+
+  # Self-extracting archive
+  Aile.exe a setup_files\ -sfx
+  Aile.exe a tool.exe -sfx:console -dC:\out
+
+  # Extract without any prompts
+  Aile.exe x archive.7z -dC:\temp\out
+
+  # Integrity test from a script
+  Aile.exe t backup.7z
+  if %ERRORLEVEL% neq 0 echo Archive is corrupt!
+
+  # Pre-set the dialog but still review it
+  Aile.exe report.txt -t7z -mlzma2 -l9

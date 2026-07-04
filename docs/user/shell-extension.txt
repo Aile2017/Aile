@@ -1,0 +1,46 @@
+==============================================================================
+ Aile - Explorer Context Menu (Shell Extension)
+==============================================================================
+
+Aile can add commands to the Explorer right-click menu:
+
+  On archive files:      Open        (browse the archive in Aile)
+                         Extract...  (choose a destination and extract)
+                         Test Integrity
+  On other files:        Compress... (open the compression dialog)
+
+The menu labels follow the Windows display language (English / Japanese).
+
+
+Registering
+===========
+  1. Keep AileShell.dll (and optionally AileShell32.dll) next to
+     Aile.exe.
+  2. Run AileSetup.exe and click Register.
+
+Registration is per-user (HKEY_CURRENT_USER) - no administrator rights
+are required and other user accounts are not affected.
+
+AileShell32.dll is only needed if you use a 32-bit file manager on
+64-bit Windows; Explorer itself uses the 64-bit AileShell.dll.
+
+
+Unregistering
+=============
+Run AileSetup.exe and click Unregister. Do this before deleting or
+moving the Aile folder; the registration stores the DLL's absolute path,
+so a moved folder must be unregistered and registered again.
+
+If Explorer still shows the old menu afterwards, sign out and back in
+(or restart explorer.exe) - Explorer may keep the DLL loaded for a
+while.
+
+
+Notes
+=====
+  - On Windows 11 the commands appear in the classic context menu.
+    Choose "Show more options" (or press Shift+F10) if you do not see
+    them in the new compact menu.
+  - The menu commands simply launch Aile.exe with the corresponding
+    command-line action (see docs\cli.txt), so their behavior matches
+    the CLI exactly.

@@ -89,7 +89,9 @@ jobs:
           $tag = "${{ steps.names.outputs.aile_tag }}"
           New-Item -ItemType Directory -Force pkg_aile\bin | Out-Null
           Copy-Item build_release\Aile.exe pkg_aile\Aile.exe
-          Copy-Item README.md               pkg_aile\README.md
+          New-Item -ItemType Directory -Force pkg_aile\docs | Out-Null
+          Copy-Item docs\user\*.txt         pkg_aile\docs\
+          Move-Item pkg_aile\docs\README.txt pkg_aile\README.txt
           Copy-Item -Recurse b2e            pkg_aile\b2e
           $vendor = "third_party\7zip-zstd"
           Copy-Item $vendor\7z.dll      pkg_aile\bin\7z.dll
@@ -139,7 +141,8 @@ jobs:
             | File | Description |
             |---|---|
             | `Aile.exe`           | Executable (MSVC x64 Release) |
-            | `README.md`            | Overview and usage |
+            | `README.txt`           | Overview and quick start |
+            | `docs\`                | User documentation (manual, CLI, B2E, shell extension, FAQ) |
             | `b2e/`                 | B2E archive handler scripts |
             | `AileShell.dll`         | Explorer right-click menu handler (64-bit hosts) |
             | `AileShell32.dll`       | Explorer right-click menu handler (32-bit hosts) |

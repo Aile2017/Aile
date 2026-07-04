@@ -1,0 +1,61 @@
+==============================================================================
+ Aile - FAQ / Troubleshooting
+==============================================================================
+
+Q: Windows SmartScreen warns about Aile.exe on first launch.
+A: The binaries are not code-signed, so SmartScreen may warn about a
+   downloaded executable. Click "More info" > "Run anyway" if you
+   obtained the package from the official release page
+   (https://github.com/Aile2017/Aile/releases). Windows may also mark
+   the ZIP as coming from the internet; you can clear this by opening
+   the ZIP's Properties and checking "Unblock" before extracting.
+
+Q: "rar" does not appear in the compression dialog / -trar fails.
+A: Creating RAR archives requires WinRAR to be installed - RAR
+   compression is proprietary and cannot be bundled. Extracting RAR
+   works without it. See docs\b2e.txt.
+
+Q: Where are my settings stored? Is Aile portable?
+A: Everything is in Aile.ini next to Aile.exe. Copy the folder and you
+   copy the whole installation. The registry is only touched if you
+   register the Explorer context menu (per-user; see
+   docs\shell-extension.txt).
+
+Q: How do I open a split archive (.001 / .002 / ...)?
+A: Open the .001 file; the other volumes in the same folder are used
+   automatically. All volumes must be present.
+
+Q: Compressing several files as gz / xz / zst fails with an error.
+A: These are single-stream formats that hold exactly one file. Either
+   pick tar with the stream method (creates .tar.gz etc.) or compress
+   each file into its own archive (CLI action "w", see docs\cli.txt).
+
+Q: Extracting one file from a large 7z archive is slow.
+A: The archive is solid: files are compressed as one continuous block,
+   so extracting one file requires decompressing the block up to it.
+   When creating archives you can reduce the solid block size (or set
+   it to non-solid) in the Advanced options at the cost of a slightly
+   larger archive.
+
+Q: Delete is grayed out / fails.
+A: Some formats are read-only in the engine (iso, cab, jar, ...), and
+   entries cannot be deleted from 7z archives with encrypted headers.
+   Auto-unwrapped split archives are also opened read-only.
+
+Q: The context menu entries disappeared or point to a moved folder.
+A: Run AileSetup.exe from the current Aile folder and re-register. The
+   registration stores the DLL's absolute path.
+
+Q: Can I use my own 7-Zip build instead of the bundled engine?
+A: Yes. Point Settings > "7z.dll path" at any compatible 7z.dll. Note
+   that the Zstandard / Brotli / LZ4 / Lizard formats and methods are
+   only offered when the loaded DLL provides them (the bundled
+   bin\7z.dll is 7-Zip ZS, which does).
+
+Q: How do I switch the UI language?
+A: Aile follows the Windows display language: Japanese when Windows is
+   Japanese, English otherwise. There is no separate language setting.
+
+Q: Something else is wrong - where do I report it?
+A: Please open an issue at https://github.com/Aile2017/Aile/issues with
+   the archive format, what you did, and any error message shown.

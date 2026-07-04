@@ -1,0 +1,202 @@
+==============================================================================
+ Aile - User Manual
+==============================================================================
+
+Contents
+--------
+  1. Main window
+  2. Opening archives
+  3. Extracting
+  4. Compressing
+  5. Other archive operations
+  6. Settings
+  7. Keyboard shortcuts
+  8. Known limitations
+
+
+1. Main window
+==============
+  - Left pane:  folder tree of the open archive (View > Tree to toggle).
+  - Right pane: file list with Name / Size / Compressed / Type / Modified
+    columns. Click a column header to sort; click again to reverse.
+  - Toolbar:    Extract / Open / Add / Info / Test / Settings
+    (View > Toolbar to toggle). The Extract button is context-aware:
+    it extracts the selected entries if any are selected, otherwise all.
+  - Status bar: entry count, loaded engine DLL, progress during operations.
+  - The splitter between the panes can be dragged; its position, the
+    window size and the view toggles are remembered across sessions.
+  - F10 toggles the menu bar; Alt+<letter> mnemonics work as usual.
+
+Language: the user interface is bilingual (English / Japanese) and follows
+the Windows display language automatically.
+
+
+2. Opening archives
+===================
+Ways to open an archive:
+
+  - Drag & drop it onto the Aile window.
+  - File > Open (Ctrl+O).
+  - File > Recent Archives (last 10 archives).
+  - Pass it on the command line: Aile.exe <archive>
+  - Explorer right-click menu, if registered (docs\shell-extension.txt).
+
+Supported formats include 7z, zip, rar, tar, gz, bz2, xz, zstd, cab, iso,
+jar, wim, lzma, lzh, arj and every other format the bundled 7z.dll
+recognizes.
+
+Split archives: open the first volume (archive.7z.001) and the remaining
+volumes are picked up automatically. If a split set wraps a single inner
+archive, Aile opens the inner archive directly (read-only).
+
+Passwords: if an archive has an encrypted header you are asked for the
+password when opening it. If only the file contents are encrypted, the
+list is shown normally and the password is requested when you extract.
+The password is remembered for the current archive only.
+
+Inside the list view:
+
+  - Enter on a folder navigates into it.
+  - Enter on a file extracts it to a temporary folder and opens it with
+    its associated application (Actions > Open with Association).
+  - Right-click opens a context menu with Extract / Extract selected /
+    Open with association / Test / Info / Delete.
+
+
+3. Extracting
+=============
+  - Actions > Extract (F5 or Ctrl+E) extracts the whole archive.
+  - Actions > Extract selected extracts only the entries selected in the
+    list (folders include their contents).
+  - A folder picker asks for the destination; the default follows the
+    output-directory setting (see section 6).
+
+Subfolder creation: Aile can create a subfolder named after the archive
+(compound extensions such as .tar.gz are stripped). The policy is set in
+Settings:
+
+  Never                     extract directly into the destination
+  Single-file archives only
+  When multiple entries     (default)
+  Always
+
+Optionally, the destination folder can be opened in Explorer after a
+successful extraction (Settings > "Open folder after extract").
+
+Operations run in the background with a progress dialog; Cancel stops the
+operation (for external B2E tools the spawned process is terminated).
+
+
+4. Compressing
+==============
+Ways to start:
+
+  - Drop regular (non-archive) files onto the Aile window.
+  - Actions > Add... (Ctrl+A).
+  - Actions > Add to current archive... (Ctrl+U) appends files to the
+    archive that is currently open.
+  - Command line: see docs\cli.txt.
+
+The compression dialog lets you choose:
+
+  Format   7z, zip, tar, gz, bz2, xz plus the Zstandard / Brotli / LZ4 /
+           LZ5 / Lizard formats provided by the bundled 7-Zip ZS engine.
+           RAR and other B2E formats appear when the corresponding script
+           and external tool are available (docs\b2e.txt).
+  Method   Compression algorithm, per format (e.g. 7z: LZMA2 / LZMA /
+           PPMd / Zstandard / ...; zip: Deflate / LZMA / Zstandard / ...).
+           Only encoders actually present in the loaded engine are shown.
+  Level    0 (store) to 9 (maximum) for most formats. Zstd uses 1-22,
+           Brotli 0-11, Lizard 10-49, LZ4/LZ5 1-12.
+  Password Optional encryption; for 7z you can additionally encrypt the
+           file names (header encryption).
+  SFX      Create a self-extracting .exe instead of an archive
+           (GUI or console flavor; 7z and RAR only).
+
+Notes:
+
+  - Single-stream formats (gz, bz2, xz, zst, ...) compress exactly one
+    file. To pack multiple files, choose tar and set the stream format
+    as the method (creates .tar.gz etc.), or use the "each file" CLI
+    mode (docs\cli.txt).
+  - The output extension is adjusted automatically when you change the
+    format.
+  - After a successful compression the new archive is opened in the
+    main window.
+
+Advanced options (button in the dialog):
+
+  Dictionary size, word size, solid block size, thread count.
+  Split volume    splits the output into fixed-size parts
+                  (archive.7z.001 / .002 / ...). 7z and zip only.
+  Extra parameters   raw key=value switches passed to the encoder
+                  (e.g. qs=on, memuse=..). Intended for advanced users;
+                  the full list is documented in the project repository
+                  (docs/compress-extra-params.md).
+
+The last-used advanced values are remembered.
+
+
+5. Other archive operations
+===========================
+  Test (Ctrl+T)          Verifies archive integrity in place, without
+                         extracting. Result is shown in a message box.
+  Delete (Del)           Removes the selected entries from the archive.
+                         For 7z-engine formats the remaining entries are
+                         copied without re-compression. Not available for
+                         read-only formats (iso, cab, jar, ...).
+  Info                   Details of the selected entry (path, sizes,
+                         method, modified time, ...).
+  Archive properties     (Alt+Enter) Archive-wide information: format,
+                         method, solid flag, counts, total/packed size,
+                         encryption.
+  Archive comment        View or edit the whole-archive comment
+                         (writable for zip; read-only elsewhere).
+
+
+6. Settings
+===========
+Actions > Settings... opens the settings dialog. Everything is stored in
+Aile.ini next to Aile.exe, so the whole installation is portable.
+
+  Output directory    "Same as source" (default) or a fixed folder used
+                      as the initial destination for extract/compress.
+  Subfolder creation  Extraction subfolder policy (see section 3).
+  Default format /    Initial values for the compression dialog.
+  compression level
+  Open folder after extract
+                      Show the destination in Explorer when done.
+  Font                Font used by the main window.
+  7z.dll path         Leave empty to use the bundled bin\7z.dll (or a
+                      7-Zip installation found via the registry). Set
+                      explicitly to use another 7z.dll build.
+  RAR tool path       Path to WinRAR.exe / Rar.exe for RAR writing;
+                      auto-detected from the registry when empty
+                      (see docs\b2e.txt).
+
+Changes take effect immediately after OK (engine DLLs are reloaded).
+
+
+7. Keyboard shortcuts
+=====================
+  Ctrl+O       Open archive
+  F5 / Ctrl+E  Extract
+  Ctrl+A       Compress (add files)
+  Ctrl+U       Add to current archive
+  Ctrl+T       Test integrity
+  Del          Delete selected entries
+  Enter        Open folder / open file with association
+  Alt+Enter    Archive properties
+  Ctrl+F4      Close archive (keeps Aile running)
+  F10          Toggle menu bar
+  Esc          Exit Aile
+
+
+8. Known limitations
+====================
+  - Individual-file extraction from solid 7z archives decompresses the
+    containing solid block (engine limitation).
+  - Split output is available for 7z and zip only; gz/bz2/xz/tar cannot
+    be split.
+  - Entries cannot be deleted from header-encrypted 7z archives.
+  - No search/filter inside an archive, and one archive per window.
