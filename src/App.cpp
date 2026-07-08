@@ -206,7 +206,8 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
 
         params.outputPath = CompressPolicy::FinalizeOutputPath(
             params.outputPath, params.format, params.method, params.sfxMode,
-            WillUseB2eForCompress(params.format.c_str(), m_sevenZip), combinedFormats);
+            WillUseB2eForCompress(params.format.c_str(), m_sevenZip),
+            params.inputFiles, combinedFormats);
     } else {
         CompressDlg dlg;
         if (!dlg.Show(wnd.Hwnd(), params, enc, wf))
@@ -219,7 +220,8 @@ int App::RunCompressMode(const std::vector<std::wstring>& filePaths, int nCmdSho
         if (!params.sfxMode.empty()) {
             params.outputPath = CompressPolicy::FinalizeOutputPath(
                 params.outputPath, params.format, params.method, params.sfxMode,
-                WillUseB2eForCompress(params.format.c_str(), m_sevenZip), combinedFormats);
+                WillUseB2eForCompress(params.format.c_str(), m_sevenZip),
+                params.inputFiles, combinedFormats);
         }
 
         CompressPolicy::Save(params, m_settings);
@@ -291,20 +293,27 @@ int App::RunCompressEachMode(const std::vector<std::wstring>& filePaths, int nCm
         return 0;
     }
 
+    // Group by "dir\<source name with extension>" so same-named sources from
+    // different directories still merge into one archive, while a.txt and a.md
+    // keep separate archives (their bare stems would collide).
     std::map<std::wstring, std::vector<std::wstring>> groups;
     for (const auto& file : filePaths) {
-        std::wstring baseOutput = Settings::ComputeDefaultOutputPath(m_settings, { file }, destDir);
-        groups[baseOutput].push_back(file);
+        std::wstring key = Settings::ComputeDefaultOutputPath(m_settings, { file }, destDir,
+                                                              /*keepSourceExt=*/true);
+        groups[key].push_back(file);
     }
 
     for (const auto& pair : groups) {
         CompressDlg::Params params = baseParams;
         params.inputFiles = pair.second;
 
-        // baseOutput is always a bare stem (no dialog runs per-file), so this is a
-        // plain append; FinalizeOutputPath's strip step is a no-op here.
+        // The base is a bare stem (no dialog runs per-file); FinalizeOutputPath
+        // re-adds the source extension for stream formats (file.txt -> file.txt.gz)
+        // and appends the final archive extension.
+        std::wstring base = Settings::ComputeDefaultOutputPath(m_settings, { pair.second[0] }, destDir);
         params.outputPath = CompressPolicy::FinalizeOutputPath(
-            pair.first, params.format, params.method, params.sfxMode, isB2e, combinedFormats);
+            base, params.format, params.method, params.sfxMode, isB2e,
+            params.inputFiles, combinedFormats);
 
         int counter = 1;
         std::wstring originalOutputPath = params.outputPath;

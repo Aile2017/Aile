@@ -11,10 +11,14 @@ public:
     void Save() const;
 
     // Compute default output path ("dir\stem") for compress dialog based on settings and input files.
-    // Priority: overrideDir > fixed mode > source file directory. Returns path without extension.
+    // Priority: overrideDir > fixed mode > source file directory. Returns path without extension;
+    // the stream-format naming convention (file.txt -> file.txt.gz) is applied later by
+    // CompressPolicy once the target format is known. keepSourceExt=true keeps a single source
+    // file's extension in the name ("dir\file.txt") — used only as the w-mode grouping key.
     static std::wstring ComputeDefaultOutputPath(const Settings& s,
                                                  const std::vector<std::wstring>& srcFiles,
-                                                 const std::wstring& overrideDir = L"");
+                                                 const std::wstring& overrideDir = L"",
+                                                 bool keepSourceExt = false);
 
     const std::wstring& GetDefaultOutputDir() const { return m_defaultOutputDir; }
     void SetDefaultOutputDir(const wchar_t* v)      { m_defaultOutputDir = v; }

@@ -44,7 +44,14 @@ std::wstring OutputExtension(const std::wstring& format,
 // Replace a trailing recognized archive extension on `path` with `ext`, leaving
 // any dotted base name intact (also strips a preceding ".tar"). `writableFormats`
 // plus "exe"/"tar" define which trailing tokens count as archive extensions.
+// When `inputFiles` is a single file, the base name is additionally swapped
+// between the source's stem and full name per the stream-format convention:
+// stream formats keep the source extension (file.txt -> file.txt.gz), archive
+// formats drop it (file.txt -> file.zip). Only exact matches with the source
+// name are swapped, so user-edited base names are left untouched.
 void ApplyOutputExtension(std::wstring& path, const std::wstring& ext,
+                          const std::wstring& format,
+                          const std::vector<std::wstring>& inputFiles,
                           const std::vector<WritableFormat>& writableFormats);
 
 // The combined format list shown by the compress dialog and used for extension
@@ -65,6 +72,7 @@ std::vector<WritableFormat> CombinedWritableFormats(const std::vector<WritableFo
 // 7z.dll-priority rule and the extension decision never disagree.
 std::wstring FinalizeOutputPath(std::wstring path, const std::wstring& format,
                                 const std::wstring& method, const std::wstring& sfxMode,
-                                bool isB2e, const std::vector<WritableFormat>& writableFormats);
+                                bool isB2e, const std::vector<std::wstring>& inputFiles,
+                                const std::vector<WritableFormat>& writableFormats);
 
 }  // namespace CompressPolicy

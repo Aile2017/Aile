@@ -111,6 +111,48 @@ bool IsInvalidStreamInput(const std::wstring& format,
     return false;
 }
 
+// Map CLI/long format spellings (gzip, zstandard, ...) to the canonical extension token.
+static std::wstring NormalizeFormatExt(std::wstring fmt) {
+    if (fmt == L"gzip") fmt = L"gz";
+    if (fmt == L"bzip2") fmt = L"bz2";
+    if (fmt == L"brotli") fmt = L"br";
+    if (fmt == L"lizard") fmt = L"liz";
+    if (fmt == L"zstandard" || fmt == L"zstd") fmt = L"zst";
+    return fmt;
+}
+
+// Stream formats (gz/bz2/xz/...) conventionally keep the source's full name
+// (file.txt -> file.txt.gz) while archive formats use the bare stem
+// (file.txt -> file.zip). `base` is an output path with no archive extension;
+// swap its name part between the source's stem and full name to match `format`.
+// Only an exact match with a source-derived name is swapped, so dotted base
+// names ("111.222.333.444") and user-edited names are never altered.
+static void AdjustBaseNameForStream(std::wstring& base, const std::wstring& format,
+                                    const std::vector<std::wstring>& inputFiles) {
+    if (inputFiles.size() != 1) return;
+    DWORD attrs = GetFileAttributesW(inputFiles[0].c_str());
+    if (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY)) return;
+
+    size_t sl = inputFiles[0].find_last_of(L"\\/");
+    std::wstring srcName = (sl != std::wstring::npos) ? inputFiles[0].substr(sl + 1)
+                                                      : inputFiles[0];
+    size_t dot = srcName.rfind(L'.');
+    if (dot == std::wstring::npos || dot == 0) return;  // no extension to swap
+    std::wstring srcStem = srcName.substr(0, dot);
+
+    size_t slash     = base.find_last_of(L"\\/");
+    size_t nameStart = (slash == std::wstring::npos) ? 0 : slash + 1;
+    std::wstring name = base.substr(nameStart);
+
+    if (SevenZip::IsStreamExt(NormalizeFormatExt(format).c_str())) {
+        if (_wcsicmp(name.c_str(), srcStem.c_str()) == 0)
+            base.replace(nameStart, name.size(), srcName);
+    } else {
+        if (_wcsicmp(name.c_str(), srcName.c_str()) == 0)
+            base.replace(nameStart, name.size(), srcStem);
+    }
+}
+
 std::wstring OutputExtension(const std::wstring& format,
                              const std::wstring& sfxMode,
                              const std::wstring& method,
@@ -128,12 +170,7 @@ std::wstring OutputExtension(const std::wstring& format,
         }
     }
 
-    std::wstring fmt = format;
-    if (fmt == L"gzip") fmt = L"gz";
-    if (fmt == L"bzip2") fmt = L"bz2";
-    if (fmt == L"brotli") fmt = L"br";
-    if (fmt == L"lizard") fmt = L"liz";
-    if (fmt == L"zstandard" || fmt == L"zstd") fmt = L"zst";
+    std::wstring fmt = NormalizeFormatExt(format);
 
     if (_wcsicmp(fmt.c_str(), L"tar") == 0 && !method.empty()) {
         std::wstring m = method;
@@ -151,6 +188,8 @@ std::wstring OutputExtension(const std::wstring& format,
 }
 
 void ApplyOutputExtension(std::wstring& path, const std::wstring& ext,
+                          const std::wstring& format,
+                          const std::vector<std::wstring>& inputFiles,
                           const std::vector<WritableFormat>& writableFormats) {
     // Replace only a recognized *archive* extension, never a dotted part of the
     // base name. The initial value is a bare stem from ComputeDefaultOutputPath,
@@ -158,7 +197,9 @@ void ApplyOutputExtension(std::wstring& path, const std::wstring& ext,
     // arrives as "111.222.333.444". Blindly dropping the last ".444" would diverge
     // from the CLI `a -t<fmt>` path (which only appends), so a segment is removed
     // only when it is a known archive extension (or a .tar prefix of a compound
-    // stream extension such as archive.tar.gz).
+    // stream extension such as archive.tar.gz). After the strip, the base name is
+    // swapped between source stem and full source name per the stream-format
+    // convention (file.txt -> file.txt.gz, but file.zip / file.tar.gz).
     size_t slash     = path.find_last_of(L"\\/");
     size_t nameStart = (slash == std::wstring::npos) ? 0 : slash + 1;
 
@@ -181,6 +222,7 @@ void ApplyOutputExtension(std::wstring& path, const std::wstring& ext,
             path.erase(dot2);
     }
 
+    AdjustBaseNameForStream(path, format, inputFiles);
     path += ext;
 }
 
@@ -204,11 +246,12 @@ std::vector<WritableFormat> CombinedWritableFormats(const std::vector<WritableFo
 
 std::wstring FinalizeOutputPath(std::wstring path, const std::wstring& format,
                                 const std::wstring& method, const std::wstring& sfxMode,
-                                bool isB2e, const std::vector<WritableFormat>& writableFormats) {
+                                bool isB2e, const std::vector<std::wstring>& inputFiles,
+                                const std::vector<WritableFormat>& writableFormats) {
     std::wstring ext = sfxMode.empty() ? OutputExtension(format, L"", method, false)
                       : isB2e          ? (L"." + format)   // B2E script controls the actual conversion
                                        : L".exe";           // real 7z.dll SFX
-    ApplyOutputExtension(path, ext, writableFormats);
+    ApplyOutputExtension(path, ext, format, inputFiles, writableFormats);
     return path;
 }
 

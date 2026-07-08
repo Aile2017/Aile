@@ -177,7 +177,7 @@ void CompressDlg::UpdateOutputExt(HWND hwnd, const wchar_t* fmtId, const wchar_t
     std::wstring ext = CompressPolicy::OutputExtension(fmtId, L"", methodId ? methodId : L"", false);
 
     std::wstring path(outPath);
-    CompressPolicy::ApplyOutputExtension(path, ext, m_writableFormats);
+    CompressPolicy::ApplyOutputExtension(path, ext, fmtId, m_params.inputFiles, m_writableFormats);
     SetDlgItemTextW(hwnd, IDC_OUTPUT_PATH, path.c_str());
 }
 

@@ -156,12 +156,15 @@ void Settings::WriteStr(const wchar_t* section, const wchar_t* key, const wchar_
     WritePrivateProfileStringW(section, key, val, m_iniPath);
 }
 
-// When auto-detecting the output path, we want to strip the original extension.
-// However, if we're wrapping a single file into a stream format (like .gz),
-// it's conventional to append the extension rather than replace it.
+// Always return "dir\stem" (source extension stripped). The stream-format naming
+// convention (single file xxx.txt -> xxx.txt.gz) is NOT applied here — the target
+// format is unknown at this point; CompressPolicy re-adds the source extension
+// when a stream format is actually selected. keepSourceExt=true keeps a single
+// file's extension ("dir\xxx.txt") and exists only for the w-mode grouping key.
 std::wstring Settings::ComputeDefaultOutputPath(const Settings& s,
                                                const std::vector<std::wstring>& srcFiles,
-                                               const std::wstring& overrideDir) {
+                                               const std::wstring& overrideDir,
+                                               bool keepSourceExt) {
     // Priority: overrideDir > fixed mode > source file directory
     std::wstring dir;
     if (!overrideDir.empty()) {
@@ -180,18 +183,18 @@ std::wstring Settings::ComputeDefaultOutputPath(const Settings& s,
 
     auto sl = srcFiles[0].find_last_of(L"\\/");
     std::wstring name = (sl != std::wstring::npos) ? srcFiles[0].substr(sl + 1) : srcFiles[0];
-    
-    DWORD attrs = GetFileAttributesW(srcFiles[0].c_str());
-    bool isDir = (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY));
 
-    std::wstring stem;
-    if (srcFiles.size() == 1 && !isDir) {
-        // Single file: keep full name so we get file.txt.gz
-        stem = name;
-    } else {
-        // Directory or multiple files (we use the first item's name as a base)
+    bool keepExt = false;
+    if (keepSourceExt && srcFiles.size() == 1) {
+        // Directories have no "extension" to keep; their dotted tail is still stripped.
+        DWORD attrs = GetFileAttributesW(srcFiles[0].c_str());
+        keepExt = !(attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY));
+    }
+
+    std::wstring stem = name;
+    if (!keepExt) {
         auto dot = name.rfind(L'.');
-        stem = (dot != std::wstring::npos) ? name.substr(0, dot) : name;
+        if (dot != std::wstring::npos) stem = name.substr(0, dot);
     }
 
     return dir.empty() ? stem : dir + L"\\" + stem;
