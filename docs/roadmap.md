@@ -3,7 +3,7 @@
 Summary of features commonly found in archive managers but not yet implemented in Aile,
 and features that would be nice to have. Includes implementation hints and effort estimates.
 
-Last updated: 2026-07-01
+Last updated: 2026-07-08
 
 Effort estimates:
 - **S** = half day to 1 day
@@ -304,7 +304,36 @@ Implementation hints:
 - Speed: moving average of throughput in last N seconds
 - Add 2 lines to ProgressDlg layout
 
-### 12. Edit archive file → auto re-pack — `M`
+### 12. CLI regression smoke tests — `S`
+
+Scripted end-to-end tests that exercise the dialog-free CLI paths and assert observable
+results (output file names, archive contents, exit codes). Motivated by the 2026-07-08
+output-name regression (92863b0 → fixed in 228889e): the bug class — policy/convention
+changes that quietly alter behavior in another path — is exactly what a cheap smoke
+suite catches, and the manual verification done for that fix is already the prototype.
+
+Why CLI: `a` / `w` with `-t<fmt>` (and `x` / `t`) run `SW_HIDE` and skip the compress
+dialog entirely, so the full pipeline (format routing → naming policy → 7z.dll/B2E
+backend → output) runs unattended. GUI dialogs stay out of scope (modal, not automatable
+here); the shared policy code (`CompressPolicy`) is still covered via the CLI entry.
+
+Implementation hints:
+- PowerShell script, e.g. `tests/smoke.ps1`, run manually (optionally pre-release)
+- B2E-backend cases use `work/b2e` + `work/bin` (untracked snapshot of the user's live
+  `C:\usr\tools\Aile\{b2e,bin}` set; see `.gitignore`) staged next to the built `Aile.exe`
+- Generate fixtures in `%TEMP%`: single file, multi-dot name (`111.222.333.444.log`),
+  dotted folder, same-stem pairs (`a.txt`+`a.md`), Japanese names
+- Case matrix from the 2026-07-08 verification: zip/7z strip source ext (`xxx.txt`→`xxx.zip`),
+  stream formats keep it (`xxx.txt.gz`), `tar -mgzip`→`.tar.gz`, folder/multi-file stems,
+  `w` per-file naming + collision counter (`a.zip`/`a_1.zip`)
+- Assert contents/integrity with system `7z.exe` (`l` / `t`) or `Expand-Archive`
+- `t` action already returns exit codes (0/1) — assert directly
+- Keep each case independent (own output dir) so failures pinpoint the broken rule
+
+Related files: new `tests/smoke.ps1`; exercises `main.cpp` CLI routing, `CompressPolicy`,
+`Settings::ComputeDefaultOutputPath`, both backends
+
+### 13. Edit archive file → auto re-pack — `M`
 
 "Open with association (`ID_OPEN_ASSOC`)" currently **read-only** extracts and opens. No auto write-back after edit.
 
@@ -317,19 +346,19 @@ Implementation hints:
 
 ## Low Priority / Niche
 
-### 13. Themes / skins — `L`
+### 14. Themes / skins — `L`
 Customization beyond dark mode. Low priority.
 
-### 14. Settings import/export — `S`
+### 15. Settings import/export — `S`
 Copying `Aile.ini` works, but UI "Export / Import" commands would be nice.
 
-### 15. Plugin system — `L`
+### 16. Plugin system — `L`
 Custom format support or external compression engine calls. Total Commander WCX plugin compatibility has demand but large effort.
 
-### 16. Logging — `S`
+### 17. Logging — `S`
 Append history of all operations to `Aile.log`. For diagnosis on trouble.
 
-### 17. Archive contents list export — `S`
+### 18. Archive contents list export — `S`
 Save ListView contents as CSV / TSV / text.
 
 ---

@@ -45,4 +45,8 @@ Thumbs.db
 # Stray root-level scratch dir (a test archive 'a/b2e.7z' was once committed here)
 /a/
 
+# Local working copy of the user's live b2e scripts + external tools
+# (snapshot of C:\usr\tools\Aile\{b2e,bin}; used by future CLI smoke tests — never commit)
+/work/
+
 .rtk/
