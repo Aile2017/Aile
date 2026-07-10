@@ -64,6 +64,13 @@ Aile.exe x archive.7z -dC:\temp\out
 Aile.exe a file.txt -dC:\temp\out -tzip
 ```
 
+補足（引用符の扱い）: Aile は `CommandLineToArgvW` を使わず自前で引数分割する
+（`src/main.cpp` の `SplitCommandLine`）。`"` は引用の開始/終了のみを意味し、
+`\` は常にリテラル。そのため末尾 `\` 付きディレクトリを引用した
+`-d"C:\some dir\"` も位置を問わず正しく解釈される（ファイラーの外部コマンド
+テンプレート `%D\` 形式に対応）。`\"` エスケープは不要かつ解釈されない。
+値の末尾 `\` はルート（`C:\`）を除き除去して正規化される。
+
 ### 3.2 `-t<format>` — アーカイブ形式
 
 | 値 | 形式 | 備考 |

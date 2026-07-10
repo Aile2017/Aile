@@ -1,5 +1,4 @@
 #include <windows.h>
-#include <shellapi.h>
 #include <vector>
 #include <string>
 #include "App.h"
@@ -7,6 +6,31 @@
 #include "SevenZip.h"
 #include "I18n.h"
 #include "resource.h"
+
+// Split the raw command line without CommandLineToArgvW. Its rule that a
+// backslash escapes a following quote mangles directories passed with a
+// trailing separator (e.g. -d"C:\dir\" from filer command templates).
+// Every Aile argument is a path, format name, or number, and '"' is not a
+// valid file-name character, so no argument can legitimately contain a
+// literal quote: here '"' only toggles quoting and '\' is always literal.
+static std::vector<std::wstring> SplitCommandLine(const wchar_t* cmd) {
+    std::vector<std::wstring> args;
+    std::wstring cur;
+    bool inQuote = false, inToken = false;
+    for (const wchar_t* p = cmd; *p; ++p) {
+        if (*p == L'"') {
+            inQuote = !inQuote;
+            inToken = true;              // "" still yields an (empty) token
+        } else if (!inQuote && (*p == L' ' || *p == L'\t')) {
+            if (inToken) { args.push_back(cur); cur.clear(); inToken = false; }
+        } else {
+            cur += *p;
+            inToken = true;
+        }
+    }
+    if (inToken) args.push_back(cur);
+    return args;
+}
 
 int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
     // Call first; resource language selection affects subsequent DialogBox / LoadMenu / LoadString.
@@ -24,33 +48,27 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
         return 1;
     }
 
-    // Parse command-line arguments
-    int argc = 0;
-    wchar_t** argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+    // Parse command-line arguments (args[0] is the exe path)
+    std::vector<std::wstring> args = SplitCommandLine(GetCommandLineW());
+    int argc = (int)args.size();
 
     int result;
 
     // Subcommand-style CLI: first argument selects the action (a/x/w), no dash.
     // Modifiers (-sfx, -d, -t, -m, -l) are concatenated; no space between option and value.
 
-    auto StripQuotes = [](const std::wstring& s) -> std::wstring {
-        size_t start = 0, end = s.size();
-        if (!s.empty() && s[0] == L'"')
-            start = 1;
-        if (end > start && s[end - 1] == L'"')
-            end--;
-        std::wstring result = s.substr(start, end - start);
-        // Remove trailing backslash (normalize path), but preserve root paths (e.g. C:\)
-        if (result.size() > 3 && result.back() == L'\\')
-            result.pop_back();
-        return result;
+    // Remove trailing backslash (normalize path), but preserve root paths (e.g. C:\)
+    auto NormalizeDirArg = [](std::wstring s) -> std::wstring {
+        if (s.size() > 3 && s.back() == L'\\')
+            s.pop_back();
+        return s;
     };
 
     enum class Action { None, Extract, Compress, CompressEach, Test };
     Action action = Action::None;
     int argStart = 1;
     if (argc > 1) {
-        const wchar_t* first = argv[1];
+        const wchar_t* first = args[1].c_str();
         if      (_wcsicmp(first, L"a") == 0) { action = Action::Compress;     argStart = 2; }
         else if (_wcsicmp(first, L"x") == 0) { action = Action::Extract;      argStart = 2; }
         else if (_wcsicmp(first, L"w") == 0) { action = Action::CompressEach; argStart = 2; }
@@ -64,13 +82,13 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
     std::wstring sfxOverride;     // -sfx or -sfx:<variant>
     std::vector<std::wstring> positional;
     for (int i = argStart; i < argc; ++i) {
-        const wchar_t* a = argv[i];
+        const wchar_t* a = args[i].c_str();
         if (_wcsicmp(a, L"-sfx") == 0)
             sfxOverride = L"gui";
         else if (_wcsnicmp(a, L"-sfx:", 5) == 0)
             sfxOverride = a + 5;
         else if ((a[0] == L'-' || a[0] == L'/') && (a[1] == L'd' || a[1] == L'D') && a[2] != L'\0')
-            destDir = StripQuotes(a + 2);
+            destDir = NormalizeDirArg(a + 2);
         else if ((a[0] == L'-' || a[0] == L'/') && (a[1] == L't' || a[1] == L'T') && a[2] != L'\0') {
             typeOverride = a + 2;
             for (auto& c : typeOverride) c = (wchar_t)towlower(c);
@@ -82,7 +100,6 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmdShow) {
         else
             positional.push_back(a);
     }
-    if (argv) LocalFree(argv);
 
     switch (action) {
     case Action::Extract: {

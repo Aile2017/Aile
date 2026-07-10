@@ -37,6 +37,11 @@ Modifiers
                                 folder picker (subfolder policy still
                                 applies)
                    with a / w:  preset the output path in the dialog
+                 Quoting: a trailing backslash before the closing quote
+                 is fine (-d"C:\some dir\"), so filer command templates
+                 that append \ to directories work as-is. Inside quotes
+                 a backslash is always literal; \" escaping is neither
+                 needed nor interpreted.
 
   -t<format>     Archive format, e.g. -t7z, -tzip, -ttar, -tgz, -tbz2,
                  -txz, -tzst, -trar. Case-insensitive; common aliases
