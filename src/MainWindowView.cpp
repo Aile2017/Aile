@@ -12,6 +12,7 @@
 #include "ProgressDlg.h"
 #include "SevenZipBackend.h"
 #include "ArchiveOpener.h"
+#include "B2eBridge.h"
 #include "SettingsDlg.h"
 #include "resource.h"
 #include <shellapi.h>
@@ -201,6 +202,31 @@ void MainWindow::OnOpenAssoc() {
     std::wstring relPath = itemPath;
     for (auto& c : relPath) if (c == L'/') c = L'\\';
     std::wstring localPath = tmpDir + relPath;
+
+    // If the extracted item is itself a format Aile can read (nested archive),
+    // open it directly in Aile instead of handing it off to the OS association.
+    // This replaces the current session outright (no back-navigation to the
+    // outer archive), matching a simple "drill down" behavior.
+    //
+    // Office/ODF documents and similar container formats are technically ZIP
+    // archives (7z.dll registers their extensions as ZIP aliases so it can
+    // browse them), but the user's intent when double-clicking one is almost
+    // always to view/edit it in its native application, not to browse its
+    // internal XML parts as an archive. Exclude these so they always fall
+    // through to the OS file association below.
+    static const std::set<std::wstring> kDocumentExtsNotArchive = {
+        L"docx", L"docm", L"dotx", L"dotm",
+        L"xlsx", L"xlsm", L"xltx", L"xltm",
+        L"pptx", L"pptm", L"potx", L"potm", L"ppsx", L"ppsm",
+        L"odt", L"ods", L"odp", L"odg", L"odf",
+        L"vsdx", L"vsdm", L"epub",
+    };
+    std::wstring ext = SevenZip::ExtOfPath(localPath.c_str());
+    if (!kDocumentExtsNotArchive.count(ext) &&
+        (m_svc.sevenZip.IsArchiveExt(ext.c_str()) || B2e_IsArchiveExt(ext.c_str()))) {
+        OpenArchive(localPath.c_str());
+        return;
+    }
 
     // Open with associated application
     HINSTANCE hi = ShellExecuteW(m_hwnd, L"open", localPath.c_str(),
