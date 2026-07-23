@@ -8,16 +8,15 @@
 ;   2 = Default
 ;   3 = Best (default)
 ;   4 = RR       - create archive, then add recovery record
-;   5 = Recover  - run WinRAR repair command against an existing archive
-;   6 = password - create encrypted archive
+;   5 = password - create encrypted archive
 ;
-; Note: list, extract (decode/decode1), and test operations are handled natively
-; by 7z.dll. This script provides only the compression/mutation commands.
+; Note: list, extract, test and compression operations are all handled by
+; WinRAR.exe and Rar.exe natively.
 ; ============================================================================
 
 load:
- ; WinRAR.exe is used as the primary backend for RAR operations.
- (name WinRAR.exe)
+ ; rar.exe is used as the primary backend for RAR operations.
+ (name rar.exe)
 
  ; Compression and special modes exposed in the AileFlow dialog.
  (type rar Store Default *Best RR password)
@@ -51,6 +50,24 @@ sfx:
  ; Convert the archive to an SFX archive using WinRAR's built-in SFX support.
  (cmd s -sfx (arc))
 
+decode:
+ ; Extract all files with full directory structure.
+ (cmd x (arc))
+
+decode1:
+ ; Extract selected entries only.
+ (cmd x -y (arc) (list))
+
 delete:
  ; Remove selected entries from the archive.
  (cmd d (arc) (list))
+
+test:
+ ; Verify archive integrity.
+ ; -scfr = emit redirected (console) output as UTF-8 for the wide stdout decoder.
+ (cmd t -scfr (arc))
+
+list:
+ ; Parse verbose RAR listing output.
+ ; -scfr = emit redirected (console) output as UTF-8 so non-ASCII names survive.
+ (scan "-----------" 1 "-----------" 1 68 v -scfr (arc))
