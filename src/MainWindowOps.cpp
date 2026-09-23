@@ -104,14 +104,14 @@ void MainWindow::OnExtractSmart() {
         OnExtract(dest);
 }
 
-void MainWindow::OnExtractSelected(const std::wstring& presetDest) {
-    if (!m_session.IsOpen()) return;
+// Resolve lParam to real archive index.
+// - lParam < items.size()  : real entry (directory → extract contents too)
+// - lParam >= items.size() : virtual folder (extract folderPaths contents)
+MainWindow::SelectedExtraction MainWindow::CollectSelectedForExtract() const {
+    SelectedExtraction result;
     const auto& items       = m_session.Items();
     const auto& folderPaths = m_session.FolderPaths();
 
-    // Resolve lParam to real archive index.
-    // - lParam < items.size()  : real entry (directory → extract contents too)
-    // - lParam >= items.size() : virtual folder (extract folderPaths contents)
     std::set<UINT32> indexSet;
     int item = -1;
     while ((item = ListView_GetNextItem(m_hListView, item, LVNI_SELECTED)) != -1) {
@@ -124,11 +124,14 @@ void MainWindow::OnExtractSelected(const std::wstring& presetDest) {
         std::wstring folder;
         if (lp < (UINT32)items.size()) {
             indexSet.insert(lp);
+            result.topPaths.push_back(items[lp].path);
             if (items[lp].isDir) folder = items[lp].path;
         } else {
             int fpIdx = (int)(lp - (UINT32)items.size());
-            if (fpIdx >= 0 && fpIdx < (int)folderPaths.size())
+            if (fpIdx >= 0 && fpIdx < (int)folderPaths.size()) {
                 folder = folderPaths[fpIdx];
+                result.topPaths.push_back(folder);
+            }
         }
         if (!folder.empty()) {
             std::wstring prefix = folder + L"/";
@@ -139,14 +142,20 @@ void MainWindow::OnExtractSelected(const std::wstring& presetDest) {
             }
         }
     }
-    if (indexSet.empty()) {
+    result.indices.assign(indexSet.begin(), indexSet.end());
+    return result;
+}
+
+void MainWindow::OnExtractSelected(const std::wstring& presetDest) {
+    if (!m_session.IsOpen()) return;
+    SelectedExtraction sel = CollectSelectedForExtract();
+    if (sel.indices.empty()) {
         MessageBoxW(m_hwnd, I18n::Tr(IDS_INFO_NO_FILES_SELECTED).c_str(),
                     I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONINFORMATION);
         return;
     }
 
-    std::vector<UINT32> indices(indexSet.begin(), indexSet.end());
-    m_controller.Extract(std::move(indices), presetDest);
+    m_controller.Extract(std::move(sel.indices), presetDest);
 }
 
 HRESULT MainWindow::OnTest() {

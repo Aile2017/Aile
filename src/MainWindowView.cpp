@@ -14,6 +14,8 @@
 #include "ArchiveOpener.h"
 #include "B2eBridge.h"
 #include "SettingsDlg.h"
+#include "DragSource.h"
+#include "DragDataObject.h"
 #include "resource.h"
 #include <shellapi.h>
 #include <shlobj.h>
@@ -236,6 +238,77 @@ void MainWindow::OnOpenAssoc() {
                     I18n::TrFmt(IDS_FMT_NO_ASSOC_APP, localPath.c_str()).c_str(),
                     I18n::Tr(IDS_APP_TITLE).c_str(), MB_ICONWARNING);
     }
+}
+
+// ---- Drag-out extraction ----
+//
+// Mirrors 7-Zip/WinRAR/Explorer's "drag a file out of the archive": the selection is
+// extracted to a scratch temp folder first (same Extract() pipeline as the menu command,
+// so it works identically for the 7z.dll and B2E backends), then handed to the shell as
+// an OLE drag source (CDragDataObject, a hand-built CF_HDROP — see DragDataObject.h for
+// why SHCreateDataObject doesn't fit). The drop target only ever sees the dragged
+// files/folders themselves at their own names — not the archive-internal ancestor
+// folders they lived under — because each CF_HDROP entry points at the extracted leaf
+// path (tempDir + archive-relative path), and a shell copy always takes the leaf name
+// of whatever path it's given.
+void MainWindow::OnListBeginDrag() {
+    if (!m_session.IsOpen() || !m_session.Backend()) return;
+
+    SelectedExtraction sel = CollectSelectedForExtract();
+    if (sel.indices.empty()) return;
+
+    // If password not yet known, check whether the selection is encrypted and prompt.
+    if (m_session.Password().empty() && m_session.SelectionNeedsPassword(sel.indices)) {
+        std::wstring pw = PromptPassword();
+        if (pw.empty()) return;
+        m_session.SetPassword(std::move(pw));
+    }
+
+    std::wstring dragDir = NewDragTempDir();
+    if (dragDir.empty()) {
+        ShowError(I18n::Tr(IDS_ERR_EXTRACT_FILE_FAILED).c_str());
+        return;
+    }
+
+    IArchiveBackend*     backend  = m_session.Backend();
+    std::wstring         password = m_session.Password();
+    std::vector<UINT32>  indices  = sel.indices;
+
+    OpResult res = RunOperation(I18n::Tr(IDS_PROGRESS_EXTRACTING).c_str(),
+        [backend, indices, dragDir, password](IExtractProgressSink* sink) -> HRESULT {
+            const wchar_t* pw = password.empty() ? nullptr : password.c_str();
+            return backend->Extract(indices, dragDir.c_str(), pw, sink);
+        });
+
+    if (res.cancelled) return;
+    if (FAILED(res.hr)) {
+        ShowError(I18n::Tr(IDS_ERR_EXTRACT_FILE_FAILED).c_str(), res.hr);
+        return;
+    }
+
+    // Build the drag path list from just the directly-selected top-level entries (not the
+    // descendant indices added for folder recursion) so a dragged folder appears once, as
+    // itself, rather than as a separate entry per file inside it.
+    std::vector<std::wstring> localPaths;
+    localPaths.reserve(sel.topPaths.size());
+    for (const auto& archivePath : sel.topPaths) {
+        std::wstring rel = archivePath;
+        for (auto& c : rel) if (c == L'/') c = L'\\';
+        localPaths.push_back(dragDir + rel);
+    }
+    if (localPaths.empty()) return;
+
+    CDragDataObject* pDataObj = new CDragDataObject(localPaths);
+    if (!pDataObj->IsValid()) {
+        pDataObj->Release();
+        return;
+    }
+
+    CDropSource* pSrc = new CDropSource();
+    DWORD effect = 0;
+    DoDragDrop(pDataObj, pSrc, DROPEFFECT_COPY, &effect);
+    pSrc->Release();
+    pDataObj->Release();
 }
 
 // ---- Tree and List population ----

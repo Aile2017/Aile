@@ -54,6 +54,7 @@ private:
     void OnCommand(WORD id);
     void OnTreeSelChanged();
     void OnListDblClick();
+    void OnListBeginDrag();
     void OnExtract(const std::wstring& presetDest = L"");
     void OnExtractSelected(const std::wstring& presetDest = L"");
     // Toolbar extract: extract selected items if any are selected, otherwise extract all.
@@ -95,6 +96,18 @@ private:
     bool Ensure7zLoaded();
     // Creates m_tempViewDir on first call; shows error and returns false on failure.
     bool EnsureTempViewDir(const wchar_t* errorMsg);
+    // Fresh GUID-named subfolder under m_tempViewDir for one drag-out operation, so
+    // repeated drags never collide. Cleaned up along with m_tempViewDir at WM_DESTROY.
+    // Returns "" on failure.
+    std::wstring NewDragTempDir();
+    // Resolves the current ListView selection to the full index set needed for
+    // Extract() (selected entries + all descendants of any selected folder) and the
+    // archive-relative paths of just the directly-selected top-level entries.
+    struct SelectedExtraction {
+        std::vector<UINT32>      indices;   // full set incl. descendants, for Extract()
+        std::vector<std::wstring> topPaths; // paths of the directly-selected entries only
+    };
+    SelectedExtraction CollectSelectedForExtract() const;
     void ApplyFontToControls();
     // Refresh the "Extract to:" edit box to reflect the current archive + settings state.
     void UpdateExtractDestEdit();

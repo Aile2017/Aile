@@ -149,6 +149,8 @@ LRESULT MainWindow::HandleMsg(UINT msg, WPARAM wp, LPARAM lp) {
             OnTreeSelChanged();
         if (hdr->hwndFrom == m_hListView && hdr->code == NM_DBLCLK)
             OnListDblClick();
+        if (hdr->hwndFrom == m_hListView && hdr->code == LVN_BEGINDRAG)
+            OnListBeginDrag();
         if (hdr->hwndFrom == m_hListView && hdr->code == LVN_COLUMNCLICK) {
             auto* nm = reinterpret_cast<NMLISTVIEW*>(lp);
             OnColumnClick(nm->iSubItem);
@@ -1089,4 +1091,17 @@ bool MainWindow::EnsureTempViewDir(const wchar_t* errorMsg) {
     HRESULT hr = CreateSessionTempDir(&m_tempViewDir);
     if (FAILED(hr)) { ShowError(errorMsg, hr); return false; }
     return true;
+}
+
+std::wstring MainWindow::NewDragTempDir() {
+    if (!EnsureTempViewDir(I18n::Tr(IDS_ERR_EXTRACT_FILE_FAILED).c_str())) return {};
+
+    GUID guid = {};
+    if (FAILED(CoCreateGuid(&guid))) return {};
+    wchar_t guidText[40] = {};
+    if (!StringFromGUID2(guid, guidText, _countof(guidText))) return {};
+
+    std::wstring dir = m_tempViewDir + guidText + L"\\";
+    if (SHCreateDirectoryExW(nullptr, dir.c_str(), nullptr) != ERROR_SUCCESS) return {};
+    return dir;
 }
