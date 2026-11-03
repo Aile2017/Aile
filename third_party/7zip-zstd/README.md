@@ -7,7 +7,7 @@ backend, so dropping these into `bin\` makes the app self-contained.
 ## Why the zstd fork (not vanilla 7-Zip)
 
 Aile's codec enumeration exposes modern methods
-(`zstd`, `brotli`, `lizard`, `lz4`, `lz5`, `flzma2`) that **do not exist in
+(`zstd`, `brotli`, `lizard`, `lz4`, `lz5`, `flzma2`, `kanzi`) that **do not exist in
 official 7-Zip**. They are statically linked into the `7z.dll` of the
 mcmilk **7-Zip-zstd** build, so no separate codec DLLs are needed.
 
@@ -15,7 +15,7 @@ mcmilk **7-Zip-zstd** build, so no separate codec DLLs are needed.
 
 | | |
 |---|---|
-| Build | 7-Zip 26.03 ZS v1.5.7 R1 (x64) |
+| Build | 7-Zip 26.05 ZS v1.5.7 R1 (x64), with Kanzi |
 | Architecture | **x64** (`machine 0x8664`) — must match the x64 app EXEs |
 | Source | `..\7-Zip-zstd\build\bin-x64-ndm\` (local build) |
 | License | `..\7-Zip-zstd\build\pkg\skel\License.txt` |
@@ -29,7 +29,7 @@ mcmilk **7-Zip-zstd** build, so no separate codec DLLs are needed.
 | File | Used by | Purpose |
 |---|---|---|
 | `7z.dll`     | Aile | Codec/format engine. Aile loads it in-process. |
-| `7z.sfx`     | Aile | SFX stub (Desktop variant) |
+| `7z.sfx`     | Aile | SFX stub (Desktop variant). Cannot extract Kanzi-compressed archives |
 | `7zCon.sfx`  | Aile | SFX stub (console variant) |
 | `License.txt`| Aile | 7-Zip LGPL-2.1 + unRAR-restricted license text |
 
