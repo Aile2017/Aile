@@ -31,6 +31,8 @@ struct CompressAdvanced {
     std::wstring solidBlock;  // "off","1m","4g" — solid block size (7z only)
     std::wstring threads;     // "1","4","8" — CPU threads (mt)
     std::wstring extra;       // free-form "key=value" pairs (e.g. "mf=bt4 mpass=2")
+    std::wstring kanziBlock;  // "1m","4m","1g" — Kanzi codec block size (b); Kanzi only
+    std::wstring kanziCheck;  // "32","64" — Kanzi block checksum bits (check); Kanzi only
     // Split volume size. "" = single file; specify as "10m","100m","1g" etc.
     // Valid only for seekable output (7z/zip etc.); ignored for stream-wrapped gz/bz2/xz/tar.
     std::wstring volumeSize;

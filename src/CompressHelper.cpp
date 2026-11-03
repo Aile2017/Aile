@@ -69,6 +69,8 @@ HRESULT RunCompressJob(const CompressDlg::Params& params, SevenZip& sevenZip,
     adv.solidBlock    = params.solidBlock;
     adv.threads       = params.threads;
     adv.extra         = params.extra;
+    adv.kanziBlock    = params.kanziBlock;
+    adv.kanziCheck    = params.kanziCheck;
     adv.volumeSize    = params.volumeSize;
     adv.sfxModulePath = sfxModulePath;
     return sevenZip.Compress(params.inputFiles, params.outputPath.c_str(),

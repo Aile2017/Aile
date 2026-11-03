@@ -107,7 +107,7 @@ The compression dialog lets you choose:
            PPMd / Zstandard / ...; zip: Deflate / LZMA / Zstandard / ...).
            Only encoders actually present in the loaded engine are shown.
   Level    0 (store) to 9 (maximum) for most formats. Zstd uses 1-22,
-           Brotli 0-11, Lizard 10-49, LZ4/LZ5 1-12.
+           Brotli 0-11, Lizard 10-49, LZ4/LZ5 1-12, Kanzi 0-9.
   Password Optional encryption; for 7z you can additionally encrypt the
            file names (header encryption).
   SFX      Create a self-extracting .exe instead of an archive
@@ -127,6 +127,9 @@ Notes:
 Advanced options (button in the dialog):
 
   Dictionary size, word size, solid block size, thread count.
+  Kanzi block size / checksum   Block size and optional per-block checksum
+                  for the Kanzi method (7z only; disabled for other
+                  methods, which also disables dictionary/word size).
   Split volume    splits the output into fixed-size parts
                   (archive.7z.001 / .002 / ...). 7z and zip only.
   Extra parameters   raw key=value switches passed to the encoder

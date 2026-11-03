@@ -82,11 +82,36 @@ static const ComboEntry kVolumes[] = {
     {0, L"4480 MB (DVD)", L"4480m"},
 };
 
+// ---- Kanzi block size (Kanzi codec only; valid range 1 KB .. 1 GB) ----
+static const ComboEntry kKanziBlocks[] = {
+    {IDS_ADV_DEFAULT, nullptr, L""},   // level-dependent default chosen by the codec
+    {0, L"1 MB",   L"1m"},
+    {0, L"2 MB",   L"2m"},
+    {0, L"4 MB",   L"4m"},
+    {0, L"8 MB",   L"8m"},
+    {0, L"16 MB",  L"16m"},
+    {0, L"32 MB",  L"32m"},
+    {0, L"64 MB",  L"64m"},
+    {0, L"128 MB", L"128m"},
+    {0, L"256 MB", L"256m"},
+    {0, L"512 MB", L"512m"},
+    {0, L"1 GB",   L"1g"},
+};
+
+// ---- Kanzi per-block checksum ----
+static const ComboEntry kKanziChecks[] = {
+    {IDS_ADV_NONE, nullptr, L""},
+    {0, L"32-bit", L"32"},
+    {0, L"64-bit", L"64"},
+};
+
 // ---- AdvancedCompressDlg ----
 
-bool AdvancedCompressDlg::Show(HWND hwndParent, const wchar_t* format, Params& params) {
+bool AdvancedCompressDlg::Show(HWND hwndParent, const wchar_t* format, const wchar_t* method, Params& params) {
     m_params = params;
     m_format = format ? format : L"";
+    m_method = method ? method : L"";
+    for (auto& c : m_method) c = (wchar_t)towlower(c);
 
     INT_PTR ret = DialogBoxParamW(
         GetModuleHandleW(nullptr),
@@ -154,6 +179,22 @@ void AdvancedCompressDlg::OnInit(HWND hwnd) {
         EnableWindow(hVol, splittable ? TRUE : FALSE);
     }
 
+    // Kanzi-only options. Kanzi ignores dictionary/word size, so those are disabled
+    // for it, and the Kanzi controls are disabled for every other method.
+    {
+        const bool isKanzi = (m_method == L"kanzi");
+        FillCombo(GetDlgItem(hwnd, IDC_ADV_KBLOCK),
+                  kKanziBlocks, (int)_countof(kKanziBlocks), m_params.kanziBlock);
+        FillCombo(GetDlgItem(hwnd, IDC_ADV_KCHECK),
+                  kKanziChecks, (int)_countof(kKanziChecks), m_params.kanziCheck);
+        EnableWindow(GetDlgItem(hwnd, IDC_ADV_KBLOCK), isKanzi ? TRUE : FALSE);
+        EnableWindow(GetDlgItem(hwnd, IDC_ADV_KCHECK), isKanzi ? TRUE : FALSE);
+        if (isKanzi) {
+            EnableWindow(GetDlgItem(hwnd, IDC_ADV_DICT), FALSE);
+            EnableWindow(GetDlgItem(hwnd, IDC_ADV_WORD), FALSE);
+        }
+    }
+
     SetDlgItemTextW(hwnd, IDC_ADV_PARAMS, m_params.extra.c_str());
 }
 
@@ -171,6 +212,8 @@ bool AdvancedCompressDlg::OnOK(HWND hwnd) {
     m_params.solidBlock = getComboVal(IDC_ADV_SOLID);
     m_params.threads    = getComboVal(IDC_ADV_THREADS);
     m_params.volumeSize = getComboVal(IDC_ADV_VOLUME);
+    m_params.kanziBlock = getComboVal(IDC_ADV_KBLOCK);
+    m_params.kanziCheck = getComboVal(IDC_ADV_KCHECK);
 
     wchar_t buf[512] = {};
     GetDlgItemTextW(hwnd, IDC_ADV_PARAMS, buf, 512);

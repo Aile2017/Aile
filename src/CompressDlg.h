@@ -23,6 +23,8 @@ public:
         std::wstring solidBlock;  // "" = default; "off","1m" (7z only)
         std::wstring threads;     // "" = auto; "4","8"
         std::wstring extra;       // free-form "key=value" pairs
+        std::wstring kanziBlock;  // "" = level default; "1m","4m","1g" (Kanzi only)
+        std::wstring kanziCheck;  // "" = none; "32","64" (Kanzi only)
         std::wstring volumeSize;  // "" = no split; "100m","1g" etc. (7z/zip only)
         // Self-extraction (SFX) mode — "" = none / "gui" / "console"
         // Valid for 7z only. Non-empty values force the output extension to .exe.

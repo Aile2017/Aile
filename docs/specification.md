@@ -96,9 +96,9 @@ Dynamically updated via `WM_INITMENUPOPUP` based on archive state (open / read-o
 - B2E formats spawn external archiver processes as defined in their `.b2e` scripts.
   - 7z.dll does not support RAR writing. **B2E format compression is consolidated via `B2e_Compress` (B2eBridge)**
 - Other formats use 7z.dll's `IOutArchive`
-- Compression level: 0 (no compression) / 1 / 3 / 5 / 7 / 9 (maximum). Zstd: 1..22. Lizard: 10..49.
+- Compression level: 0 (no compression) / 1 / 3 / 5 / 7 / 9 (maximum). Zstd: 1..22. Lizard: 10..49. Kanzi: 0..9 (default 3).
 - Method selection:
-  - 7z: LZMA2 / LZMA / PPMd / BZip2 / Deflate / Zstandard / Brotli / LZ4 / LZ5 / Lizard / FastLZMA2
+  - 7z: LZMA2 / LZMA / PPMd / BZip2 / Deflate / Zstandard / Brotli / LZ4 / LZ5 / Lizard / FastLZMA2 / Kanzi
   - ZIP: Deflate / BZip2 / LZMA / Zstandard / Brotli / LZ4 / Store
   - TAR: Store / GZip / BZip2 / XZ / Zstandard / Brotli / LZ4 / LZ5 / Lizard (automatically wraps stream formats in tar)
   - Only encoders available in loaded 7z.dll are displayed (dynamically enumerated via `GetNumberOfMethods` / `GetMethodProperty`)

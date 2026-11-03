@@ -48,6 +48,8 @@ void Settings::Load() {
     m_advThreads    = ReadStr(L"AdvancedCompress", L"Threads",    L"");
     m_advExtra      = ReadStr(L"AdvancedCompress", L"Extra",      L"");
     m_advVolume     = ReadStr(L"AdvancedCompress", L"Volume",     L"");
+    m_advKanziBlock = ReadStr(L"AdvancedCompress", L"KanziBlock", L"");
+    m_advKanziCheck = ReadStr(L"AdvancedCompress", L"KanziCheck", L"");
 
     // Window placement
     GetPrivateProfileStringW(L"Window", L"X",         L"-1",    buf, 16, m_iniPath); m_windowX        = _wtoi(buf);
@@ -106,6 +108,8 @@ void Settings::Save() const {
     WriteStr(L"AdvancedCompress", L"Threads",    m_advThreads.c_str());
     WriteStr(L"AdvancedCompress", L"Extra",      m_advExtra.c_str());
     WriteStr(L"AdvancedCompress", L"Volume",     m_advVolume.c_str());
+    WriteStr(L"AdvancedCompress", L"KanziBlock", m_advKanziBlock.c_str());
+    WriteStr(L"AdvancedCompress", L"KanziCheck", m_advKanziCheck.c_str());
 
     // Window placement
     _itow_s(m_windowX,  buf, 10); WriteStr(L"Window", L"X",         buf);

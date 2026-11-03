@@ -12,11 +12,14 @@ public:
         std::wstring solidBlock;  // "" = default; "off","1m","4g" (7z only)
         std::wstring threads;     // "" = auto; "1","4","8"
         std::wstring extra;       // free-form "key=value" pairs
+        std::wstring kanziBlock;  // "" = level default; "1m".."1g" (Kanzi only)
+        std::wstring kanziCheck;  // "" = none; "32","64" (Kanzi only)
         std::wstring volumeSize;  // "" = no split; "10m","100m","1g" etc. for split size
     };
 
     // format: currently selected compression format ("7z","zip" etc.)
-    bool Show(HWND hwndParent, const wchar_t* format, Params& params);
+    // method: currently selected method id (e.g. "lzma2","kanzi"); gates method-specific controls.
+    bool Show(HWND hwndParent, const wchar_t* format, const wchar_t* method, Params& params);
 
     static INT_PTR CALLBACK DlgProc(HWND, UINT, WPARAM, LPARAM);
     INT_PTR HandleMsg(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
@@ -29,4 +32,5 @@ private:
     HWND         m_hwnd   = nullptr;
     Params       m_params;
     std::wstring m_format;
+    std::wstring m_method;
 };

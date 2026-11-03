@@ -206,6 +206,17 @@ d=900k  pass=1
 
 ---
 
+## Kanzi Options (not for the Extra field)
+
+Kanzi's block size (`b`) and block checksum (`check`) are **coder-level** options. 7z.dll rejects
+them as archive-global `key=value` properties (`SetProperties` returns `E_INVALIDARG` and the whole
+property set is dropped), so writing `b=4m` / `check=32` in the Extra field does **not** work.
+Use the **Kanzi block size** / **Kanzi checksum** controls of the advanced dialog instead; Aile
+appends them to the method spec (`m=kanzi:b4m:check32`, same syntax as 7-Zip's `-m0=kanzi:b4m:check32`)
+only when Kanzi is the selected method. Dictionary and word size are ignored by Kanzi (disabled in the dialog).
+
+---
+
 ## Known Pitfalls
 
 - **No quotes needed for values**. Space-separated, so values cannot contain spaces with current parser (spec of `extra` parser in `SevenZip.cpp`)

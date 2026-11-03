@@ -58,12 +58,16 @@ public:
     const std::wstring& GetAdvThreads() const       { return m_advThreads; }
     const std::wstring& GetAdvExtra() const         { return m_advExtra; }
     const std::wstring& GetAdvVolume() const        { return m_advVolume; }
+    const std::wstring& GetAdvKanziBlock() const    { return m_advKanziBlock; }
+    const std::wstring& GetAdvKanziCheck() const    { return m_advKanziCheck; }
     void SetAdvDictSize(const wchar_t* v)           { m_advDictSize   = v; }
     void SetAdvWordSize(const wchar_t* v)           { m_advWordSize   = v; }
     void SetAdvSolidBlock(const wchar_t* v)         { m_advSolidBlock = v; }
     void SetAdvThreads(const wchar_t* v)            { m_advThreads    = v; }
     void SetAdvExtra(const wchar_t* v)              { m_advExtra      = v; }
     void SetAdvVolume(const wchar_t* v)             { m_advVolume     = v; }
+    void SetAdvKanziBlock(const wchar_t* v)         { m_advKanziBlock = v; }
+    void SetAdvKanziCheck(const wchar_t* v)         { m_advKanziCheck = v; }
 
     // Window placement
     int  GetWindowX() const          { return m_windowX; }
@@ -118,6 +122,8 @@ private:
     bool         m_breakDDir;
     std::wstring m_advDictSize;
     std::wstring m_advWordSize;
+    std::wstring m_advKanziBlock;
+    std::wstring m_advKanziCheck;
     std::wstring m_advSolidBlock;
     std::wstring m_advThreads;
     std::wstring m_advExtra;

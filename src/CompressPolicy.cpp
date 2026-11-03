@@ -17,6 +17,8 @@ void Load(CompressDlg::Params& p, const Settings& s) {
     p.threads        = s.GetAdvThreads();
     p.extra          = s.GetAdvExtra();
     p.volumeSize     = s.GetAdvVolume();
+    p.kanziBlock     = s.GetAdvKanziBlock();
+    p.kanziCheck     = s.GetAdvKanziCheck();
     // SFX mode is intentionally NOT loaded: the dialog must always open with SFX
     // off, and CLI "a" (no -sfx) must never inherit a remembered SFX state. SFX is
     // enabled only per invocation (dialog checkbox or -sfx switch).
@@ -32,6 +34,8 @@ void Save(const CompressDlg::Params& p, Settings& s) {
     s.SetAdvThreads(p.threads.c_str());
     s.SetAdvExtra(p.extra.c_str());
     s.SetAdvVolume(p.volumeSize.c_str());
+    s.SetAdvKanziBlock(p.kanziBlock.c_str());
+    s.SetAdvKanziCheck(p.kanziCheck.c_str());
     // SFX mode is intentionally not persisted (see Load).
 }
 
@@ -85,6 +89,12 @@ bool GetLevelRangeForMethod(const std::wstring& method, int& minLevel, int& maxL
         minLevel = 0;
         maxLevel = 11;
         defaultLevel = 4;
+        return true;
+    }
+    if (m == L"kanzi") {
+        minLevel = 0;
+        maxLevel = 9;
+        defaultLevel = 3; // kKanziDefaultLevel in 7-Zip-zstd KanziCommon.h
         return true;
     }
     if (m == L"lz4" || m == L"lz5") {

@@ -18,6 +18,20 @@
 // Compress
 // ============================================================
 
+// Builds the "m" property value. Kanzi's block size / checksum are coder-level
+// options: 7z.dll rejects them as archive-global properties (E_INVALIDARG, which
+// silently drops the whole property set), so they must ride on the method spec
+// ("kanzi:b4m:check32", same syntax as 7z's -m0=kanzi:b4m:check32). Only applied
+// when Kanzi is the chosen method so remembered values cannot leak into other codecs.
+static std::wstring BuildMethodSpec(const wchar_t* method, const CompressAdvanced* adv) {
+    std::wstring spec = method;
+    if (adv && _wcsicmp(method, L"kanzi") == 0) {
+        if (!adv->kanziBlock.empty()) spec += L":b" + adv->kanziBlock;
+        if (!adv->kanziCheck.empty()) spec += L":check" + adv->kanziCheck;
+    }
+    return spec;
+}
+
 HRESULT SevenZip::Compress(const std::vector<std::wstring>& srcPaths,
                             const wchar_t* outPath,
                             const wchar_t* format,
@@ -102,7 +116,7 @@ HRESULT SevenZip::Compress(const std::vector<std::wstring>& srcPaths,
         if (method && method[0]) {
             PROPVARIANT pvMethod; PropVariantInit(&pvMethod);
             pvMethod.vt = VT_BSTR;
-            pvMethod.bstrVal = SysAllocString(method);
+            pvMethod.bstrVal = SysAllocString(BuildMethodSpec(method, adv).c_str());
             names.push_back(L"m"); vals.push_back(pvMethod);
         }
 
@@ -405,7 +419,7 @@ HRESULT SevenZip::AddToArchive(const wchar_t* archivePath,
         if (method && method[0]) {
             PROPVARIANT pvMethod; PropVariantInit(&pvMethod);
             pvMethod.vt = VT_BSTR;
-            pvMethod.bstrVal = SysAllocString(method);
+            pvMethod.bstrVal = SysAllocString(BuildMethodSpec(method, adv).c_str());
             names.push_back(L"m"); vals.push_back(pvMethod);
         }
 

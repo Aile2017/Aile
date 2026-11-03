@@ -47,6 +47,8 @@
 #define IDC_ADV_THREADS     6004
 #define IDC_ADV_PARAMS      6005
 #define IDC_ADV_VOLUME      6006
+#define IDC_ADV_KBLOCK      6007
+#define IDC_ADV_KCHECK      6008
 
 // RAR Advanced compress dialog controls
 // Removed RAR_ADV

@@ -24,6 +24,7 @@ static const MethodEntry kMethods7z[] = {
     {L"LZ5",           L"lz5"},
     {L"Lizard",        L"lizard"},
     {L"FastLZMA2",     L"flzma2"},
+    {L"Kanzi",         L"kanzi"},
 };
 static const MethodEntry kMethodsZip[] = {
     {L"Deflate",        L"deflate"},   // default
@@ -504,15 +505,29 @@ void CompressDlg::OnAdvanced(HWND hwnd) {
     advParams.solidBlock = m_params.solidBlock;
     advParams.threads    = m_params.threads;
     advParams.extra      = m_params.extra;
+    advParams.kanziBlock = m_params.kanziBlock;
+    advParams.kanziCheck = m_params.kanziCheck;
     advParams.volumeSize = m_params.volumeSize;
 
     AdvancedCompressDlg advDlg;
-    if (advDlg.Show(hwnd, fmt.c_str(), advParams)) {
+    // Method currently selected in the combo (m_params.method is only synced on OK).
+    std::wstring method = m_params.method;
+    {
+        HWND hMethod = GetDlgItem(hwnd, IDC_METHOD);
+        int msel = (int)SendMessageW(hMethod, CB_GETCURSEL, 0, 0);
+        if (msel != CB_ERR) {
+            const wchar_t* mid = (const wchar_t*)SendMessageW(hMethod, CB_GETITEMDATA, msel, 0);
+            method = mid ? mid : L"";
+        }
+    }
+    if (advDlg.Show(hwnd, fmt.c_str(), method.c_str(), advParams)) {
         m_params.dictSize   = advParams.dictSize;
         m_params.wordSize   = advParams.wordSize;
         m_params.solidBlock = advParams.solidBlock;
         m_params.threads    = advParams.threads;
         m_params.extra      = advParams.extra;
+        m_params.kanziBlock = advParams.kanziBlock;
+        m_params.kanziCheck = advParams.kanziCheck;
         m_params.volumeSize = advParams.volumeSize;
     }
 }

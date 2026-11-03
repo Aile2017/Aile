@@ -111,6 +111,7 @@ Aile.exe a file.txt -dC:\temp\out -tzip
 | `lz4` / `lz5` | LZ4 / LZ5 | 7-Zip ZS 拡張 DLL のみ |
 | `lizard` | Lizard | 7-Zip ZS 拡張 DLL のみ |
 | `flzma2` | FastLZMA2 | 7-Zip ZS 拡張 DLL のみ |
+| `kanzi` | Kanzi | 7-Zip ZS 拡張 DLL のみ(Kanzi 対応ビルド)。レベル 0–9(既定 3)。ブロックサイズ/チェックサムは詳細設定ダイアログで指定 |
 
 **`-tzip` の場合**
 
